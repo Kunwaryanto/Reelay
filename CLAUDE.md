@@ -17,7 +17,7 @@ Settle these first, they affect screens already designed:
 
 ## Stack
 
-- Vite + React + TypeScript, deployed on Vercel from `main`.
+- Vite + React + TypeScript, deployed on Vercel from `main` to https://usereelay.vercel.app.
 - Supabase (database, auth with 6-digit email code). Everything Supabase is in `supabase/`:
   migrations in `supabase/migrations`, auth settings in `supabase/config.toml`, email template in `supabase/templates`.
   The Supabase GitHub integration applies new migrations when they reach `main`. Never change the database by hand in the dashboard; add a migration.

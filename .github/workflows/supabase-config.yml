@@ -1,0 +1,38 @@
+# Sends supabase/config.toml (auth settings, sign-in email) to the Supabase project.
+# Migrations are applied by the Supabase GitHub integration, not here.
+name: Supabase config
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/config.toml'
+      - 'supabase/templates/**'
+      - '.github/workflows/supabase-config.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-config
+  cancel-in-progress: false
+
+jobs:
+  push-config:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Show what will change
+        run: npx supabase config diff --remote="$SUPABASE_PROJECT_REF"
+
+      - name: Push config
+        run: npx supabase config push --remote="$SUPABASE_PROJECT_REF" --yes

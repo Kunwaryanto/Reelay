@@ -2,6 +2,8 @@
 
 Where films and series stream in Sweden. A web app for your iPhone Home Screen.
 
+Live at https://usereelay.vercel.app
+
 ## Run locally
 
 ```sh
@@ -23,6 +25,7 @@ npm run dev
 ## Deploys
 
 - **Site:** Vercel builds every push to `main`.
+- **Supabase settings:** the `Supabase config` workflow sends `supabase/config.toml` and the email template to Supabase when they change.
 - **Database:** the Supabase GitHub integration applies new files in `supabase/migrations` when they reach `main`.
 
 See `CLAUDE.md` for links to the design canvas and decisions doc.
