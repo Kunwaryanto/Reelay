@@ -127,3 +127,15 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Only title pages are public; the rest of Reelay still needs an account.
 • On a computer, the link shows the Made for iPhone page.
 • The share sheet is iOS’s own: navigator.share with the title and URL. Each title page sets og:title and og:image so the preview shows its art.
+
+## Platform (from modern-web-guidance, checked against Safari on iOS 26)
+
+• Navigation: pages that push in from the right (title, person, Settings sub-pages) use the "stack drill-down" pattern: views side by side in a horizontal scroll-snap stack, so swiping back from the left edge follows the finger like iOS. Behind the page you're leaving, the previous page sits shifted left and dimmed, as on iOS. Back button and browser history stay in step. Safari has no scrollsnapchange: use the guide's IntersectionObserver fallback.
+• Sheets (filters, services, Settings drawers): native <dialog> with showModal(). Safari lacks closedby="any": add the guide's tap-outside fallback. Safari lacks the overlay property: use the guide's data-closing fallback for the closing animation. Swipe-down-to-close is our own gesture on top.
+• Long-press menu: popover (top layer, light dismiss), positioned from the poster's rect as in the prototype; no anchor positioning needed.
+• Poster rows: native scroll snap only; no JS scrolling.
+• View transitions (same-document) for page changes; without support the change is instant.
+• Toasts: popover="manual" in one named region (role="region", aria-label="Notifications") plus an ARIA live region (ariaNotify only arrives in Safari 27). No toasts while a sheet is open; hold them until it closes.
+• Images: Now's hero poster loading first with fetchpriority="high"; everything below the fold loading="lazy" (never both on one image). Request TMDB sizes per use (w185 rows, w342 grids, w780/original hero) with srcset.
+• Long grids and lists: content-visibility: auto with contain-intrinsic-size on off-screen blocks only, never above the fold.
+• Reduce Motion per animation (nested @media), never a global animation-duration override.
