@@ -243,25 +243,25 @@ otp_length = 6
 otp_expiry = 3600
 
 # Reelay signs in with a 6-digit code (the email also carries a link).
-# Supabase only accepts custom templates once a custom SMTP sender is set up (free plan).
-# Uncomment both blocks after adding [auth.email.smtp].
-# [auth.email.template.magic_link]
-# subject = "Your Reelay code: {{ .Token }}"
-# content_path = "./supabase/templates/sign-in.html"
-#
-# [auth.email.template.confirmation]
-# subject = "Your Reelay code: {{ .Token }}"
-# content_path = "./supabase/templates/sign-in.html"
+# (Custom templates need the custom SMTP sender below on the free plan.)
+[auth.email.template.magic_link]
+subject = "Your Reelay code: {{ .Token }}"
+content_path = "./supabase/templates/sign-in.html"
+
+[auth.email.template.confirmation]
+subject = "Your Reelay code: {{ .Token }}"
+content_path = "./supabase/templates/sign-in.html"
 
 # Use a production-ready SMTP server
-# [auth.email.smtp]
-# enabled = true
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# Brevo sends the sign-in emails. Values come from GitHub Actions secrets.
+[auth.email.smtp]
+enabled = true
+host = "smtp-relay.brevo.com"
+port = 587
+user = "env(BREVO_SMTP_LOGIN)"
+pass = "env(BREVO_SMTP_KEY)"
+admin_email = "env(BREVO_SENDER_EMAIL)"
+sender_name = "Reelay"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

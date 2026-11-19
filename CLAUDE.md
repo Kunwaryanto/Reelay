@@ -21,7 +21,7 @@ Settle these first, they affect screens already designed:
 - Supabase (database, auth with 6-digit email code). Everything Supabase is in `supabase/`:
   migrations in `supabase/migrations`, auth settings in `supabase/config.toml`, email template in `supabase/templates`.
   The Supabase GitHub integration applies new migrations when they reach `main`. Never change the database by hand in the dashboard; add a migration.
-- Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`) and Vercel env vars. Never commit them.
+- Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`) and Vercel env vars. Never commit them.
 
 ## Rules
 
