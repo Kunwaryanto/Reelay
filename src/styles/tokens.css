@@ -1,0 +1,115 @@
+/* Reelay design tokens
+   Exported from the Tokens board (Current direction), 2026-11-19.
+   Dark only. Font: Inter Display (Inter with opsz 32). Icons: Material Symbols Outlined, weight 250. */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- Colour ---------- */
+  --bg: #000000;
+  --surface: #1A1A1A;              /* white 10% on black: pills, avatars, empty posters, toasts */
+  --sheet: #141414;                /* sheets and drawers, with --sheet-edge on top */
+  --sheet-edge: inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
+  --on: #2FB858;                   /* switch track when on, nothing else */
+  --error: #F6675C;                /* matched to --on: OKLCH 0.69 / 0.178, hue 27 */
+  --gold: #C9A85C;                 /* award won only */
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #D6D6D6;       /* item titles, hero line */
+  --text-muted: #A7A7A7;           /* body, detail meta */
+  --text-faint: #808080;           /* the one grey: meta, View all, placeholders, text on sheets,
+                                      all inactive icons incl. the tab bar (5.3:1 on black, 4.7:1 on sheets) */
+
+  --fill: rgba(255, 255, 255, 0.10);        /* pills, icon buttons, fields */
+  --fill-strong: rgba(255, 255, 255, 0.20); /* switch off, filter pill border, grabber, edge line */
+  --track: rgba(255, 255, 255, 0.35);       /* indicator track */
+  --hairline: rgba(255, 255, 255, 0.22);    /* fades at corners */
+  --grabber: rgba(255, 255, 255, 0.22);
+  --glass: rgba(0, 0, 0, 0.35);             /* frosted buttons on artwork, + --blur-glass */
+  --scrim: rgba(0, 0, 0, 0.50);             /* behind sheets */
+  --wash: rgba(0, 0, 0, 0.75);              /* nav and top fades */
+  --wall-dim: rgba(0, 0, 0, 0.55);          /* poster wall behind Start (0.62 behind "not available") */
+
+  --blur-glass: blur(12px);
+  --blur-pill: blur(20px) saturate(140%);   /* Offline pill, install card */
+  --blur-menu: blur(30px) saturate(140%);   /* long-press menu */
+  --blur-backdrop: blur(18px) saturate(120%); /* behind the long-press menu */
+
+  /* ---------- Type ---------- */
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-opsz: 'opsz' 32;
+
+  /* size / line-height / weight / tracking */
+  --type-wordmark: 600 34px/40px var(--font);  --track-wordmark: -0.02em;   /* Start only */
+  --type-title: 600 20px/26px var(--font);     --track-title: -0.012em;     /* page titles */
+  --type-prompt: 500 20px/22px var(--font);    --track-prompt: -0.012em;    /* two-line question titles */
+  --type-nav-title: 600 17px/22px var(--font); --track-nav-title: -0.01em;  /* centred bar titles */
+  --type-heading: 600 15px/20px var(--font);   --track-heading: -0.005em;   /* sections, sheet titles */
+  --type-body: 400 13px/20px var(--font);                                    /* descriptions, empty states */
+  --type-text: 400 13px/17px var(--font);      /* titles; 500 pills, tabs, buttons; 600 primary button */
+  --type-meta: 400 12px/16px var(--font);      /* meta, View all, notes, cast roles; 500 tabular for ratings */
+  --type-field: 400 16px/20px var(--font);     /* inputs: 16px so iPhone doesn't zoom */
+  --type-count: 500 9px/10px var(--font);      /* pill counts */
+  --type-mark: 800 7px/8px var(--font);        /* text service marks on posters */
+
+  /* ---------- Spacing ---------- */
+  --space-1: 4px;     /* inline */
+  --space-2: 8px;
+  --space-3: 12px;    /* grid gap, heading to content */
+  --space-4: 16px;    /* card gap in rows */
+  --margin: 20px;     /* screen margin */
+  --row-gap: 28px;    /* grid rows, under hero, page title to first section */
+  --section-gap: 32px;
+
+  /* ---------- Size ---------- */
+  --button: 44px;          /* main action: Continue, Done, Show n, Send code; centred, width fits label, padding 0 22px */
+  --button-small: 32px;    /* standalone small action (Try again), padding 0 14px */
+  --button-inline: 28px;   /* inside content (title page service pill) */
+  --icon-button: 32px;     /* glass circle (Back, Share) inside a 44px hit area */
+  --hit: 44px;
+  --icon: 24px;
+  --chevron: 16px;         /* sits 2px after its label */
+  --chevron-gap: 2px;
+  --row: 48px;             /* settings and list rows */
+  --menu-row: 44px;        /* long-press menu */
+  --tab-bar: 80px;
+
+  /* ---------- Radius (use corner-shape: squircle where supported) ---------- */
+  --radius-media: 12px;
+  --radius-card: 26px;          /* notification card, install card */
+  --radius-menu: 14px;
+  --radius-sheet: 28px;         /* top corners only */
+  --radius-pill-44: 23.1px / 50%;  /* pills: 1.05 x height/2 wide, 50% tall */
+  --radius-pill-32: 16.8px / 50%;
+  --radius-pill-28: 14.7px / 50%;
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);        /* entering, fades, presses */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);    /* things moving on screen */
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);      /* iOS drawer and context menu */
+  --ease-camera: cubic-bezier(0.16, 1, 0.3, 1);      /* onboarding step camera */
+
+  --dur-press: 160ms;          /* scale(0.97) */
+  --dur-nav-hide: 220ms;
+  --dur-nav-show: 160ms;
+  --dur-sheet: 380ms;
+  --dur-menu-open: 420ms;      /* long press */
+  --dur-menu-close: 280ms;
+  --dur-rise: 500ms;           /* late content rises 8px */
+  --dur-wall-in: 600ms;
+  --dur-image-in: 300ms;       /* sharp poster over its blur preview */
+  --dur-toast: 4000ms;
+  --dur-hero-slide: 5000ms;
+  --long-press: 450ms;         /* with 8px movement allowed */
+  --rise: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0ms;
+    --dur-rise: 0ms;
+    --dur-menu-open: 150ms;
+    --dur-menu-close: 150ms;
+    --rise: 0px;
+  }
+}

@@ -1,0 +1,30 @@
+@import './styles/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-variation-settings: var(--font-opsz);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.ms {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'wght' 250, 'opsz' 24;
+  font-size: var(--icon);
+  line-height: 1;
+}
