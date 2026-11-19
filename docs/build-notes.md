@@ -28,6 +28,15 @@ Copied from the notes beside the screens on the Current page of the design canva
 • On every poster and title card: Now rows, Browse, categories, Search, Watchlist, Person, More like this. Not on the Now hero (swipe), cast, pills or settings rows.
 • Turn off Safari’s link menu on posters (-webkit-touch-callout: none, no selection). No haptics on the web. Reduce Motion: fade only.
 
+## Award line on title cards
+
+• Only where the award is the point: award rows on Now (Oscars, Emmys) and Search with an award filter on. Everywhere else cards keep their normal meta line; the title page lists every award.
+• The row names the award, so the line shows the top category in that award, then “+n” for the other wins (or, for a title that only has nominations, the other nominations): “Best Miniseries +7”.
+• Top category: a win beats any nomination; then Best Series / Film / Miniseries; lead acting; directing, then writing; supporting acting; everything else. Same level: the most recent year.
+• Short category names (“Outstanding Limited Series” → “Best Miniseries”).
+• “+n” never truncates; the category name does. Gold laurel = won, grey = nominated.
+• Counts come from the same award rows the title page lists (v275, option C).
+
 ## Start and sign in
 
 • Wrong code and a rejected email shake (no haptics on the web). Never on expired, too many tries or a failed send.

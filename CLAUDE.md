@@ -12,8 +12,7 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 
 ## Before building screens
 
-Settle these first, they affect screens already designed:
-- the rule for which award shows under a cover
+Settle this first, it affects screens already designed:
 - service marks for SVT Play and SkyShowtime
 
 ## Stack
