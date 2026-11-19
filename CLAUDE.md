@@ -8,12 +8,8 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 - Design decisions doc (rules, open questions, decision log): https://claude.ai/artifact/3sRRqQPxj8P8R3RvcATcSx — start with its Handoff overview.
 - `docs/build-notes.md` — the build notes from beside each Current screen.
 - `public/brand/wordmark.svg` — the Reelay wordmark as outlines (Inter Display SemiBold, -0.02em), `fill=currentColor`, one `<path class="l">` per letter for the Start rise. Always use it instead of typing “Reelay” in the font. `wordmark-email.png` is the black version for emails (email apps don’t show SVG).
+- `public/icons/services/` — white service marks for poster corners (8–14px tall). SVT Play and SkyShowtime are their own wordmarks at 8px. `public/icons/ui/laurel.svg` — the award laurel.
 - `src/styles/tokens.css` — every colour, type style, size, radius and motion value. Use the variables; don't hard-code values.
-
-## Before building screens
-
-Settle this first, it affects screens already designed:
-- service marks for SVT Play and SkyShowtime
 
 ## Stack
 
