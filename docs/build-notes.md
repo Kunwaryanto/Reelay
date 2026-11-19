@@ -33,7 +33,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Wrong code and a rejected email shake (no haptics on the web). Never on expired, too many tries or a failed send.
 • Poster wall: the camera mostly sways sideways; every column keeps climbing (at least 48 px/s, bob capped at 12 px/s), so no row lingers on the same posters. Same wall on Start, sign-in states and the install card.
 • Reduce Motion: no shake, no letter rise, wall stands still; red outlines and messages stay.
-• Code length, expiry and attempt limits come from Supabase Auth. The resend countdown is 60 s.
+• Code only: the email carries the 6-digit code and no link (a link would sign in Safari, not the installed app). Code length, expiry and attempt limits come from Supabase Auth. The resend countdown is 60 s.
 • Email field: autocomplete="email"; code field: autocomplete="one-time-code" for the From Mail suggestion.
 • Reelay is a web app. In Safari on iPhone, when it isn't installed yet, the start screen shows the Add to Home Screen card (iOS 26 steps: ••• → Share → Add to Home Screen → Add). Older Safari layouts have Share in the toolbar: show two steps there. Continue in Safari opens sign-in; don't show the card again each visit, remind once when someone turns on a notification (those need the installed app).
 
