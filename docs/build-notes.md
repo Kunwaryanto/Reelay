@@ -34,7 +34,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 • The row names the award, so the line shows the top category in that award, then “+n” for the other wins (or, for a title that only has nominations, the other nominations): “Best Miniseries +7”.
 • Top category: a win beats any nomination; then Best Series / Film / Miniseries; lead acting; directing, then writing; supporting acting; everything else. Same level: the most recent year.
 • Short category names (“Outstanding Limited Series” → “Best Miniseries”).
-• “+n” never truncates; the category name does. Gold laurel = won, grey = nominated.
+• “+n” never truncates; the category name does. Won laurel in #D6D6D6, the same as the title above it; nominated in grey #808080. No gold anywhere (v276).
 • Counts come from the same award rows the title page lists (v275, option C).
 
 ## Start and sign in

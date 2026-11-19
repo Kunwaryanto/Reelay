@@ -12,10 +12,9 @@
   --sheet-edge: inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
   --on: #2FB858;                   /* switch track when on, nothing else */
   --error: #F6675C;                /* matched to --on: OKLCH 0.69 / 0.178, hue 27 */
-  --gold: #C9A85C;                 /* award won only */
 
   --text-primary: #FFFFFF;
-  --text-secondary: #D6D6D6;       /* item titles, hero line */
+  --text-secondary: #D6D6D6;       /* item titles, hero line, won award laurel */
   --text-muted: #A7A7A7;           /* body, detail meta */
   --text-faint: #808080;           /* the one grey: meta, View all, placeholders, text on sheets,
                                       all inactive icons incl. the tab bar (5.3:1 on black, 4.7:1 on sheets) */
