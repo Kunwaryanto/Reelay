@@ -243,13 +243,15 @@ otp_length = 6
 otp_expiry = 3600
 
 # Reelay signs in with a 6-digit code (the email also carries a link).
-[auth.email.template.magic_link]
-subject = "Your Reelay code: {{ .Token }}"
-content_path = "./supabase/templates/sign-in.html"
-
-[auth.email.template.confirmation]
-subject = "Your Reelay code: {{ .Token }}"
-content_path = "./supabase/templates/sign-in.html"
+# Supabase only accepts custom templates once a custom SMTP sender is set up (free plan).
+# Uncomment both blocks after adding [auth.email.smtp].
+# [auth.email.template.magic_link]
+# subject = "Your Reelay code: {{ .Token }}"
+# content_path = "./supabase/templates/sign-in.html"
+#
+# [auth.email.template.confirmation]
+# subject = "Your Reelay code: {{ .Token }}"
+# content_path = "./supabase/templates/sign-in.html"
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]
