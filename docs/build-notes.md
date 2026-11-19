@@ -20,7 +20,8 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 ## Long press on a poster (try it on Now)
 
-• Hold 0.45 s; moving more than 8px first counts as scrolling. The poster lifts into a larger preview, the screen and tab bar blur, a glass menu grows from under it. Tap outside: it settles back.
+• Like iOS, scrolling always wins: rows keep native horizontal swipe (no touch-action or preventDefault on cards), the page keeps vertical scroll. The hold only starts a timer; moving more than 8px before 0.45 s, or the browser taking over the gesture (pointercancel), cancels it. A tap that stops a moving row doesn't open anything.
+• Hold 0.45 s without moving. The poster lifts into a larger preview, the screen and tab bar blur, a glass menu grows from under it. Tap outside: it settles back.
 • Menu = the actions from the title page, never new ones. Title as a small header, then:
   – Default: Add to / Remove from Watchlist, Open in [service], Share.
   – Watchlist: Remove from Watchlist (red) first, Notify me, Open in [service], Share.
