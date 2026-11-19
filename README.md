@@ -26,6 +26,6 @@ npm run dev
 
 - **Site:** Vercel builds every push to `main`.
 - **Supabase settings:** the `Supabase config` workflow sends `supabase/config.toml` and the email template to Supabase when they change.
-- **Database:** the Supabase GitHub integration applies new files in `supabase/migrations` when they reach `main`.
+- **Database:** the `Supabase migrations` workflow applies new files in `supabase/migrations` when they reach `main`.
 
 See `CLAUDE.md` for links to the design canvas and decisions doc.
