@@ -17,10 +17,9 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <!-- TODO: plain black apple-touch-startup-image per iPhone size, generated in the build -->
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght@24,250&display=block" rel="stylesheet" />
+    <!-- Fonts are self-hosted (src/styles/fonts.css); preload the two every screen needs -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/material-symbols-reelay.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

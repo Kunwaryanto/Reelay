@@ -1,0 +1,36 @@
+/* Self-hosted fonts: no request to Google or any other font service (GDPR).
+   Built by scripts/fonts/ — rebuild the icon font after adding a name to icons.txt.
+   Inter (rsms.me/inter, SIL OFL 1.1): opsz fixed at 32, weight 400–700, split by script.
+   Material Symbols Outlined (Apache 2.0): only Reelay's icons, opsz 24, FILL 0–1, weight 250–400. */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+0259, U+02B0-02FF, U+0300-036F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-214F, U+2190-21FF, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-greek.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0370-03FF, U+1F00-1FFF;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-cyrillic.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0400-052F, U+1C80-1C8F, U+2DE0-2DFF, U+A640-A69F;
+}
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  src: url('/fonts/material-symbols-reelay.woff2') format('woff2');
+  font-weight: 250 400;
+  font-style: normal;
+  font-display: block;
+}
