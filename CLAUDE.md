@@ -20,6 +20,13 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
   Catalogue tables are public to read (shared title pages) and written only by the sync with the service role; user tables (profiles, user_services, watchlist, push_subscriptions) are private to their owner via RLS.
 - Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`) and Vercel env vars. Never commit them.
 
+## Browser support
+
+- **Target: Safari on iOS 26 and later**, as a Home Screen web app and in Safari (shared title pages). Any feature that Safari on iOS 26 supports may be used without a fallback, even if it isn't Baseline Widely available.
+- Features Safari doesn't support may only be used as progressive enhancement that falls back to the designed look (e.g. `corner-shape: squircle` falls back to ordinary rounded corners). No polyfills.
+- Exception: the "Made for iPhone" desktop page must work in current Chrome, Edge, Firefox and Safari (Baseline Widely available).
+- Front-end work uses the `modern-web-guidance` skill (`.agents/skills/modern-web-guidance`, from Google Chrome). Apply its guides with the target above; it does not apply to the sync, database or CI.
+
 ## Rules
 
 - Dark only. One grey (#808080) for meta, faint text and every inactive icon.
