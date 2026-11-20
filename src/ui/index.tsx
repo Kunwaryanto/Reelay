@@ -348,6 +348,7 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     }
     else if (!open && d.open) {
       // Safari has no `overlay` transition yet: animate out, then close
+      d.style.removeProperty('top'); d.style.removeProperty('bottom')
       d.dataset.closing = 'true'
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
       const t = setTimeout(() => { d.close(); delete d.dataset.closing }, reduce ? 0 : 380)
@@ -393,7 +394,16 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
   return (
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
-    <dialog ref={ref} className="sheet" data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
+    <dialog ref={ref} className="sheet"
+      // Once in place, pin the sheet by its top edge: Safari swaps its big bottom bar for a small one above the
+      // keyboard, which changes the page height and would otherwise nudge a bottom-anchored sheet.
+      onTransitionEnd={(e) => {
+        const d = ref.current
+        if (!d || e.target !== d || e.propertyName !== 'transform' || !d.open) return
+        if (d.dataset.closing || d.dataset.waiting || d.dataset.entering || d.style.top) return
+        d.style.top = `${d.offsetTop}px`
+        d.style.bottom = 'auto'
+      }} data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
       // drag down from anywhere on the sheet (not from a field or button) to close it
       onPointerDown={(e) => {
