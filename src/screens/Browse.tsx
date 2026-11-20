@@ -1,5 +1,5 @@
 // Browse: categories as cards (genres, lists, decades, countries), a category's page of rows, and the grid behind "View all".
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
@@ -22,12 +22,36 @@ const tintOf = (h: string) => `linear-gradient(25deg, ${h} 0%, ${h}E6 32%, ${h}6
 /** Where a category's card goes: lists open as a grid, everything else has a page of rows. */
 const hrefOf = (cat: Category, k: Pick) => (cat.list ? `/browse/g/${cat.id}/list${kindPath(k)}` : `/browse/c/${cat.id}${kindPath(k)}`)
 
+// The card is about 170px wide: w300 on ordinary screens, w780 on a 3x iPhone.
+const coverSrc = (path: string) => ({ src: tmdbImage(path, 'w780'), srcSet: `${tmdbImage(path, 'w300')} 300w, ${tmdbImage(path, 'w780')} 780w`, sizes: '50vw' })
+
+/** Load every card picture ahead (a couple of seconds after Browse shows), so View all opens with them ready. */
+function useWarmCovers(covers: Record<string, string | null> | undefined) {
+  useEffect(() => {
+    if (!covers) return
+    const t = setTimeout(() => {
+      for (const path of Object.values(covers)) {
+        if (!path) continue
+        const img = new Image()
+        const c = coverSrc(path)
+        img.sizes = c.sizes; img.srcset = c.srcSet; img.src = c.src!
+      }
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [covers])
+}
+
 function CategoryCard({ cat, cover, pick }: { cat: Category; cover: string | null | undefined; pick: Pick }) {
   const { push } = useNavActions()
   const href = hrefOf(cat, pick)
+  // Like posters: the picture fades in once it is decoded, so it never draws in strips or pops in.
+  const [ready, setReady] = useState(false)
+  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
   return (
-    <a className="br-card press" href={href} onClick={(e) => { e.preventDefault(); push(href) }}>
-      {cover && <img src={tmdbImage(cover, 'w780')} alt="" loading="lazy" decoding="async" draggable={false} />}
+    <a className="br-card press" href={href} data-ready={ready} onClick={(e) => { e.preventDefault(); push(href) }}>
+      {cover && <img {...coverSrc(cover)} alt="" decoding="async" draggable={false}
+        ref={(el) => { if (el?.complete && el.naturalWidth && !ready) show(el) }}
+        onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
       <span className="br-tint" aria-hidden="true" style={{ background: tintOf(cat.tint) }} />
       <span className="hair" aria-hidden="true" />
       <span className="br-label">{cat.label}</span>
@@ -55,6 +79,7 @@ export default function Browse() {
   const onDim = useDimOnScroll()
   const [pick, setPick] = useState<Pick>('all')
   const covers = useQuery('browse-covers', loadCovers, { maxAge: DAY })
+  useWarmCovers(covers.data)
   return (
     <main className="page noscroll" onScroll={onDim}>
       <div className="tab-head br-head"><h1>Browse</h1></div>
