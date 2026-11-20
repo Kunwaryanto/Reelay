@@ -339,10 +339,19 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
   useEffect(() => {
     if (!open || !window.visualViewport) return
     const vv = window.visualViewport
-    const set = () => ref.current?.style.setProperty('--kb', `${Math.max(0, window.innerHeight - vv.height - vv.offsetTop)}px`)
+    // How far the sheet's bottom edge sits below the visible area. Measured from what the sheet sits in, so it
+    // is right both when the sheet is fixed (Safari) and when it is in the page (Home Screen app), where iOS
+    // may also scroll the page to show the field: that scroll already moves the sheet, so it must not count twice.
+    const set = () => {
+      const d = ref.current
+      if (!d) return
+      const box = d.offsetParent ?? document.documentElement
+      const bottom = d.offsetParent ? box.getBoundingClientRect().bottom : window.innerHeight
+      d.style.setProperty('--kb', `${Math.max(0, bottom - (vv.offsetTop + vv.height))}px`)
+    }
     set()
-    vv.addEventListener('resize', set); vv.addEventListener('scroll', set)
-    return () => { vv.removeEventListener('resize', set); vv.removeEventListener('scroll', set) }
+    vv.addEventListener('resize', set); vv.addEventListener('scroll', set); window.addEventListener('scroll', set)
+    return () => { vv.removeEventListener('resize', set); vv.removeEventListener('scroll', set); window.removeEventListener('scroll', set) }
   }, [open])
 
   // A non-modal dialog doesn't close on Escape by itself

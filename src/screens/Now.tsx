@@ -78,11 +78,11 @@ function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement };
   const saved = useSaved()
   const [open, setOpen] = useState(false)
   const lift = useRef<HTMLDivElement>(null)
-  // Measured once, without the press shrink, so the lifted copy starts exactly on top of the poster.
+  // Measured once without the press shrink; the copy starts at the shrunk size it had, then lifts.
   const [rect] = useState(() => {
     const r = held.cover.getBoundingClientRect()
     const w = held.cover.offsetWidth, h = held.cover.offsetHeight
-    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h }
+    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h, pressed: r.width / w }
   })
   // Lift a copy of the poster as it is on screen (same image, already loaded, with its service mark)
   // and hide the original until the copy has landed back on it, so there's never two or a blank one.
@@ -111,7 +111,8 @@ function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement };
       <div className="hold-back" onClick={close} />
       <div ref={lift} className="hold-poster" aria-hidden="true" style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
-        transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})` : 'none',
+        transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
+          : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
       }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
         <div className="hold-title">{card.title}</div>
