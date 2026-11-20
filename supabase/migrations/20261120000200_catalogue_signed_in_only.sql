@@ -2,6 +2,7 @@
 -- The sync connects as the database owner and is not affected by these grants or RLS.
 -- Take every lock up front, in one statement, so a running sync makes this wait instead of deadlock.
 
+begin;
 set local lock_timeout = '60s';
 lock table public.services, public.titles, public.people, public.credits,
   public.availability, public.availability_events, public.scores, public.awards
@@ -21,3 +22,5 @@ begin
     execute format('create policy "signed-in users read the catalogue" on public.%I for select to authenticated using (true)', t);
   end loop;
 end $$;
+
+commit;
