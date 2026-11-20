@@ -153,14 +153,22 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   function pasteCode(e: ClipboardEvent<HTMLInputElement>) {
-    const text = e.clipboardData.getData('text')
+    if (takeCode(e.clipboardData.getData('text'))) e.preventDefault()
+  }
+
+  // The Paste button: iOS shows its own small Paste confirmation next to it, then we get the text.
+  async function pasteButton() {
+    try { takeCode(await navigator.clipboard.readText()) } catch { codeInput.current?.focus() }
+  }
+
+  function takeCode(text: string): boolean {
     const six = text.match(/\b\d{6}\b/)?.[0] ?? text.replace(/\D/g, '').slice(0, 6)
-    if (!six) return
-    e.preventDefault()
-    if (ok || checking || codeErr === 'locked') return
+    if (!six) return false
+    if (ok || checking || codeErr === 'locked') return true
     setCode(six)
     setCodeErr('')
     if (six.length === 6) verify(six)
+    return true
   }
 
   const joining = invite === 'valid'
@@ -212,7 +220,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
               <p>{ok ? 'Signed in as ' : 'Sent to '}{email.trim()}</p>
               {!ok && <QuietButton onClick={() => { setStep('email'); setCode(''); setCodeErr('') }}>Change</QuietButton>}
             </div>
-            <label className={`code ${codeErr === 'wrong' ? `shake-${shakeClass}` : ''}`} data-dim={codeErr === 'locked' ? 'locked' : checking ? 'checking' : undefined}>
+            <div className={`code ${codeErr === 'wrong' ? `shake-${shakeClass}` : ''}`} data-dim={codeErr === 'locked' ? 'locked' : checking ? 'checking' : undefined}>
               <input ref={codeInput} type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6}
                 aria-label="6-digit code" name="code" id="code" value={code} onChange={(e) => typeCode(e.target.value)} onPaste={pasteCode} disabled={ok} />
               {Array.from({ length: 6 }, (_, i) => (
@@ -220,11 +228,14 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
                   {code[i] ?? ''}{!ok && !codeErr && i === code.length && <i className="caret" />}
                 </span>
               ))}
-            </label>
+            </div>
             <p className="code-status" role="status">
               {checking && <><Spinner light /><span>Checking…</span></>}
               {resent && !checking && !codeErr && <><span className="resent">New code sent</span><span aria-hidden="true">·</span></>}
               {!ok && codeErr && <span className="err">{CODE_ERR[codeErr]}</span>}
+              {!ok && !checking && 'clipboard' in navigator && code.length === 0 && (
+                <><button type="button" className="paste" onClick={pasteButton}>Paste</button><span aria-hidden="true">·</span></>
+              )}
               {!ok && !checking && (
                 <button type="button" aria-disabled={secs > 0} data-ready={secs === 0} onClick={() => { if (secs === 0 && !sending) send(true) }}>
                   {secs > 0 ? `Send again in ${mm}` : 'Send again'}

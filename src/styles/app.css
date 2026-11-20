@@ -34,7 +34,7 @@ button { font: inherit; color: inherit; }
 .page-bar { margin-left: -14px; height: var(--hit); display: flex; align-items: center; }
 .page-title { margin: 16px 0 0; font: var(--type-title); letter-spacing: var(--track-title); }
 .page-title-tab { margin-top: 44px; }
-.page-back { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top, 0px) + 7px); left: 12px; }
+.page-back { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top, 0px) + 19px); left: 12px; }
 .page-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
 .empty { margin: 8px 0 0; font: var(--type-body); color: var(--text-muted); }
 .row + .empty, .rise > .empty { padding: 0 var(--margin); }
@@ -92,7 +92,7 @@ button { font: inherit; color: inherit; }
 .row-track { display: flex; gap: var(--space-4); padding: 0 var(--margin); width: max-content; align-items: flex-start; }
 
 /* ---- Now ---- */
-.now-settings { position: absolute; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 3px); right: 12px; }
+.now-settings { position: absolute; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 15px); right: 12px; }
 .hero { position: relative; height: 540px; margin-bottom: var(--row-gap); }
 .hero-gap { height: calc(env(safe-area-inset-top, 0px) + 70px); }
 .hero-stage { position: relative; height: 100%; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
@@ -184,7 +184,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .load-failed { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .load-failed p { margin: 0; font: var(--type-body); color: var(--text-muted); }
 .load-failed[data-compact='true'] { flex-direction: row; justify-content: space-between; width: 100%; }
-.offline-pill { position: fixed; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; translate: -50% 0; height: 28px; padding: 0 12px; border-radius: var(--radius-pill-28); background: rgba(40, 40, 40, 0.7); -webkit-backdrop-filter: var(--blur-pill); backdrop-filter: var(--blur-pill); display: flex; align-items: center; font: var(--type-meta); font-weight: 500; animation: rise-in 250ms var(--ease-out); }
+.offline-pill { position: fixed; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 20px); left: 50%; translate: -50% 0; height: 28px; padding: 0 12px; border-radius: var(--radius-pill-28); background: rgba(40, 40, 40, 0.7); -webkit-backdrop-filter: var(--blur-pill); backdrop-filter: var(--blur-pill); display: flex; align-items: center; font: var(--type-meta); font-weight: 500; animation: rise-in 250ms var(--ease-out); }
 
 /* ---- Sheet ---- */
 .sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
@@ -228,6 +228,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .code-status .resent { color: var(--text-secondary); }
 .code-status button { height: var(--hit); margin: -12px 0; padding: 0; border: 0; background: none; font: var(--type-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; cursor: pointer; transition: color var(--dur-press) var(--ease-out); }
 .code-status button[data-ready='true'] { color: #fff; font-weight: 500; }
+.code-status .paste { color: #fff; font-weight: 500; }
 @keyframes shake { 0%, 100% { transform: none; } 15% { transform: translateX(-6px); } 30% { transform: translateX(5px); } 45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-2px); } 90% { transform: translateX(1px); } }
 @keyframes shake2 { 0%, 100% { transform: none; } 15% { transform: translateX(-6px); } 30% { transform: translateX(5px); } 45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-2px); } 90% { transform: translateX(1px); } }
 @keyframes nudge { 0%, 100% { transform: none; } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(1px); } }
@@ -298,15 +299,26 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* ---- Screen check (temporary, for the black band at the bottom) ---- */
 html.screen-check, html.screen-check body { background: #ff00ff; }
 .sc { position: fixed; inset: 0; z-index: 1000; pointer-events: none; font: 500 11px/1.35 ui-monospace, Menlo, monospace; color: #fff; }
-.sc-ruler { position: fixed; top: 0; right: 0; width: 46px; border-left: 1px solid #ffff00; background: rgba(0, 0, 0, 0.35); }
+.sc-ruler { position: absolute; z-index: 1000; pointer-events: none; font: 500 11px/1.35 ui-monospace, Menlo, monospace; top: 0; right: 0; width: 46px; border-left: 1px solid #ffff00; background: rgba(0, 0, 0, 0.35); }
 .sc-ruler span { position: absolute; right: 3px; translate: 0 -50%; color: #ffff00; }
 .sc-ruler span::before { content: ''; position: absolute; right: 100%; top: 50%; width: 8px; border-top: 1px solid #ffff00; margin-right: 3px; }
 .sc-mark { position: fixed; left: 0; padding: 0 6px; height: 16px; line-height: 16px; color: #000; }
 .sc-fixed-bottom { bottom: 0; background: #ff3b30; }
 .sc-lvh { top: calc(100lvh - 16px); left: 90px; background: #00e5ff; }
 .sc-screen { position: absolute; left: 180px; background: #ffff00; }
+.sc-abs { position: absolute; z-index: 1000; left: 0; background: #34c759; font: 500 11px/16px ui-monospace, Menlo, monospace; }
+.sc-actions button[data-on='true'] { background: #34c759; }
 .sc-panel { position: fixed; left: 8px; right: 54px; top: calc(env(safe-area-inset-top, 0px) + 60px); max-height: 60%; overflow: auto; pointer-events: auto; padding: 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.85); }
 .sc-panel pre { margin: 0; white-space: pre-wrap; word-break: break-all; font: inherit; }
 .sc-actions { display: flex; gap: 8px; margin-top: 10px; }
 .sc-actions button, .sc-show { pointer-events: auto; height: 34px; padding: 0 12px; border: 0; border-radius: 17px; background: #fff; color: #000; font: 600 13px/1 var(--font, system-ui); }
 .sc-show { position: fixed; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 60px); }
+
+/* Black band test. iOS lays the Home Screen app out 59pt (the status bar) shorter than the screen and cuts
+   fixed layers off there. Both fixes stop using position: fixed for the app and make the page itself
+   screen-tall: A adds the status bar height to 100%, B uses 100lvh. */
+html[data-screen-fix='a'], html[data-screen-fix='a'] body { height: calc(100% + env(safe-area-inset-top, 0px)); }
+html[data-screen-fix='b'], html[data-screen-fix='b'] body { height: 100lvh; }
+html:not([data-screen-fix='off']) body { position: relative; }
+html:not([data-screen-fix='off']) #root { position: absolute; }
+html:not([data-screen-fix='off']) :is(.sheet, .toasts, .hold, .action-sheet) { position: absolute; }
