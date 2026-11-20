@@ -335,26 +335,29 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
     }
   }, [open])
 
-  // Keep the sheet above the on-screen keyboard.
+  // Keep the sheet above the on-screen keyboard. iOS doesn't reliably tell us when the keyboard has finished
+  // opening or closing in Home Screen apps (resize events stop partway), and briefly scrolls the page while
+  // it opens, so while the sheet is open its position is checked every frame and corrected when it's off.
   useEffect(() => {
     if (!open || !window.visualViewport) return
     const vv = window.visualViewport
-    // How far the sheet's bottom edge sits below the visible area. Measured from what the sheet sits in, so it
-    // is right both when the sheet is fixed (Safari) and when it is in the page (Home Screen app), where iOS
-    // may also scroll the page to show the field: that scroll already moves the sheet, so it must not count twice.
-    const set = () => {
+    let last = -1
+    let frame = 0
+    const check = () => {
       const d = ref.current
-      if (!d) return
-      const box = d.offsetParent ?? document.documentElement
-      const bottom = d.offsetParent ? box.getBoundingClientRect().bottom : window.innerHeight
-      d.style.setProperty('--kb', `${Math.max(0, bottom - (vv.offsetTop + vv.height))}px`)
-      // temporary: read by the screen check, to see why the sheet sits too high in the Home Screen app
-      ;(window as Window & { __sheet?: string }).__sheet =
-        `kb ${Math.round(Math.max(0, bottom - (vv.offsetTop + vv.height)))} · box bottom ${Math.round(bottom)} · parent ${d.offsetParent ? (d.offsetParent as HTMLElement).className : 'none'} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)} · scrollY ${Math.round(window.scrollY)} · inner ${window.innerHeight}`
+      if (d) {
+        // the bottom the sheet would have without any lift: the bottom of what it sits in (fixed: the viewport)
+        const bottom = d.offsetParent ? d.offsetParent.getBoundingClientRect().bottom : window.innerHeight
+        const kb = Math.max(0, Math.round(bottom - (vv.offsetTop + vv.height)))
+        if (kb !== last) { last = kb; d.style.setProperty('--kb', `${kb}px`) }
+        // temporary: read by the screen check
+        ;(window as Window & { __sheet?: string }).__sheet =
+          `kb ${kb} · box bottom ${Math.round(bottom)} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)} · scrollY ${Math.round(window.scrollY)}`
+      }
+      frame = requestAnimationFrame(check)
     }
-    set()
-    vv.addEventListener('resize', set); vv.addEventListener('scroll', set); window.addEventListener('scroll', set)
-    return () => { vv.removeEventListener('resize', set); vv.removeEventListener('scroll', set); window.removeEventListener('scroll', set) }
+    frame = requestAnimationFrame(check)
+    return () => cancelAnimationFrame(frame)
   }, [open])
 
   // A non-modal dialog doesn't close on Escape by itself
