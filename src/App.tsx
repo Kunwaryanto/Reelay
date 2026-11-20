@@ -6,6 +6,7 @@ import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
 import Invites from './screens/Invites'
 import Now from './screens/Now'
+import Search from './screens/Search'
 import Settings from './screens/Settings'
 import Soon from './screens/Soon'
 import Start from './screens/Start'
@@ -23,7 +24,7 @@ function renderPage(path: string) {
 }
 
 const ROOT: Record<Tab, React.ReactNode> = {
-  now: <Now />, browse: <Soon name="Browse" />, watchlist: <Watchlist />, search: <Soon name="Search" />,
+  now: <Now />, browse: <Soon name="Browse" />, watchlist: <Watchlist />, search: <Search />,
 }
 
 function Shell() {
@@ -34,7 +35,8 @@ function Shell() {
     <SavedProvider>
       {(Object.keys(ROOT) as Tab[]).map((tab) => <TabStack key={tab} tab={tab} root={ROOT[tab]} render={renderPage} />)}
       <OfflinePill />
-      <TabBar hidden={path.startsWith('/settings')} />
+      {/* Search has its own bar at the bottom: the field and a close button */}
+      <TabBar hidden={path.startsWith('/settings') || path === '/search'} />
     </SavedProvider>
   )
 }

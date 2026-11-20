@@ -76,6 +76,19 @@ Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: 
 
 Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. The parallax runs on `.pane-in`, never on the `.pane` snap area: Safari snaps to the transformed box, so a moving snap area left the strip stuck halfway after a swipe. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
 
+## Search (built 20 Nov, `src/screens/Search.tsx`, `src/lib/search.ts`)
+
+- Boards: Search (v182), Search results with the no-results cases (v121), Search offline (v260).
+- The tab bar hides on Search; the close button beside the field goes back to Now.
+- **The field and the keyboard:** the field is focused by our own code without scrolling (left alone, iOS scrolls the whole app), and rides above the keyboard using the keyboard height measured on this phone (`useKeyboardRoom`), a guess the very first time. Dragging the results or pressing Search puts the keyboard away.
+- **Words become filters** (`parseQuery`): a service, films/series, a decade or year, a genre, a language, "leaving soon". Each shows as a chip that can be removed. A phrase that is a title's whole name ("Modern Family", "American Horror Story") is searched as a name instead. A year alone ("1917") is a name.
+- Names are matched by the database's `search_titles` (handles typos, streaming titles first); filters alone list the most popular streaming titles that fit.
+- Results show titles not streaming in Sweden too, marked so. "Only on my services" reads "Only what’s streaming" until Your services exists.
+- Ideas before typing: Leaving soon, Swedish series, 90s films (each runs that search). The designed ones link to Browse and to award lists, which aren't built.
+- Recents (drawer on the left): searches submitted with the Search key and titles opened from results, 12 at most, kept on the phone and cleared on sign-out.
+- Offline: "Search needs a connection for this. We’ll search again when you’re back." and it does. Searching what's saved on the phone needs the service worker, which isn't built.
+- Not built yet: People (needs the Person page), award filters and the award line (need the awards sync), the "Results for …" typo line, titles outside the catalogue with Notify me (needs a server-side TMDB lookup), long press on a row.
+
 ## Watchlist (built 20 Nov, `src/screens/Watchlist.tsx`)
 
 - List from board v128, empty state (pick wall) from v189.

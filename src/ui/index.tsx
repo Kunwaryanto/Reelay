@@ -1,6 +1,6 @@
 // Building blocks from the Components page of the design canvas. Styles are in src/styles/app.css.
 import {
-  createContext, useCallback, useContext, useEffect, useRef, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react'
 import wordmarkSvg from '../../public/brand/wordmark.svg?raw'
@@ -359,6 +359,35 @@ let openHeight = window.visualViewport?.height ?? window.innerHeight
 const typing = () => { const a = document.activeElement; return a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement }
 window.visualViewport?.addEventListener('resize', () => { if (!typing()) openHeight = window.visualViewport!.height })
 const storedRoom = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
+
+/**
+ * The room the on-screen keyboard takes while `typing`, in px (0 when it's away). Uses the height measured before
+ * on this phone, or a guess the first time, and measures again once the keyboard has settled. For a field that sits
+ * at the bottom of the screen and has to ride above the keyboard (Search).
+ */
+export function useKeyboardRoom(isTyping: boolean): number {
+  const touch = useMemo(() => matchMedia('(pointer: coarse)').matches, [])
+  const [measured, setMeasured] = useState(storedRoom)
+  const [absent, setAbsent] = useState(false)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!isTyping || !touch || !vv) return
+    let quiet = 0
+    const measure = () => {
+      const room = Math.round(openHeight - vv.height)
+      if (room <= 150) return // no on-screen keyboard (a hardware one, or it hasn't come up)
+      setMeasured(room)
+      try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
+    }
+    const moved = () => { clearTimeout(quiet); clearTimeout(none); setAbsent(false); quiet = window.setTimeout(measure, 120) }
+    // nothing moved: no on-screen keyboard came up (a hardware keyboard), so don't hold the field up
+    const none = window.setTimeout(() => { if (openHeight - vv.height <= 150) setAbsent(true) }, 900)
+    vv.addEventListener('resize', moved)
+    return () => { clearTimeout(quiet); clearTimeout(none); setAbsent(false); vv.removeEventListener('resize', moved) }
+  }, [isTyping, touch])
+  if (!isTyping || !touch || absent) return 0
+  return measured || Math.round(window.innerHeight * 0.42)
+}
 
 /**
  * `keyboard`: for sheets with a text field (focused as the sheet opens). The sheet has one constant height: its
