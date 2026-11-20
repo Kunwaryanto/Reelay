@@ -76,6 +76,16 @@ Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: 
 
 Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. The parallax runs on `.pane-in`, never on the `.pane` snap area: Safari snaps to the transformed box, so a moving snap area left the strip stuck halfway after a swipe. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
 
+## Settings (built 21 Nov, `src/screens/Settings.tsx`, `src/screens/Legal.tsx`, `src/lib/profile.ts`)
+
+- Board v296. Pages: Your services, Region, Credits, Privacy, Delete account (plus Invite friends), and the privacy policy and terms at `/privacy` and `/terms`, which can also be read signed out.
+- **Your services** saves each tap to `user_services`. Watchlist, Search and Browse read the same cached list (`my-services:<user>`), and `setQueryData` updates every screen showing it at once.
+- **Notifications:** three switches on the profile. The first one tapped asks iOS for permission. In Safari (no Home Screen app) or when iOS has them blocked, a card says so and the switches dim. Sending them is the notifications piece.
+- **Get a copy of my data** builds the copy on the phone and opens the share sheet (the design promised an email within days).
+- **Delete account** calls the `delete-account` Edge Function, which removes the auth user (the user tables cascade). Functions deploy from `main`.
+- Language is left out until there is Swedish copy to switch to.
+- A temporary Testing section stays at the bottom (Reload, Show onboarding again, build and layout numbers).
+
 ## Browse (built 21 Nov, `src/screens/Browse.tsx`, `src/lib/browse.ts`)
 
 - Boards: Browse, Category, Grid · mixed list, Grid · typed list (all v121).

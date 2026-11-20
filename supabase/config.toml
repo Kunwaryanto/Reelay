@@ -444,3 +444,7 @@ enabled = true
 # isn't a JWT, so the gateway must not require one. The function checks the invite itself.
 [functions.redeem-invite]
 verify_jwt = false
+
+# Checks the session it is sent itself (the gateway's check doesn't accept the publishable key).
+[functions.delete-account]
+verify_jwt = false

@@ -25,6 +25,15 @@ function save(key: string, data: unknown, persist: boolean) {
   try { localStorage.setItem(PREFIX + key, JSON.stringify(entry)) } catch { /* storage full or blocked: memory only */ }
 }
 
+// Screens showing a key re-render when another screen writes it (see setQueryData).
+const watchers = new Map<string, Set<() => void>>()
+
+/** Put an answer in the cache by hand, after changing it on the server: every screen showing that key updates. */
+export function setQueryData<T>(key: string, data: T, persist = true) {
+  save(key, data, persist)
+  watchers.get(key)?.forEach((f) => f())
+}
+
 export function clearSavedData() {
   memory.clear()
   try {
@@ -97,6 +106,14 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: { 
       bump((n) => n + 1)
     }
   }, [key, persist])
+
+  useEffect(() => {
+    if (!key) return
+    const f = () => bump((n) => n + 1)
+    const set = watchers.get(key) ?? new Set()
+    watchers.set(key, set.add(f))
+    return () => { set.delete(f) }
+  }, [key])
 
   useEffect(() => {
     if (!key) return

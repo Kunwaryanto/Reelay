@@ -111,7 +111,11 @@ export default function Watchlist() {
 
       {sections.map((s) => (
         <section key={s.id} className="wl-section">
-          <div className="wl-section-head"><h2>{s.title}</h2>{s.sub && <span>{s.sub}</span>}</div>
+          <div className="wl-section-head"><h2>{s.title}</h2>
+            {s.sub && (s.id === 'on'
+              ? <button type="button" className="wl-services" onClick={() => push('/settings/services')}>{s.sub}<Icon name="chevron_right" size={14} /></button>
+              : <span>{s.sub}</span>)}
+          </div>
           <ul>
             {s.rows.map((r) => (
               <WatchRow key={r.t.id} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
