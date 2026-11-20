@@ -1,9 +1,9 @@
 // Start and sign in. Code only: the email holds a 6-digit code. Reelay is invite only:
 // an invite link (/i/<token>) creates the account, otherwise only existing accounts get a code.
-import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQuery } from '../lib/query'
-import { Button, GlassButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
+import { Button, GlassButton, Icon, IconButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
 
 const LAST_EMAIL = 'reelay:last-email'
 
@@ -208,7 +208,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
         <p>{joining ? 'You’re invited.' : 'Reelay is invite only.'}</p>
       </main>
 
-      <Sheet open={open} onClose={() => setOpen(false)} keyboard={step === 'email' || step === 'code'} label={joining ? 'Join Reelay' : 'Continue with email'}>
+      <SignIn open={open} onClose={() => setOpen(false)} keyboard={step === 'email' || step === 'code'} label={joining ? 'Join Reelay' : 'Continue with email'}>
         {step === 'email' && (
           <form className="stepin" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); send() }}>
             <h2 className="sheet-title">{joining ? 'Join Reelay' : 'Continue with email'}</h2>
@@ -269,7 +269,44 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
             {sendErr && <p className="field-error" role="alert">{SEND_ERR[sendErr]}</p>}
           </div>
         )}
-      </Sheet>
+      </SignIn>
     </div>
+  )
+}
+
+// In the Home Screen app sign-in is a sheet. In Safari it's its own page: Safari moves its whole visible area
+// around its bars while the keyboard opens, which a sheet can't hide but a plain page doesn't mind.
+const STANDALONE = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+
+function SignIn(props: { open: boolean; onClose: () => void; keyboard: boolean; label: string; children: ReactNode }) {
+  if (STANDALONE) return <Sheet {...props} />
+  return <SignInPage {...props} />
+}
+
+function SignInPage({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+  const [shown, setShown] = useState(open)
+  const [closing, setClosing] = useState(false)
+  const close = useRef(onClose)
+  close.current = onClose
+  // a history entry, so Safari's back swipe and button close the page
+  useEffect(() => {
+    if (!open) return
+    setShown(true); setClosing(false)
+    history.pushState({ signin: true }, '')
+    const onPop = () => close.current()
+    window.addEventListener('popstate', onPop)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      if (history.state?.signin) history.back()
+      setClosing(true)
+      setTimeout(() => setShown(false), 280)
+    }
+  }, [open])
+  if (!shown) return null
+  return (
+    <section className="signin-page" aria-label={label} data-closing={closing || undefined}>
+      <div className="signin-close"><IconButton label="Back" onClick={onClose}><Icon name="chevron_left" size={20} /></IconButton></div>
+      {children}
+    </section>
   )
 }

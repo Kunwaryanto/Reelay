@@ -5,7 +5,7 @@
    - Safari 26: content runs behind the status bar and the floating address bar only when no fixed layer
      touches those edges; otherwise Safari paints the bars a solid colour.
    overflow: clip (not hidden) so iOS can't scroll the app to reveal a focused field.
-   --chrome-b (main.tsx) is how much of the bottom Safari's address bar covers; 0 in the Home Screen app. */
+   Signed-in use is meant for the Home Screen app; in Safari, sign-in is its own page (Start.tsx). */
 html, body { height: 100%; overflow: hidden; }
 /* Home Screen app only: iOS reports a viewport 59pt shorter than the screen there, so size to the large viewport.
    (In Safari 100lvh is taller than what's visible, which left the page 40pt of room to scroll: Safari used it to
@@ -44,7 +44,7 @@ button { font: inherit; color: inherit; }
 }
 @keyframes pane-leave { to { transform: translateX(70%); opacity: 0.55; } }
 
-.page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: calc(110px + var(--chrome-b, 0px)); -webkit-overflow-scrolling: touch; }
+.page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: 110px; -webkit-overflow-scrolling: touch; }
 .page-plain { padding: calc(env(safe-area-inset-top, 0px) + 50px) var(--margin) 110px; }
 .page-bar { margin-left: -14px; height: var(--hit); display: flex; align-items: center; }
 .page-title { margin: 16px 0 0; font: var(--type-title); letter-spacing: var(--track-title); }
@@ -269,14 +269,14 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 }
 
 /* ---- Toast ---- */
-.toasts { position: absolute; z-index: 40; left: var(--margin); right: var(--margin); bottom: calc(92px + var(--chrome-b, 0px)); pointer-events: none; }
+.toasts { position: absolute; z-index: 40; left: var(--margin); right: var(--margin); bottom: 92px; pointer-events: none; }
 @media (min-width: 500px) { .toasts { left: 50%; right: auto; width: 350px; margin-left: -175px; } }
 .toast { min-height: 48px; padding: 0 8px 0 16px; border-radius: 14px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; animation: rise-in 250ms var(--ease-out); }
 .toast span { font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast button { flex: none; height: var(--hit); padding: 0 8px; border: 0; background: none; font: var(--type-text); font-weight: 500; color: #fff; cursor: pointer; }
 
 /* ---- Tab bar ---- */
-.tabbar { position: absolute; z-index: 10; left: 0; right: 0; bottom: var(--chrome-b, 0px); height: var(--tab-bar); pointer-events: none; color: #fff; transition: opacity var(--dur-nav-show) var(--ease-out), transform var(--dur-sheet) var(--ease-sheet); }
+.tabbar { position: absolute; z-index: 10; left: 0; right: 0; bottom: 0; height: var(--tab-bar); pointer-events: none; color: #fff; transition: opacity var(--dur-nav-show) var(--ease-out), transform var(--dur-sheet) var(--ease-sheet); }
 .tabbar[data-hidden='true'] { opacity: 0; transform: translateY(100%); }
 .tabbar-fade i { position: absolute; inset: 0; transition: opacity var(--dur-nav-show) var(--ease-out); }
 .tabbar-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(transparent 0%, #000 50%); mask-image: linear-gradient(transparent 0%, #000 50%); }
@@ -350,3 +350,11 @@ html.screen-check, html.screen-check body { background: #ff00ff; }
 .sc-actions button, .sc-show { pointer-events: auto; height: 34px; padding: 0 12px; border: 0; border-radius: 17px; background: #fff; color: #000; font: 600 13px/1 var(--font, system-ui); }
 .sc-show { position: fixed; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 60px); }
 
+
+/* ---- Sign-in page (Safari) ---- */
+.signin-page { position: absolute; inset: 0; z-index: 50; background: var(--bg); padding: calc(env(safe-area-inset-top, 0px) + 64px) var(--margin) 24px; overflow-y: auto; animation: page-in var(--dur-sheet) var(--ease-sheet); }
+.signin-page[data-closing='true'] { animation: page-out 280ms var(--ease-sheet) forwards; }
+.signin-close { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; }
+@keyframes page-in { from { transform: translateX(100%); } }
+@keyframes page-out { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .signin-page, .signin-page[data-closing='true'] { animation: none; } }
