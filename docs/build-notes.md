@@ -160,7 +160,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Poster rows: native scroll snap only; no JS scrolling.
 • View transitions (same-document) for page changes; without support the change is instant.
 • Toasts: popover="manual" in one named region (role="region", aria-label="Notifications") plus an ARIA live region (ariaNotify only arrives in Safari 27). No toasts while a sheet is open; hold them until it closes.
-• Images: Now's hero poster loading first with fetchpriority="high"; everything below the fold loading="lazy" (never both on one image). Request TMDB sizes per use (w185 rows, w342 grids, w780/original hero) with srcset.
+• Images: Now's hero poster loading first with fetchpriority="high"; everything below the fold loading="lazy" (never both on one image). Poster rows load all their posters once the row is within one screen of view (IntersectionObserver on the .page scroller), with loading="lazy" as the fallback. A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the image, its edge line and the service mark fade in together. Image service marks are built in as data URLs. Request TMDB sizes per use (w185 rows, w342 grids, w780/original hero) with srcset.
 • Posters and photos load straight from image.tmdb.org (decided 20 Nov). The privacy policy says TMDB sees visitors' IP addresses when images load. Keep image URLs behind one helper (src/lib/images.ts) so routing them through our own site later is a one-line change.
 • Long grids and lists: content-visibility: auto with contain-intrinsic-size on off-screen blocks only, never above the fold.
 • Reduce Motion per animation (nested @media), never a global animation-duration override.

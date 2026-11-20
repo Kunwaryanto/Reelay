@@ -90,21 +90,21 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
 
   useEffect(() => {
     if (!open) return
-    const t = setTimeout(() => (step === 'code' ? codeInput : emailInput).current?.focus(), 50)
+    const t = setTimeout(() => (step === 'code' ? codeInput : emailInput).current?.focus({ preventScroll: true }), 50)
     return () => clearTimeout(t)
   }, [open, step])
 
   const openSheet = () => {
     const next = step !== 'code' || ok ? (invite === 'expired' || invite === 'used' ? 'gone' : 'email') : step
     if (step !== 'code' || ok) { setStep(next); setSendErr('') }
-    // Safari only opens the keyboard for a field focused during the tap itself, and the sign-in page isn't there
+    // iOS only opens the keyboard for a field focused during the tap itself, and the sheet or page isn't there
     // yet. So focus a stand-in field now (the keyboard comes up) and hand the focus to the real one once it exists.
-    if (!standalone && next !== 'gone') {
+    if (next !== 'gone') {
       const stand = document.createElement('input')
       stand.setAttribute('aria-hidden', 'true')
       stand.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0'
       document.body.append(stand)
-      stand.focus()
+      stand.focus({ preventScroll: true })
       setTimeout(() => stand.remove(), 1000)
     }
     setOpen(true)

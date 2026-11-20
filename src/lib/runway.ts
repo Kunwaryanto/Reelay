@@ -21,6 +21,12 @@ export function setRunway(on: boolean) {
 }
 
 // The document never scrolls on its own: pages scroll inside the app. If iOS scrolls it (to show a focused field,
-// or a stray drag), put it back once it has settled, not on every scroll event (snapping back mid-animation jumps).
+// or a stray drag), put it back once it has settled. While a sheet is open it goes back at once, the next frame:
+// in the Home Screen app the page is a little taller than iOS's viewport, and iOS used that room to push the
+// sign-in sheet up and down as the keyboard opened and closed (in Safari the page has no such room).
 let settle = 0
-window.addEventListener('scroll', () => { clearTimeout(settle); settle = window.setTimeout(hold, 300) }, { passive: true })
+window.addEventListener('scroll', () => {
+  clearTimeout(settle)
+  if (document.querySelector('.sheet[open]')) requestAnimationFrame(hold)
+  else settle = window.setTimeout(hold, 300)
+}, { passive: true })
