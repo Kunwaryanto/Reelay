@@ -404,9 +404,17 @@ async function syncMdblist() {
      order by s.mdblist_synced_at nulls first, t.popularity desc limit $1`,
     [MDBLIST_PER_RUN],
   )).rows;
-  let ok = 0, sample = null;
+  let ok = 0, sample = null, spent = false;
   await pool(todo.map((t) => ({ ...t, key: t.imdb_id })), 4, async (t) => {
-    const r = await getJson(`https://api.mdblist.com/imdb/${t.kind === 'film' ? 'movie' : 'show'}/${t.imdb_id}?apikey=${key}`);
+    // MDBList allows a fixed number of lookups a day: once it says no, stop asking (the rest come tomorrow).
+    if (spent) return;
+    let r;
+    try {
+      r = await getJson(`https://api.mdblist.com/imdb/${t.kind === 'film' ? 'movie' : 'show'}/${t.imdb_id}?apikey=${key}`, {}, spent ? 0 : 1);
+    } catch (e) {
+      if (/Daily API limit/i.test(e.message)) { spent = true; return; }
+      throw e;
+    }
     if (!r) return;
     sample ??= r.ratings;
     const by = Object.fromEntries((r.ratings ?? []).map((x) => [x.source, x.value]));
@@ -419,7 +427,7 @@ async function syncMdblist() {
     );
     ok++;
   });
-  log(`MDBList: ${ok} of ${todo.length} titles updated`);
+  log(`MDBList: ${ok} of ${todo.length} titles updated${spent ? ' (daily limit reached, the rest next run)' : ''}`);
   if (sample) log('  sample ratings:', JSON.stringify(sample).slice(0, 400));
 }
 

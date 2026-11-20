@@ -4,23 +4,28 @@ import { NavProvider, TabStack, useNav, type Tab } from './lib/nav'
 import { SavedProvider } from './lib/saved'
 import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
+import Browse, { browsePage } from './screens/Browse'
+import Invites from './screens/Invites'
 import Now from './screens/Now'
+import Search from './screens/Search'
 import Settings from './screens/Settings'
-import Soon from './screens/Soon'
 import Start from './screens/Start'
 import Title from './screens/Title'
+import Watchlist from './screens/Watchlist'
 import { OfflinePill, TabBar, ToastProvider } from './ui'
 
 function renderPage(path: string) {
   const title = path.match(/^\/title\/(\d+)$/)
   if (title) return <Title id={Number(title[1])} />
+  if (path.startsWith('/browse/')) { const page = browsePage(path); if (page) return page }
   if (path === '/settings') return <Settings />
+  if (path === '/settings/invites') return <Invites />
   if (path === '/dev') return <Dev />
   return <Title id={NaN} />
 }
 
 const ROOT: Record<Tab, React.ReactNode> = {
-  now: <Now />, browse: <Soon name="Browse" />, watchlist: <Soon name="Watchlist" />, search: <Soon name="Search" />,
+  now: <Now />, browse: <Browse />, watchlist: <Watchlist />, search: <Search />,
 }
 
 function Shell() {
@@ -31,7 +36,8 @@ function Shell() {
     <SavedProvider>
       {(Object.keys(ROOT) as Tab[]).map((tab) => <TabStack key={tab} tab={tab} root={ROOT[tab]} render={renderPage} />)}
       <OfflinePill />
-      <TabBar hidden={path.startsWith('/settings')} />
+      {/* Search has its own bar at the bottom: the field and a close button */}
+      <TabBar hidden={path.startsWith('/settings') || path === '/search'} />
     </SavedProvider>
   )
 }

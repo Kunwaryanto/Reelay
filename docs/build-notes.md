@@ -70,6 +70,48 @@ Copied from the notes beside the screens on the Current page of the design canva
 • /i/<token> opens Start. Ask redeem-invite with { token }: valid → Join Reelay; expired or used → the sheet with the reason. On Send code ask it with { token, email }: created or existing → signInWithOtp({ shouldCreateUser: false }) and the usual code. Without a link, signInWithOtp with shouldCreateUser false; a “signups not allowed” error means no account → the “Reelay is invite only” sheet.
 • An invite is spent only at the account’s first sign-in (joined_at), so a mistyped email doesn’t burn the link.
 
+Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: tapping a waiting row shares that link again; where the share sheet is missing the link is copied ("Link copied").
+
+## Page slides (20 Nov)
+
+Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. The parallax runs on `.pane-in`, never on the `.pane` snap area: Safari snaps to the transformed box, so a moving snap area left the strip stuck halfway after a swipe. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
+
+## Browse (built 21 Nov, `src/screens/Browse.tsx`, `src/lib/browse.ts`)
+
+- Boards: Browse, Category, Grid · mixed list, Grid · typed list (all v121).
+- A category is a set of filters over streaming titles, defined in code (`CATEGORIES`); nothing is stored in the database. Genres, decades and countries open a category page (top three as the hero, then rows); lists open straight as a grid.
+- Routes: `/browse/all/<section>` (every card in a section), `/browse/c/<category>[/film|series]`, `/browse/g/<category>/<row|list>[/film|series]`. The Films/Series pill on Browse carries into the page it opens.
+- Card pictures: the artwork of the category's most popular title, a different title per card, looked up once a day. They load like posters, as one piece: picture, colour wash and name stay hidden on the plain card until the picture is decoded, then fade in together (300 ms). Every card picture is fetched 1.5 s after Browse shows, so the View all pages open with them ready. w300 or w780 by screen density.
+- Category rows: New in … (this year and last, most popular first; decades get "Popular from the …"), Leaving soon (30 days), Top … series, Top … films (by IMDb rating with enough votes). A row needs three titles to show.
+- Grid: type pills with counts on mixed rows, the year alone on typed ones; Sort by Highest rated / Newest / Most popular, re-fetched in that order (90 titles at most). "Only on my services" appears once Your services exists. The big title fades into the bar as the page scrolls.
+- The bar on these pages (`TopBar`) dims with the tab bar.
+- Lists built from the data we have: Highest rated, Hidden gems (IMDb 7.5+, 2,000–30,000 votes), Under 90 minutes, New this year.
+- Not built yet: the Awards section and award rows (need the awards sync); Cult classics, Miniseries, Finished series, Book adaptations, True stories (no data for them); type-specific card pictures; service wordmark cards.
+
+## Search (built 20 Nov, `src/screens/Search.tsx`, `src/lib/search.ts`)
+
+- Boards: Search (v182), Search results with the no-results cases (v121), Search offline (v260).
+- The tab bar hides on Search; the close button beside the field goes back to Now.
+- Tapping the Search tab opens it with the keyboard coming up and the field rising with it (`src/lib/keyboard.ts`: a stand-in field takes focus during the tap, because the real one is still hidden). Coming back from a title doesn't reopen the keyboard. Opened this way, Search is drawn with the field already above where the keyboard will be and only fades in. When the field is tapped later, it and the prompt lift with a transform at the keyboard's pace (380 ms, the sheet curve); `bottom` is never animated.
+- **The field and the keyboard:** the field is focused by our own code without scrolling (left alone, iOS scrolls the whole app), and rides above the keyboard using the keyboard height measured on this phone (`useKeyboardRoom`), the same measurement the sign-in sheet takes. With no measurement yet, the field and list are held back (invisible) until the keyboard has settled, then rise into place. Dragging the results or pressing Search puts the keyboard away.
+- **Words become filters** (`parseQuery`): a service, films/series, a decade or year, a genre, a language, "leaving soon". Each shows as a chip that can be removed. A phrase that is a title's whole name ("Modern Family", "American Horror Story") is searched as a name instead. A year alone ("1917") is a name.
+- Names are matched by the database's `search_titles` (handles typos, streaming titles first); filters alone list the most popular streaming titles that fit.
+- Results show titles not streaming in Sweden too, marked so. "Only on my services" reads "Only what’s streaming" until Your services exists.
+- Ideas before typing: Leaving soon, Swedish series, 90s films (each runs that search). The designed ones link to Browse and to award lists, which aren't built.
+- Recents (drawer on the left): searches submitted with the Search key and titles opened from results, 12 at most, kept on the phone and cleared on sign-out.
+- Offline: "Search needs a connection for this. We’ll search again when you’re back." and it does. Searching what's saved on the phone needs the service worker, which isn't built.
+- Not built yet: People (needs the Person page), award filters and the award line (need the awards sync), the "Results for …" typo line, titles outside the catalogue with Notify me (needs a server-side TMDB lookup), long press on a row.
+
+## Watchlist (built 20 Nov, `src/screens/Watchlist.tsx`)
+
+- List from board v128, empty state (pick wall) from v189.
+- **No Your services yet:** `user_services` is empty until that screen is built, so every service counts as yours. The sections then read "Leaving soon", "Streaming now" and "Not streaming in Sweden", and the switch reads "Only what’s streaming". Once services are picked the designed names and the services label appear on their own.
+- Leaving soon = leaves within 30 days on one of your services.
+- Swipe a row left for Remove (opens past 44px); the bell on a not-streaming row turns Notify on and off.
+- The sort sheet is mounted in `#root` (not the body) so it covers the tab bar; in the body, iOS scrolled the document when the sheet took focus. A sheet without a field focuses itself, not its first button.
+- Pick wall: 49 posters (7 × 7, so the tilted wall reaches every corner when panned) from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
+- Not built yet: long press on a row, the "New season" note, the link from the services label to Your services.
+
 ## Settings pages: Credits, Privacy, policy and terms
 
 • Credits: two lists in the Settings row style, Data (TMDB · Titles, posters and cast; JustWatch · Where to watch; Streaming Availability · Leaving dates; IMDb · IMDb rating; MDBList · Rotten Tomatoes and Letterboxd scores; Wikidata · Awards) and Design (Inter · Typeface by Rasmus Andersson · SIL Open Font License; Material Symbols · Icons by Google · Apache License 2.0).

@@ -1,14 +1,15 @@
 // Building blocks from the Components page of the design canvas. Styles are in src/styles/app.css.
 import {
-  createContext, useCallback, useContext, useEffect, useRef, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react'
 import wordmarkSvg from '../../public/brand/wordmark.svg?raw'
 import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
+import { summonKeyboard } from '../lib/keyboard'
 import { SERVICE_NAME, type Card } from '../lib/catalogue'
-import { useNav, type Tab } from '../lib/nav'
+import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { useRequestFailed } from '../lib/query'
 
 // ---- Icons -----------------------------------------------------------------
@@ -88,7 +89,7 @@ export function IconButton({ label, glass, children, ...rest }: BtnProps & { lab
 }
 
 export function BackButton({ glass }: { glass?: boolean }) {
-  const { back } = useNav()
+  const { back } = useNavActions()
   return <IconButton label="Back" glass={glass} onClick={back}><Icon name="chevron_left" size={20} /></IconButton>
 }
 
@@ -132,7 +133,7 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
 }
 
 export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: string | null; eager?: boolean; onHold?: (card: Card, cover: HTMLElement) => void }) {
-  const { push } = useNav()
+  const { push } = useNavActions()
   const service = card.availability[0]?.service_id
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
@@ -361,6 +362,37 @@ window.visualViewport?.addEventListener('resize', () => { if (!typing()) openHei
 const storedRoom = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
 
 /**
+ * The room the on-screen keyboard takes while `typing`, in px (0 when it's away). Uses the height measured before
+ * on this phone (the sign-in sheet and Search share it) and measures again each time the keyboard settles. The very
+ * first time there is nothing to go on: `pending` is true until the keyboard has settled and been measured, so the
+ * caller can hold its field back and bring it in at the right place. For a field at the bottom of the screen (Search).
+ */
+export function useKeyboardRoom(isTyping: boolean): { room: number; pending: boolean } {
+  const touch = useMemo(() => matchMedia('(pointer: coarse)').matches, [])
+  const [measured, setMeasured] = useState(storedRoom)
+  const [absent, setAbsent] = useState(false)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!isTyping || !touch || !vv) return
+    let quiet = 0
+    const measure = () => {
+      const room = Math.round(openHeight - vv.height)
+      if (room <= 150) return // no on-screen keyboard (a hardware one, or it hasn't come up)
+      setMeasured(room)
+      try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
+    }
+    const moved = () => { clearTimeout(quiet); clearTimeout(none); setAbsent(false); quiet = window.setTimeout(measure, 120) }
+    // nothing moved: no on-screen keyboard came up (a hardware keyboard), so don't hold the field up
+    const none = window.setTimeout(() => { if (openHeight - vv.height <= 150) setAbsent(true) }, 900)
+    vv.addEventListener('resize', moved)
+    return () => { clearTimeout(quiet); clearTimeout(none); setAbsent(false); vv.removeEventListener('resize', moved) }
+  }, [isTyping, touch])
+  if (!isTyping || !touch || absent) return { room: 0, pending: false }
+  // never measured on this phone: wait for the keyboard to settle instead of guessing
+  return { room: measured, pending: !measured }
+}
+
+/**
  * `keyboard`: for sheets with a text field (focused as the sheet opens). The sheet has one constant height: its
  * content sits just above the keyboard, keyboard open or not, and it never moves with the keyboard.
  * The first time on a phone it waits for the keyboard, measures it, then slides up; after that it uses the
@@ -381,6 +413,9 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
         // first time: invisible but roughly in place (field above the keyboard, so iOS doesn't scroll the page)
         if (!room) d.dataset.waiting = 'true'
       }
+      // Without a field to type in, focus the sheet itself rather than its first button
+      // (which would wear a focus ring and could be scrolled into view).
+      if (!keyboard) { d.tabIndex = -1; d.setAttribute('autofocus', '') }
       d.show()
     }
     else if (!open && d.open) {
@@ -521,7 +556,7 @@ export function TabBar({ hidden }: { hidden?: boolean }) {
       <div className="tabbar-fade" aria-hidden="true"><i /><i /><i /></div>
       <div className="tabbar-row">
         {items.map(([id, label, icon]) => (
-          <button key={id} type="button" aria-label={label} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{icon}</button>
+          <button key={id} type="button" aria-label={label} aria-current={tab === id ? 'page' : undefined} onClick={() => { if (id === 'search' && tab !== 'search') summonKeyboard(); setTab(id) }}>{icon}</button>
         ))}
       </div>
     </nav>
