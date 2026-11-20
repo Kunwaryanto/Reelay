@@ -345,11 +345,22 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
 // ---- Sheet -----------------------------------------------------------------
 
 /**
- * Bottom sheet on a native <dialog>, for content without text fields (forms with fields are pages: see Start's
- * sign-in). Tap outside, Escape or a swipe down closes it. Opened non-modally with its own scrim: a modal dialog
- * sits in the top layer, which iOS cuts off above the bottom of the screen in Home Screen apps.
+ * Bottom sheet on a native <dialog>. Tap outside, Escape or a swipe down closes it.
+ * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
+ * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
-export function Sheet({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+// The room the keyboard takes at the bottom of the app, measured the first time a sheet with a field opens on
+// this phone, and kept. (Sheets with fields are only used in the Home Screen app; Safari has a sign-in page.)
+const KB_KEY = 'reelay:kb-room:app'
+const storedRoom = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
+
+/**
+ * `keyboard`: for sheets with a text field (focused as the sheet opens). The sheet has one constant height: its
+ * content sits just above the keyboard, keyboard open or not, and it never moves with the keyboard.
+ * The first time on a phone it waits for the keyboard, measures it, then slides up; after that it uses the
+ * stored measurement and opens straight away.
+ */
+export function Sheet({ open, onClose, label, keyboard, children }: { open: boolean; onClose: () => void; label: string; keyboard?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const drag = useRef<{ y: number; dy: number } | null>(null)
 
@@ -358,6 +369,12 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
     if (!d) return
     if (open && !d.open) {
       delete d.dataset.closing
+      if (keyboard) {
+        const room = storedRoom()
+        d.style.setProperty('--kb-room', room ? `${room}px` : '46lvh')
+        // first time: invisible but roughly in place (field above the keyboard, so iOS doesn't scroll the page)
+        if (!room) d.dataset.waiting = 'true'
+      }
       d.show()
     }
     else if (!open && d.open) {
@@ -367,7 +384,34 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
       const t = setTimeout(() => { d.close(); delete d.dataset.closing }, reduce ? 0 : 380)
       return () => clearTimeout(t)
     }
-  }, [open])
+  }, [open, keyboard])
+
+
+  // First time only: wait for the keyboard to settle, measure the room it takes, keep it, then slide up.
+  useEffect(() => {
+    const d = ref.current
+    if (!open || !keyboard || !d || !d.dataset.waiting) return
+    const vv = window.visualViewport
+    let quiet = 0
+    const place = () => {
+      clearTimeout(quiet); clearTimeout(limit)
+      const box = d.offsetParent
+      const room = vv && box ? Math.round(box.getBoundingClientRect().bottom - (vv.offsetTop + vv.height)) : 0
+      if (room > 150) {
+        d.style.setProperty('--kb-room', `${room}px`)
+        try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
+      } else d.style.setProperty('--kb-room', '0px') // no on-screen keyboard: an ordinary sheet
+      d.dataset.entering = 'true'
+      delete d.dataset.waiting
+      requestAnimationFrame(() => requestAnimationFrame(() => { delete d.dataset.entering }))
+    }
+    // settled = no keyboard movement for 120 ms; give up after 900 ms (no keyboard came up)
+    const moved = () => { clearTimeout(quiet); quiet = window.setTimeout(place, 120) }
+    const limit = window.setTimeout(place, 900)
+    vv?.addEventListener('resize', moved)
+    return () => { clearTimeout(quiet); clearTimeout(limit); vv?.removeEventListener('resize', moved) }
+  }, [open, keyboard])
+
 
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
@@ -380,7 +424,8 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
   return (
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
-    <dialog ref={ref} className="sheet" aria-label={label} aria-modal="true"
+    <dialog ref={ref} className="sheet"
+data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
       // drag down from anywhere on the sheet (not from a field or button) to close it
       onPointerDown={(e) => {
