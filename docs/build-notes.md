@@ -76,6 +76,18 @@ Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: 
 
 Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. The parallax runs on `.pane-in`, never on the `.pane` snap area: Safari snaps to the transformed box, so a moving snap area left the strip stuck halfway after a swipe. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
 
+## Browse (built 21 Nov, `src/screens/Browse.tsx`, `src/lib/browse.ts`)
+
+- Boards: Browse, Category, Grid · mixed list, Grid · typed list (all v121).
+- A category is a set of filters over streaming titles, defined in code (`CATEGORIES`); nothing is stored in the database. Genres, decades and countries open a category page (top three as the hero, then rows); lists open straight as a grid.
+- Routes: `/browse/all/<section>` (every card in a section), `/browse/c/<category>[/film|series]`, `/browse/g/<category>/<row|list>[/film|series]`. The Films/Series pill on Browse carries into the page it opens.
+- Card pictures: the artwork of the category's most popular title, a different title per card, looked up once a day.
+- Category rows: New in … (this year and last, most popular first; decades get "Popular from the …"), Leaving soon (30 days), Top … series, Top … films (by IMDb rating with enough votes). A row needs three titles to show.
+- Grid: type pills with counts on mixed rows, the year alone on typed ones; Sort by Highest rated / Newest / Most popular, re-fetched in that order (90 titles at most). "Only on my services" appears once Your services exists. The big title fades into the bar as the page scrolls.
+- The bar on these pages (`TopBar`) dims with the tab bar.
+- Lists built from the data we have: Highest rated, Hidden gems (IMDb 7.5+, 2,000–30,000 votes), Under 90 minutes, New this year.
+- Not built yet: the Awards section and award rows (need the awards sync); Cult classics, Miniseries, Finished series, Book adaptations, True stories (no data for them); type-specific card pictures; service wordmark cards.
+
 ## Search (built 20 Nov, `src/screens/Search.tsx`, `src/lib/search.ts`)
 
 - Boards: Search (v182), Search results with the no-results cases (v121), Search offline (v260).

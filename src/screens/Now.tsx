@@ -15,7 +15,7 @@ function heroMeta(c: Card): string {
   return parts.filter(Boolean).join(' · ')
 }
 
-function Hero({ items }: { items: Card[] }) {
+export function Hero({ items }: { items: Card[] }) {
   const { push } = useNavActions()
   const [index, setIndex] = useState(0)
   const [dir, setDir] = useState(1)
@@ -74,7 +74,7 @@ function Hero({ items }: { items: Card[] }) {
 }
 
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
-function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
+export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
   const saved = useSaved()
   const [open, setOpen] = useState(false)
   const lift = useRef<HTMLDivElement>(null)
