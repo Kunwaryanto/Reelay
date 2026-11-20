@@ -212,59 +212,80 @@ export function OfflinePill() {
 /** The iOS activity indicator: eight spokes that appear one by one as you pull, then spin. */
 function Activity() {
   return (
-    <svg className="activity" width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+    <svg className="activity" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
       {Array.from({ length: 8 }, (_, i) => (
-        <line key={i} x1="13" y1="3.5" x2="13" y2="8.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
-          transform={`rotate(${i * 45} 13 13)`} style={{ '--i': i } as CSSProperties} />
+        <line key={i} x1="11" y1="2.5" x2="11" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          transform={`rotate(${i * 45} 11 11)`} style={{ '--i': i } as CSSProperties} />
       ))}
     </svg>
   )
 }
 
-const PULL = 70 // px of bounce that triggers a refresh
+const PULL = 80 // px past the top that triggers a refresh
 
 /**
- * Pull down past the top to refresh, like iOS. The page keeps its native bounce; this only reads how far
- * it bounced (iOS reports a negative scrollTop) and refreshes when you let go past the threshold.
+ * Pull down past the top to refresh, like Safari. The page keeps its native bounce; this reads how far it
+ * bounced (iOS reports a negative scrollTop). The spinner stays put and its spokes appear as you pull; it starts
+ * spinning once you've pulled far enough, and on release the page is held just below it until the refresh is done.
  * Spread `bind` on the scroll area and render `indicator` next to it, inside the same pane.
  */
 export function usePullToRefresh(refresh: () => Promise<unknown>) {
-  const el = useRef<HTMLDivElement>(null)
+  const ind = useRef<HTMLDivElement>(null)
+  const page = useRef<HTMLElement | null>(null)
   const touching = useRef(false)
   const armed = useRef(false)
-  const [busy, setBusy] = useState(false)
-  const busyRef = useRef(false)
+  const busy = useRef(false)
 
-  const paint = (pulled: number) => {
-    const node = el.current
-    if (!node || busyRef.current) return
-    const p = Math.min(1, pulled / PULL)
-    node.style.setProperty('--p', String(p))
-    node.style.transform = `translateY(${Math.max(0, pulled - 44)}px)`
+  const setState = (state: 'idle' | 'pull' | 'armed' | 'busy' | 'done') => {
+    if (ind.current) ind.current.dataset.state = state
+  }
+
+  const finish = () => {
+    const el = page.current
+    setState('done')
+    if (el) {
+      el.style.transition = 'transform 420ms var(--ease-out)'
+      el.style.transform = ''
+    }
+    setTimeout(() => {
+      if (el) el.style.transition = ''
+      busy.current = false
+      ind.current?.style.setProperty('--p', '0')
+      setState('idle')
+    }, 420)
   }
 
   const bind = {
     onTouchStart: () => { touching.current = true; armed.current = false },
     onTouchEnd: () => {
       touching.current = false
-      if (!armed.current || busyRef.current) return
+      if (!armed.current || busy.current) return
       armed.current = false
-      busyRef.current = true
-      setBusy(true)
-      el.current?.style.removeProperty('transform')
+      busy.current = true
+      setState('busy')
+      // Hold the page below the spinner. The native bounce carries it back up at the same time,
+      // so together they ease from where your finger let go to the held position.
+      const el = page.current
+      if (el) {
+        el.style.transition = 'transform 500ms cubic-bezier(0.2, 0.9, 0.3, 1)'
+        el.style.transform = 'translateY(var(--ptr-hold))'
+      }
       const started = Date.now()
-      Promise.resolve(refresh()).finally(() => {
-        setTimeout(() => { busyRef.current = false; setBusy(false); paint(0) }, Math.max(0, 700 - (Date.now() - started)))
+      Promise.resolve(refresh()).catch(() => {}).finally(() => {
+        setTimeout(finish, Math.max(0, 800 - (Date.now() - started)))
       })
     },
     onScrollPull: (e: React.UIEvent<HTMLElement>) => {
-      const pulled = -e.currentTarget.scrollTop
+      page.current = e.currentTarget
+      if (busy.current || !ind.current) return
+      const pulled = Math.max(0, -e.currentTarget.scrollTop)
       if (pulled >= PULL && touching.current) armed.current = true
-      paint(Math.max(0, pulled))
+      ind.current.style.setProperty('--p', String(Math.min(1, pulled / PULL)))
+      setState(armed.current ? 'armed' : pulled > 0 ? 'pull' : 'idle')
     },
   }
 
-  const indicator = <div ref={el} className="ptr" data-busy={busy} role={busy ? 'status' : undefined} aria-label={busy ? 'Refreshing' : undefined}><Activity /></div>
+  const indicator = <div ref={ind} className="ptr" data-state="idle" aria-hidden="true"><Activity /></div>
   return { bind, indicator }
 }
 

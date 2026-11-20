@@ -1,8 +1,7 @@
 /* Reelay app styles. Values come from tokens.css; layout numbers come from the Current boards. */
 
 html, body { height: 100%; overflow: hidden; }
-/* --app-h is set in main.tsx for Home Screen apps, where iOS 26 can report a viewport shorter than the screen. */
-#root { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); min-height: 0; overflow: hidden; background: var(--bg); }
+#root { position: fixed; inset: 0; min-height: 0; overflow: hidden; background: var(--bg); }
 /* On a computer the app sits in a phone-wide column until the desktop page is built. */
 @media (min-width: 500px) { #root { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 
@@ -115,7 +114,7 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .hero-art { transform: none !important; } .hero-dots i { animation: none; } }
 
 /* ---- Long-press menu ---- */
-.hold { position: fixed; inset: 0 0 calc(var(--gap, 0px) * -1) 0; z-index: 30; }
+.hold { position: fixed; inset: 0; z-index: 30; }
 .hold-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.3); -webkit-backdrop-filter: var(--blur-backdrop); backdrop-filter: var(--blur-backdrop); opacity: 0; transition: opacity var(--dur-menu-close) var(--ease-sheet); }
 .hold-poster { position: absolute; border-radius: 16px; corner-shape: squircle; overflow: hidden; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); transform-origin: 0 0; transition: transform var(--dur-menu-close) var(--ease-sheet); }
 .hold-poster img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
@@ -171,7 +170,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* ---- Settings (sprint 1) ---- */
 .settings-block { margin-top: var(--section-gap); }
 .version { margin: 12px 0 0; font: var(--type-meta); color: var(--text-faint); }
-.action-sheet { position: fixed; inset: 0 0 calc(var(--gap, 0px) * -1) 0; z-index: 30; }
+.action-sheet { position: fixed; inset: 0; z-index: 30; }
 .action-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
 .action-body { position: absolute; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); animation: sheet-up var(--dur-sheet) var(--ease-sheet); text-align: center; }
 .action-group { border-radius: 14px; overflow: hidden; background: rgba(44, 44, 46, 0.92); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); }
@@ -188,7 +187,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .offline-pill { position: fixed; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; translate: -50% 0; height: 28px; padding: 0 12px; border-radius: var(--radius-pill-28); background: rgba(40, 40, 40, 0.7); -webkit-backdrop-filter: var(--blur-pill); backdrop-filter: var(--blur-pill); display: flex; align-items: center; font: var(--type-meta); font-weight: 500; animation: rise-in 250ms var(--ease-out); }
 
 /* ---- Sheet ---- */
-.sheet { position: fixed; inset: auto 0 calc(var(--gap, 0px) * -1) 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
+.sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
   transform: translateY(calc(var(--drag, 0px) - var(--kb, 0px))); transition: transform var(--dur-sheet) var(--ease-sheet), overlay var(--dur-sheet) allow-discrete, display var(--dur-sheet) allow-discrete; }
 @media (min-width: 500px) { .sheet { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 .sheet[style*='--drag'] { transition: none; }
@@ -239,7 +238,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 }
 
 /* ---- Toast ---- */
-.toasts { position: fixed; z-index: 40; left: var(--margin); right: var(--margin); bottom: calc(92px - var(--gap, 0px)); pointer-events: none; }
+.toasts { position: fixed; z-index: 40; left: var(--margin); right: var(--margin); bottom: 92px; pointer-events: none; }
 @media (min-width: 500px) { .toasts { left: 50%; right: auto; width: 350px; margin-left: -175px; } }
 .toast { min-height: 48px; padding: 0 8px 0 16px; border-radius: 14px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; animation: rise-in 250ms var(--ease-out); }
 .toast span { font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -282,11 +281,32 @@ button.pill-open { padding: 0 12px 0 10px; }
 .dev-white { padding: 8px; border-radius: 8px; background: #fff; display: inline-flex; }
 .dev-wide { margin: 28px calc(var(--margin) * -1) 0; }
 
-/* ---- Pull to refresh ---- */
-.ptr { position: absolute; z-index: 3; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; margin-left: -13px; width: 26px; height: 26px; color: #fff; pointer-events: none; opacity: min(1, calc(var(--p, 0) * 1.4)); filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)); }
-.activity line { opacity: clamp(0, calc(var(--p, 0) * 8 - var(--i)), 1); }
-.ptr[data-busy='true'] { opacity: 1; transition: opacity 200ms var(--ease-out); }
-.ptr[data-busy='true'] .activity { animation: activity 800ms steps(8) infinite; }
-.ptr[data-busy='true'] .activity line { opacity: calc(1 - var(--i) * 0.1); }
+/* ---- Pull to refresh (like Safari's) ---- */
+:root { --ptr-hold: calc(env(safe-area-inset-top, 0px) + 48px); }
+.ptr { position: absolute; z-index: 3; top: calc(env(safe-area-inset-top, 0px) + 13px); left: 50%; margin-left: -11px; width: 22px; height: 22px; color: var(--text-faint); pointer-events: none; opacity: 0; }
+.ptr[data-state='pull'], .ptr[data-state='armed'], .ptr[data-state='busy'] { opacity: 1; }
+.ptr[data-state='done'] { opacity: 0; transition: opacity 250ms var(--ease-out); }
+.activity { display: block; }
+/* spokes appear one by one, clockwise from the top, over the first 75% of the pull */
+.ptr[data-state='pull'] .activity line { opacity: clamp(0, calc(var(--p, 0) * 10.7 - var(--i) - 0.5), 1); }
+/* once far enough: spin, with the trailing fade of the iOS spinner */
+.ptr[data-state='armed'] .activity, .ptr[data-state='busy'] .activity, .ptr[data-state='done'] .activity { animation: activity 1s steps(8) infinite; }
+.ptr[data-state='armed'] .activity line, .ptr[data-state='busy'] .activity line, .ptr[data-state='done'] .activity line { opacity: calc(0.23 + var(--i) * 0.11); }
 @keyframes activity { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .ptr[data-busy='true'] .activity { animation-duration: 2.4s; } }
+@media (prefers-reduced-motion: reduce) { .ptr .activity { animation-duration: 3s !important; } }
+
+/* ---- Screen check (temporary, for the black band at the bottom) ---- */
+html.screen-check, html.screen-check body { background: #ff00ff; }
+.sc { position: fixed; inset: 0; z-index: 1000; pointer-events: none; font: 500 11px/1.35 ui-monospace, Menlo, monospace; color: #fff; }
+.sc-ruler { position: fixed; top: 0; right: 0; width: 46px; border-left: 1px solid #ffff00; background: rgba(0, 0, 0, 0.35); }
+.sc-ruler span { position: absolute; right: 3px; translate: 0 -50%; color: #ffff00; }
+.sc-ruler span::before { content: ''; position: absolute; right: 100%; top: 50%; width: 8px; border-top: 1px solid #ffff00; margin-right: 3px; }
+.sc-mark { position: fixed; left: 0; padding: 0 6px; height: 16px; line-height: 16px; color: #000; }
+.sc-fixed-bottom { bottom: 0; background: #ff3b30; }
+.sc-lvh { top: calc(100lvh - 16px); left: 90px; background: #00e5ff; }
+.sc-screen { position: absolute; left: 180px; background: #ffff00; }
+.sc-panel { position: fixed; left: 8px; right: 54px; top: calc(env(safe-area-inset-top, 0px) + 60px); max-height: 60%; overflow: auto; pointer-events: auto; padding: 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.85); }
+.sc-panel pre { margin: 0; white-space: pre-wrap; word-break: break-all; font: inherit; }
+.sc-actions { display: flex; gap: 8px; margin-top: 10px; }
+.sc-actions button, .sc-show { pointer-events: auto; height: 34px; padding: 0 12px; border: 0; border-radius: 17px; background: #fff; color: #000; font: 600 13px/1 var(--font, system-ui); }
+.sc-show { position: fixed; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 60px); }

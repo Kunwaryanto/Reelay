@@ -28,36 +28,100 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 const today = () => new Date().toISOString().slice(0, 10)
 const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
 
+// Now mixes films and series, and recent titles with classics, so popularity alone (which favours
+// long-running series) doesn't fill the page. A title is shown once: rows skip anything already above them.
+const YEAR = new Date().getFullYear()
+const RECENT_FROM = YEAR - 4 // the last five years
+const CLASSIC_TO = YEAR - 15 // fifteen years and older
+
+type Kind = Card['kind']
+type Bucket = { kind: Kind; from?: number; to?: number }
+const BOTH: Bucket[] = [{ kind: 'film' }, { kind: 'series' }]
+const MIXED: Bucket[] = [
+  { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM },
+  { kind: 'film', to: CLASSIC_TO }, { kind: 'series', to: CLASSIC_TO },
+]
+
+/** Round robin over the buckets, skipping titles already on the page, until the row is full. */
+function interleave(lists: Card[][], seen: Set<number>, max = 20): Card[] {
+  const out: Card[] = []
+  const at = lists.map(() => 0)
+  while (out.length < max && lists.some((l, i) => at[i] < l.length)) {
+    lists.forEach((l, i) => {
+      while (at[i] < l.length && out.length < max) {
+        const t = l[at[i]++]
+        if (seen.has(t.id)) continue
+        seen.add(t.id)
+        out.push(t)
+        break
+      }
+    })
+  }
+  return out
+}
+
+type Filter = { genresAny?: string[]; genresAll?: string[]; from?: number; to?: number }
+
+async function cards(b: Bucket, f: Filter, limit: number): Promise<Card[]> {
+  let q = supabase.from('titles').select(CARD).eq('kind', b.kind)
+  const from = Math.max(b.from ?? -Infinity, f.from ?? -Infinity)
+  const to = Math.min(b.to ?? Infinity, f.to ?? Infinity)
+  if (Number.isFinite(from)) q = q.gte('year', from)
+  if (Number.isFinite(to)) q = q.lte('year', to)
+  if (f.genresAny) q = q.overlaps('genres', f.genresAny)
+  if (f.genresAll) q = q.contains('genres', f.genresAll)
+  return unwrap((await q.order('popularity', { ascending: false }).limit(limit)) as never)
+}
+
+async function rated(b: Bucket): Promise<Card[]> {
+  const recent = b.from !== undefined
+  let q = supabase.from('titles').select(`${CARD},scores!inner(imdb_rating,imdb_votes)`).eq('kind', b.kind)
+    .gte('scores.imdb_votes', recent ? 20000 : 50000)
+  q = recent ? q.gte('year', RECENT_FROM) : q.lt('year', RECENT_FROM)
+  return unwrap((await q.order('scores(imdb_rating)', { ascending: false }).limit(15)) as never)
+}
+
+const RATED: Bucket[] = [
+  { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM }, { kind: 'film' }, { kind: 'series' },
+]
+
 export async function loadNow(): Promise<NowData> {
-  const titles = () => supabase.from('titles')
-  const pop = { ascending: false }
-  const [hero, leaving, rated, d2000, d90, crime, comedy, drama] = await Promise.all([
-    titles().select(HERO).not('backdrop_path', 'is', null).not('logo_path', 'is', null).order('popularity', { ascending: false }).limit(5),
+  const heroQ = (kind: Kind) => supabase.from('titles').select(HERO).eq('kind', kind)
+    .not('backdrop_path', 'is', null).not('logo_path', 'is', null).order('popularity', { ascending: false }).limit(6)
+  const all = (buckets: Bucket[], f: Filter, limit: number) => Promise.all(buckets.map((b) => cards(b, f, limit)))
+
+  const [heroFilm, heroSeries, leaving, ratedLists, d2000, d90, crime, comedy, drama] = await Promise.all([
+    heroQ('film'), heroQ('series'),
     supabase.from('availability').select(`leaves_on,title:titles!inner(${CARD})`).gte('leaves_on', today()).lte('leaves_on', inDays(30)).order('leaves_on').limit(40),
-    titles().select(`${CARD},scores!inner(imdb_rating,imdb_votes)`).gte('scores.imdb_votes', 50000).order('scores(imdb_rating)', { ascending: false }).limit(20),
-    titles().select(CARD).gte('year', 2000).lte('year', 2009).order('popularity', pop).limit(20),
-    titles().select(CARD).gte('year', 1990).lte('year', 1999).order('popularity', pop).limit(20),
-    titles().select(CARD).overlaps('genres', ['Crime', 'Thriller']).order('popularity', pop).limit(20),
-    titles().select(CARD).contains('genres', ['Comedy']).order('popularity', pop).limit(20),
-    titles().select(CARD).contains('genres', ['Drama']).order('popularity', pop).limit(20),
+    Promise.all(RATED.map(rated)),
+    all(BOTH, { from: 2000, to: 2009 }, 25),
+    all(BOTH, { from: 1990, to: 1999 }, 25),
+    all(MIXED, { genresAny: ['Crime', 'Thriller'] }, 15),
+    all(MIXED, { genresAll: ['Comedy'] }, 15),
+    all(MIXED, { genresAll: ['Drama'] }, 15),
   ])
 
   const seen = new Set<number>()
+  const hero = interleave([unwrap(heroFilm as never), unwrap(heroSeries as never)], seen, 5)
+
+  // Leaving soon is a list of facts, so it keeps every title, and marks them as shown for the rows below.
+  const inLeaving = new Set<number>()
   const leavingCards = (unwrap(leaving as never) as { title: Card }[])
     .map((r) => r.title)
-    .filter((t) => t && !seen.has(t.id) && seen.add(t.id))
+    .filter((t) => t && !inLeaving.has(t.id) && inLeaving.add(t.id))
     .slice(0, 20)
+  leavingCards.forEach((t) => seen.add(t.id))
 
   const rows: Row[] = [
     { id: 'leaving', title: 'Leaving soon', items: leavingCards, notes: 'leaving' },
-    { id: 'rated', title: 'Highest rated', items: unwrap(rated as never) },
-    { id: '2000s', title: '2000s', items: unwrap(d2000 as never) },
-    { id: '90s', title: '90s', items: unwrap(d90 as never) },
-    { id: 'crime', title: 'Crime and thrillers', items: unwrap(crime as never) },
-    { id: 'comedy', title: 'Comedy', items: unwrap(comedy as never) },
-    { id: 'drama', title: 'Drama', items: unwrap(drama as never) },
+    { id: 'rated', title: 'Highest rated', items: interleave(ratedLists, seen) },
+    { id: '2000s', title: '2000s', items: interleave(d2000, seen) },
+    { id: '90s', title: '90s', items: interleave(d90, seen) },
+    { id: 'crime', title: 'Crime and thrillers', items: interleave(crime, seen) },
+    { id: 'comedy', title: 'Comedy', items: interleave(comedy, seen) },
+    { id: 'drama', title: 'Drama', items: interleave(drama, seen) },
   ]
-  return { hero: unwrap(hero as never), rows: rows.filter((r) => r.items.length >= 3) }
+  return { hero, rows: rows.filter((r) => r.items.length >= 3) }
 }
 
 export type Person = { id: number; name: string; profile_path: string | null }
