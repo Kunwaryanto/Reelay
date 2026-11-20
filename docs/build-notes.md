@@ -69,9 +69,10 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 • Any screen wider than a phone (or a non-touch browser) gets this one page, whatever the URL. No app behind it on desktop for now.
 • Same poster wall and camera as Start, at the same size, so it reads as the same product. Every column keeps climbing.
-• Layout: wordmark small in the top-left corner; centred “Made for iPhone” (48px, 600), one line “Scan with your camera to open Reelay.”, then the QR code to reelay.se on a white squircle. No URL, no footer: nothing else to do here.
+• Layout: wordmark small in the top-left corner; centred “Made for iPhone” (48px, 600), one line “Scan with your camera to open Reelay.”, then the QR code to the site on a white squircle. No URL, no footer: nothing else to do here.
 • Wall dimmed evenly (black 62%), darker in the centre and at the top and bottom edges.
-• The QR code opens reelay.se in Safari on iPhone, where the Add to Home Screen card takes over.
+• The QR code opens the site in Safari on iPhone. Generate it in the build from the site’s own address (usereelay.vercel.app today), never a hard-coded domain.
+• “Reelay is invite only.” sits alone at the bottom (12px, grey, 40px up), like on Start.
 • Wall fades in 600 ms once posters are ready; headline and code rise 8px, 500 ms, 120 ms after. Reduce Motion: the wall stands still at a fixed angle.
 
 ## Title detail variants
