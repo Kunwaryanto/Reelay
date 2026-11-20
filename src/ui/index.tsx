@@ -332,7 +332,9 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     if (!d) return
     if (open && !d.open) {
       delete d.dataset.closing
-      if (keyboard) { d.dataset.waiting = 'true'; d.style.setProperty('--kb-room', '0px') }
+      // While the keyboard comes up the sheet is invisible but already roughly in place (room estimated at 46% of
+      // the screen), so its field sits above the keyboard and iOS has no reason to scroll the page to reveal it.
+      if (keyboard) { d.dataset.waiting = 'true'; d.style.setProperty('--kb-room', '46lvh') }
       d.show()
     }
     else if (!open && d.open) {
@@ -356,7 +358,10 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
       const box = d.offsetParent
       const room = vv && box ? Math.round(box.getBoundingClientRect().bottom - (vv.offsetTop + vv.height)) : 0
       d.style.setProperty('--kb-room', `${room > 150 ? room : 0}px`) // no on-screen keyboard: an ordinary sheet
-      requestAnimationFrame(() => { delete d.dataset.waiting })
+      // then slide in from below the screen, in one movement
+      d.dataset.entering = 'true'
+      delete d.dataset.waiting
+      requestAnimationFrame(() => requestAnimationFrame(() => { delete d.dataset.entering }))
     }
     // settled = no keyboard movement for 120 ms; give up waiting after 900 ms (no keyboard came up)
     const moved = () => { clearTimeout(quiet); quiet = window.setTimeout(place, 120) }
