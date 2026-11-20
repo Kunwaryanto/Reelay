@@ -13,7 +13,10 @@ button { font: inherit; color: inherit; }
 
 .press { transition: transform var(--dur-press) var(--ease-out); }
 .press:active { transform: scale(0.97); }
-@media (prefers-reduced-motion: reduce) { .press:active { transform: none; } }
+/* cards: pressed only after a short wait (see useLongPress), so scrolling never nudges them */
+.card { transition: transform var(--dur-press) var(--ease-out); }
+.card[data-pressed='true'] { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .press:active, .card[data-pressed='true'] { transform: none; } }
 
 /* ---- Navigation: tabs and page stacks ---- */
 .stack { position: absolute; inset: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: none; scrollbar-width: none; background: var(--bg); }

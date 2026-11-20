@@ -123,7 +123,7 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
   return (
-    <a className="card press" href={`/title/${card.id}`} {...hold.handlers}
+    <a className="card" href={`/title/${card.id}`} {...hold.handlers}
       onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
       <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}`}>
         <Cover path={card.poster_path} service={service} eager={eager} />
@@ -134,26 +134,48 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   )
 }
 
-/** Hold 0.45 s without moving more than 8px. Scrolling always wins. */
+/**
+ * Hold 0.45 s without moving more than 8px. Scrolling always wins.
+ * The press shrink waits 90 ms like iOS, so a finger that lands only to scroll never moves the poster.
+ */
 export function useLongPress(onHold: (el: HTMLElement) => void) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const pressTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const start = useRef<[number, number] | null>(null)
+  const el = useRef<HTMLElement | null>(null)
   const didFire = useRef(false)
-  const cancel = () => { clearTimeout(timer.current); start.current = null }
+  const cancel = () => {
+    clearTimeout(timer.current); clearTimeout(pressTimer.current); start.current = null
+    if (el.current) delete el.current.dataset.pressed
+  }
   return {
     fired: () => didFire.current,
     handlers: {
       onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
         didFire.current = false
         start.current = [e.clientX, e.clientY]
-        const el = e.currentTarget
-        clearTimeout(timer.current)
-        timer.current = setTimeout(() => { if (start.current) { didFire.current = true; onHold(el) } }, 450)
+        el.current = e.currentTarget
+        const target = e.currentTarget
+        clearTimeout(timer.current); clearTimeout(pressTimer.current)
+        pressTimer.current = setTimeout(() => { if (start.current) target.dataset.pressed = 'true' }, 90)
+        timer.current = setTimeout(() => {
+          if (!start.current) return
+          didFire.current = true
+          delete target.dataset.pressed
+          onHold(target)
+        }, 450)
       },
       onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
         if (start.current && Math.hypot(e.clientX - start.current[0], e.clientY - start.current[1]) > 8) cancel()
       },
-      onPointerUp: cancel,
+      // a short tap still shows the press briefly before opening
+      onPointerUp: () => {
+        const t = el.current
+        const quick = start.current && !t?.dataset.pressed
+        clearTimeout(timer.current); clearTimeout(pressTimer.current); start.current = null
+        if (t && quick && !didFire.current) { t.dataset.pressed = 'true'; setTimeout(() => { delete t.dataset.pressed }, 120) }
+        else if (t) delete t.dataset.pressed
+      },
       onPointerCancel: cancel,
       onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
     },
