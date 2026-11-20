@@ -6,7 +6,11 @@
      touches those edges; otherwise Safari paints the bars a solid colour.
    overflow: clip (not hidden) so iOS can't scroll the app to reveal a focused field.
    --chrome-b (main.tsx) is how much of the bottom Safari's address bar covers; 0 in the Home Screen app. */
-html, body { height: 100lvh; overflow: hidden; }
+html, body { height: 100%; overflow: hidden; }
+/* Home Screen app only: iOS reports a viewport 59pt shorter than the screen there, so size to the large viewport.
+   (In Safari 100lvh is taller than what's visible, which left the page 40pt of room to scroll: Safari used it to
+   push everything up whenever the keyboard opened.) */
+@media (display-mode: standalone) { html, body { height: 100lvh; } }
 body { position: relative; }
 #root { position: absolute; inset: 0; min-height: 0; overflow: clip; background: var(--bg); }
 /* On a computer the app sits in a phone-wide column until the desktop page is built. */
