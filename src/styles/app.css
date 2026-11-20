@@ -275,8 +275,14 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 .start-wall { position: absolute; inset: 0; opacity: 0; transition: opacity var(--dur-wall-in) var(--ease-out); }
 .start-wall[data-ready='true'] { opacity: 1; }
 .start-word { position: absolute; left: 0; right: 0; top: 43.6%; margin: 0; display: flex; justify-content: center; }
-.start-ui { position: absolute; left: 0; right: 0; bottom: 40px; padding: 0 40px; display: flex; flex-direction: column; align-items: center; text-align: center; opacity: 0; transform: translateY(var(--rise)); pointer-events: none; transition: opacity var(--dur-rise) var(--ease-out) 120ms, transform var(--dur-rise) var(--ease-out) 120ms; }
-.start-ui[data-ready='true'] { opacity: 1; transform: none; pointer-events: auto; }
+.start-ui { position: absolute; left: 0; right: 0; bottom: 40px; padding: 0 40px; display: flex; flex-direction: column; align-items: center; text-align: center; pointer-events: none; }
+.start-ui[data-ready='true'] { pointer-events: auto; }
+/* Start's own intro: the button, then the invite line, rise from nothing with the letters' easing, starting
+   while the last letters land, so logo, button and line read as one sequence. (In-app content keeps --rise.) */
+.start-ui > * { opacity: 0; transform: translateY(24px); transition: opacity 600ms cubic-bezier(0.4, 0, 0.6, 1), transform 700ms cubic-bezier(0.16, 1, 0.3, 1); }
+.start-ui[data-ready='true'] > * { opacity: 1; transform: none; }
+.start-ui[data-ready='true'] > :nth-child(2) { transition-delay: 80ms; }
+@media (prefers-reduced-motion: reduce) { .start-ui > * { transform: none; transition-property: opacity; } }
 .start-ui p { margin: 64px 0 0; font: var(--type-meta); color: var(--text-faint); }
 .wall { position: absolute; inset: 0; overflow: hidden; }
 /* One canvas, tilted back in 3D. It is larger than the screen so the tilt never shows an edge. */

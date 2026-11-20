@@ -78,7 +78,8 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const wall = useQuery('start-wall', loadWall, { maxAge: 6 * 60 * 60 * 1000 })
 
   // The wordmark always finishes rising before the button shows.
-  useEffect(() => { const t = setTimeout(() => setReady(true), 1200); return () => clearTimeout(t) }, [])
+  // just as the last letters of the wordmark land
+  useEffect(() => { const t = setTimeout(() => setReady(true), 700); return () => clearTimeout(t) }, [])
 
   // An invite link: ask whether it still works.
   useEffect(() => {
