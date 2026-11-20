@@ -90,7 +90,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
 
   useEffect(() => {
     if (!open) return
-    const t = setTimeout(() => (step === 'code' ? codeInput : emailInput).current?.focus(), 50)
+    const t = setTimeout(() => (step === 'code' ? codeInput : emailInput).current?.focus({ preventScroll: true }), 50)
     return () => clearTimeout(t)
   }, [open, step])
 
@@ -104,7 +104,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
       stand.setAttribute('aria-hidden', 'true')
       stand.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0'
       document.body.append(stand)
-      stand.focus()
+      stand.focus({ preventScroll: true })
       setTimeout(() => stand.remove(), 1000)
     }
     setOpen(true)

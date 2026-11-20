@@ -419,6 +419,24 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
   }, [open, keyboard])
 
 
+  // Tapping a field that isn't focused yet: focus it ourselves without scrolling. Left to itself iOS scrolls the
+  // whole page to "reveal" the field as the keyboard comes up, then we put it back: a visible jump. Once a field is
+  // focused, touches on it are left alone (caret, selection, the Paste menu).
+  useEffect(() => {
+    const d = ref.current
+    if (!open || !d) return
+    const onTouch = (e: TouchEvent) => {
+      const t = e.target as HTMLElement
+      const field = t.closest('input, textarea') as HTMLInputElement | null
+        ?? (t.closest('.code')?.querySelector('input') as HTMLInputElement | null)
+      if (!field || field === document.activeElement || field.disabled) return
+      e.preventDefault()
+      field.focus({ preventScroll: true })
+    }
+    d.addEventListener('touchstart', onTouch, { passive: false })
+    return () => d.removeEventListener('touchstart', onTouch)
+  }, [open])
+
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
     if (!open) return
