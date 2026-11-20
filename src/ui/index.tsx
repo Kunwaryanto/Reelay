@@ -318,17 +318,14 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
  * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
  * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
-// Room the keyboard takes at the bottom of the app, measured on this phone the last time it came up (kept per
-// Home Screen app / Safari). Before the first measurement it's estimated from the screen, a little generously.
-const KB_ROOM_KEY = `reelay:kb-room:${matchMedia('(display-mode: standalone)').matches ? 'app' : 'safari'}`
-const kbRoom = () => {
-  try { const v = Number(localStorage.getItem(KB_ROOM_KEY)); if (v > 150) return v } catch { /* private mode */ }
-  return Math.round(screen.height * 0.45)
-}
+// Room left for the keyboard under a sheet with a field: the same share of the screen on every phone. The iPhone
+// keyboard with its suggestion bar and Safari's bar above it takes about 41–46% of the screen in portrait, so 46%
+// clears it on all of them, with a little more gap on the largest.
+const KB_ROOM = '46lvh'
 
 /**
- * `keyboard`: for sheets with a text field. The sheet is made just tall enough that its content clears the
- * keyboard, and stays put: it never moves with the keyboard (a web page can't follow the keyboard smoothly on iOS).
+ * `keyboard`: for sheets with a text field. The sheet is tall enough that its content clears the keyboard, and
+ * stays put: it never moves with the keyboard (a web page can't follow the keyboard smoothly on iOS).
  */
 export function Sheet({ open, onClose, label, keyboard, children }: { open: boolean; onClose: () => void; label: string; keyboard?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -339,7 +336,6 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     if (!d) return
     if (open && !d.open) {
       delete d.dataset.closing
-      if (keyboard) d.style.setProperty('--kb-room', `${kbRoom()}px`); else d.style.removeProperty('--kb-room')
       d.show()
     }
     else if (!open && d.open) {
@@ -352,25 +348,6 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
   }, [open])
 
 
-  // While a field is focused, note how much room the keyboard really takes, for next time (the sheet doesn't move).
-  useEffect(() => {
-    if (!open || !keyboard || !window.visualViewport) return
-    const vv = window.visualViewport
-    let t = 0
-    const note = () => {
-      clearTimeout(t)
-      t = window.setTimeout(() => {
-        const d = ref.current, box = d?.offsetParent
-        const a = document.activeElement
-        if (!d || !box || !(a instanceof HTMLInputElement) || !d.contains(a)) return
-        const room = Math.round(box.getBoundingClientRect().bottom - (vv.offsetTop + vv.height))
-        if (room > 150) try { localStorage.setItem(KB_ROOM_KEY, String(room + 8)) } catch { /* private mode */ }
-      }, 400)
-    }
-    vv.addEventListener('resize', note)
-    return () => { clearTimeout(t); vv.removeEventListener('resize', note) }
-  }, [open, keyboard])
-
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
     if (!open) return
@@ -382,7 +359,7 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
   return (
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
-    <dialog ref={ref} className="sheet" data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
+    <dialog ref={ref} className="sheet" data-keyboard={keyboard || undefined} style={keyboard ? { '--kb-room': KB_ROOM } as CSSProperties : undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
       // drag down from anywhere on the sheet (not from a field or button) to close it
       onPointerDown={(e) => {

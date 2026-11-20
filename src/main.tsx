@@ -19,9 +19,14 @@ window.visualViewport?.addEventListener('resize', measureChrome)
 window.addEventListener('resize', measureChrome)
 document.addEventListener('focusout', () => setTimeout(measureChrome, 400))
 
-// The app never scrolls the page itself (pages scroll inside it), but iOS scrolls the page to show a focused
-// field above the keyboard, which moves the whole background up. Put it straight back.
-window.addEventListener('scroll', () => { if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0) }, { passive: true })
+// The app never scrolls the page itself (pages scroll inside it). If iOS scrolls it to show a focused field,
+// put it back once the keyboard has settled, not on every scroll event (snapping back mid-animation made the
+// sheet jump while the keyboard opened).
+let settleScroll = 0
+window.addEventListener('scroll', () => {
+  clearTimeout(settleScroll)
+  settleScroll = window.setTimeout(() => { if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0) }, 300)
+}, { passive: true })
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
