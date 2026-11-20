@@ -608,3 +608,22 @@ html[data-runway] .tabbar { touch-action: none; }
 
 .wl-services { min-height: var(--hit); margin: -14px 0; padding: 0; border: 0; background: none; font: var(--type-meta); color: var(--text-faint); display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap; }
 .row-text b.err { color: var(--error); }
+
+/* ---- Person ---- */
+.person-head { margin: calc(var(--safe-top) + 75px) var(--margin) 0; display: flex; align-items: center; gap: 16px; }
+.person-head .avatar { flex: none; font: 600 22px/1 var(--font); color: var(--text-faint); }
+.person-head .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.person-head > div { flex: 1; min-width: 0; }
+.person-head h1 { margin: 0; font: var(--type-title); letter-spacing: var(--track-title); }
+.person-head p { margin: 2px 0 0; font: var(--type-meta); color: var(--text-muted); }
+.person-bar { margin: 14px var(--margin) 0 0; display: flex; align-items: center; gap: 4px; }
+.person-bar > div { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding: 0 12px 0 var(--margin); }
+.person-bar .wl-pill { flex: none; }
+.person-bar .wl-tune { margin-right: -8px; }
+.person-count { height: var(--hit); display: flex; align-items: center; font: var(--type-meta); color: var(--text-faint); }
+.gone-text { margin: 0; font: var(--type-title); letter-spacing: var(--track-title); }
+.cast a { width: 100%; display: flex; flex-direction: column; align-items: center; color: inherit; -webkit-touch-callout: none; }
+.s-person { display: flex; align-items: center; gap: 14px; padding: 6px var(--margin); color: #fff; }
+.s-person .avatar { flex: none; width: 48px; height: 48px; margin: 12px 0; font-size: 15px; }
+.s-people { margin-bottom: 0; padding-bottom: 0; }
+.s-people + .s-results { margin-top: 0; }

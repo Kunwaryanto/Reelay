@@ -86,6 +86,13 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 - Language is left out until there is Swedish copy to switch to.
 - A temporary Testing section stays at the bottom (Reload, Show onboarding again, build and layout numbers).
 
+## Person (built 21 Nov, `src/screens/Person.tsx`)
+
+- Board v231. Opened from the cast on a title page and from People in Search (`/person/<id>`).
+- Shows what the catalogue has: photo or initials, name, what they're known for and how many of their titles Reelay has; role pills with counts when there is more than one role; the grid with year and character or job; Sort (Newest, Oldest, A–Z), Type, and Only on my services once services are picked.
+- Not there: birth details, the biography and the Awards section. The catalogue doesn't store them.
+- Search: a plain name query also looks up people (names starting with the words first). Two show under All, all of them under a People pill.
+
 ## Browse (built 21 Nov, `src/screens/Browse.tsx`, `src/lib/browse.ts`)
 
 - Boards: Browse, Category, Grid · mixed list, Grid · typed list (all v121).

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { SERVICE_NAME, kindWord, leavingNote, loadTitle, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
-import { useDimOnScroll } from '../lib/nav'
+import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { BackButton, Icon, Laurel, LoadFailed, PosterRow, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
@@ -12,6 +12,7 @@ const names = (t: TitleDetail, role: string) => t.credits.filter((c) => c.role =
 
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
+  const { push } = useNavActions()
   const [open, setOpen] = useState(false)
   const film = t.kind === 'film'
   const first = t.availability[0]
@@ -106,11 +107,13 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
           <div className="row-scroll noscroll"><ul className="cast">
             {cast.map((c) => (
               <li key={c.person.id}>
-                <span className="avatar" aria-hidden="true">
-                  {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
-                </span>
-                <span className="cast-name">{c.person.name}</span>
-                {c.character && <span className="cast-role">{c.character}</span>}
+                <a href={`/person/${c.person.id}`} onClick={(e) => { e.preventDefault(); push(`/person/${c.person.id}`) }}>
+                  <span className="avatar" aria-hidden="true">
+                    {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
+                  </span>
+                  <span className="cast-name">{c.person.name}</span>
+                  {c.character && <span className="cast-role">{c.character}</span>}
+                </a>
               </li>
             ))}
           </ul></div>

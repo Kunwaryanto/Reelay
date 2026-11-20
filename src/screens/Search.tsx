@@ -14,7 +14,7 @@ import {
 } from '../lib/search'
 import { Button, Icon, LoadFailed, Sheet, SmallButton, useKeyboardRoom } from '../ui'
 
-type Kind = 'all' | 'series' | 'film'
+type Kind = 'all' | 'series' | 'film' | 'people'
 type Sort = 'best' | 'rated' | 'newest'
 const SORTS: [Sort, string][] = [['best', 'Best match'], ['rated', 'Highest rated'], ['newest', 'Newest']]
 
@@ -118,9 +118,11 @@ export default function Search() {
 
   const all = found?.hits ?? []
   const mine = all.filter((h) => !onlyMine || (hasPicked ? h.services.some((s) => picked.includes(s)) : h.services.length > 0))
-  const counts = { all: mine.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
+  const folks = found?.people ?? []
+  const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
   const typed = tokens.find((t) => t.key === 'kind') // the words already chose films or series
-  const shown = mine.filter((h) => kind === 'all' || typed || h.kind === kind)
+  const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || typed || h.kind === kind)
+  const shownPeople = kind === 'people' ? folks : kind === 'all' ? folks.slice(0, 2) : []
   const list = sort === 'best' ? shown : [...shown].sort((a, b) => (sort === 'rated' ? (b.rating ?? 0) - (a.rating ?? 0) : (b.year ?? 0) - (a.year ?? 0)))
 
   const remember = (r: Recent) => setRecents((old) => { const next = addRecent(old, r); writeRecents(next); return next })
@@ -134,8 +136,8 @@ export default function Search() {
   const run = (text: string) => { change(text); setKind('all'); setDrawer(false) }
 
   // why there is nothing, and the one step that gets something back
-  const empty = hasQ && !waiting && !error && found !== null && list.length === 0
-  const other: Kind = kind === 'film' ? 'series' : 'film'
+  const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0
+  const other: 'film' | 'series' = kind === 'film' ? 'series' : 'film'
   const nothing = !empty ? null
     : onlyMine && all.length ? {
       title: hasPicked ? 'None on your services' : 'None streaming right now',
@@ -144,7 +146,7 @@ export default function Search() {
         : `${all.length === 1 ? '1 match isn’t' : `${all.length} matches aren’t`} on a service in Sweden right now.`,
       action: hasPicked ? 'Show all services' : 'Show them', run: () => setOnlyMine(false), popular: false,
     }
-      : kind !== 'all' && !typed && mine.length ? {
+      : (kind === 'film' || kind === 'series') && !typed && mine.length ? {
         title: kind === 'film' ? 'No films match' : 'No series match', body: '',
         action: `Show ${other === 'film' ? 'films' : 'series'} (${counts[other]})`, run: () => setKind(other), popular: false,
       }
@@ -214,7 +216,7 @@ export default function Search() {
             <>
               <div className="wl-filters">
                 <div role="group" aria-label="Type">
-                  {!typed && ([['all', 'All'], ['series', 'Series'], ['film', 'Films']] as [Kind, string][]).map(([k, label]) => (
+                  {!typed && ([['all', 'All'], ['series', 'Series'], ['film', 'Films'], ...(folks.length ? [['people', 'People']] : [])] as [Kind, string][]).map(([k, label]) => (
                     <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={`${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
                       <span>{label}<sup aria-hidden="true">{counts[k]}</sup></span>
                     </button>
@@ -237,6 +239,19 @@ export default function Search() {
 
               {!online && list.length === 0 && <p className="s-note">Search needs a connection for this. We’ll search again when you’re back.</p>}
               {online && error && <div className="s-failed"><LoadFailed what="results" retry={retry} retrying={waiting} compact /></div>}
+              {shownPeople.length > 0 && (
+                <ul className="s-results s-people">
+                  {shownPeople.map((p) => (
+                    <li key={p.id}>
+                      <a className="s-person" href={`/person/${p.id}`} onClick={(e) => { e.preventDefault(); input.current?.blur(); push(`/person/${p.id}`) }}>
+                        <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" loading="lazy" /> : p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>
+                        <span className="wl-text"><b>{p.name}</b>{p.known_for && <small>{p.known_for}</small>}</span>
+                        <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)' }} />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <ul className="s-results" data-waiting={waiting}>
                 {list.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} />)}
               </ul>
@@ -299,7 +314,7 @@ export default function Search() {
           <span><b>{hasPicked ? 'Only on my services' : 'Only what’s streaming'}</b>{hasPicked && <small>{picked.map(nameOf).slice(0, 3).join(', ')}</small>}</span>
           <i aria-hidden="true" />
         </button>
-        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 result' : `${list.length} results`}</Button></div>
+        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length + shownPeople.length === 1 ? '1 result' : `${list.length + shownPeople.length} results`}</Button></div>
       </Sheet>, document.getElementById('root') ?? document.body)}
     </main>
   )

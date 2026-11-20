@@ -7,6 +7,7 @@ import Dev from './screens/Dev'
 import Browse, { browsePage } from './screens/Browse'
 import Invites from './screens/Invites'
 import Now from './screens/Now'
+import Person from './screens/Person'
 import Search from './screens/Search'
 import { PrivacyPolicy, Terms } from './screens/Legal'
 import Settings, { settingsPage } from './screens/Settings'
@@ -18,6 +19,8 @@ import { OfflinePill, TabBar, ToastProvider } from './ui'
 function renderPage(path: string) {
   const title = path.match(/^\/title\/(\d+)$/)
   if (title) return <Title id={Number(title[1])} />
+  const person = path.match(/^\/person\/(\d+)$/)
+  if (person) return <Person id={Number(person[1])} />
   if (path.startsWith('/browse/')) { const page = browsePage(path); if (page) return page }
   if (path === '/settings') return <Settings />
   if (path.startsWith('/settings/')) { const page = settingsPage(path); if (page) return page }

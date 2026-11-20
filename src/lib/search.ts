@@ -175,7 +175,18 @@ export async function byFilters(f: Filters, max = 60): Promise<Hit[]> {
   return rows.map(toHit)
 }
 
-export type Found = { hits: Hit[]; tokens: Token[] }
+export type PersonHit = { id: number; name: string; profile_path: string | null; known_for: string | null }
+
+/** People whose name contains the words; names that start with them first. */
+async function people(text: string): Promise<PersonHit[]> {
+  const needle = fold(text).replace(/[%_,()]/g, ' ').trim()
+  if (needle.length < 3) return []
+  const rows = unwrap(await supabase.from('people').select('id,name,profile_path,known_for').ilike('search_text', `%${needle}%`).limit(30)) as PersonHit[]
+  const rank = (p: PersonHit) => { const n = fold(p.name); return n === needle ? 0 : n.startsWith(needle) ? 1 : n.split(' ').some((w) => w.startsWith(needle)) ? 2 : 3 }
+  return rows.sort((a, b) => rank(a) - rank(b) || (a.profile_path ? 0 : 1) - (b.profile_path ? 0 : 1)).slice(0, 8)
+}
+
+export type Found = { hits: Hit[]; tokens: Token[]; people: PersonHit[] }
 
 /**
  * Search for what was typed. Words that name a service, type, decade, genre or language become filters,
@@ -184,19 +195,22 @@ export type Found = { hits: Hit[]; tokens: Token[] }
  */
 export async function search(typed: string, removed: string[]): Promise<Found> {
   const text = typed.replace(/\s+/g, ' ').trim()
-  if (text.length < 2) return { hits: [], tokens: [] }
+  if (text.length < 2) return { hits: [], tokens: [], people: [] }
   const parsed = parseQuery(text)
-  if (!parsed.tokens.length) return { hits: await byName(text), tokens: [] }
+  if (!parsed.tokens.length) {
+    const [hits, found] = await Promise.all([byName(text), people(text).catch(() => [])])
+    return { hits, tokens: [], people: found }
+  }
 
   const phrase = text.includes(' ') ? await byName(text, 30) : []
   const whole = fold(text)
-  if (phrase.some((h) => fold(h.title).includes(whole))) return { hits: phrase, tokens: [] }
+  if (phrase.some((h) => fold(h.title).includes(whole))) return { hits: phrase, tokens: [], people: [] }
 
   const tokens = parsed.tokens.filter((t) => !removed.includes(t.key))
   const f = merge(tokens)
-  if (parsed.rest.length >= 2) return { hits: (await byName(parsed.rest, 100)).filter((h) => passes(h, f)), tokens }
-  if (!tokens.length) return { hits: [], tokens }
-  return { hits: await byFilters(f), tokens }
+  if (parsed.rest.length >= 2) return { hits: (await byName(parsed.rest, 100)).filter((h) => passes(h, f)), tokens, people: [] }
+  if (!tokens.length) return { hits: [], tokens, people: [] }
+  return { hits: await byFilters(f), tokens, people: [] }
 }
 
 /** For "Popular right now" under an empty result. */
