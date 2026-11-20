@@ -168,6 +168,71 @@ export async function loadWatchlist(): Promise<Saved[]> {
   return unwrap(await supabase.from('watchlist').select('title_id,notify')) as Saved[]
 }
 
+/** A saved title with what the Watchlist shows about it. */
+export type SavedTitle = {
+  id: number
+  kind: Card['kind']
+  title: string
+  year: number | null
+  poster_path: string | null
+  availability: Avail[]
+  rating: number | null
+  notify: boolean
+  added_at: string
+}
+
+export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
+  type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'notify' | 'added_at'> & { scores: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null }) | null }
+  const rows = unwrap(await supabase.from('watchlist')
+    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,availability(service_id,leaves_on),scores(imdb_rating))')
+    .order('added_at', { ascending: false }) as never) as Raw[]
+  return rows.filter((r) => r.title).map((r) => {
+    const { scores, ...t } = r.title!
+    const score = Array.isArray(scores) ? scores[0] : scores
+    return { ...t, availability: t.availability ?? [], rating: score?.imdb_rating ?? null, notify: r.notify, added_at: r.added_at }
+  })
+}
+
+/** The services someone has picked as theirs. Empty until Your services is set up: then every service counts. */
+export async function loadMyServices(): Promise<string[]> {
+  return (unwrap(await supabase.from('user_services').select('service_id')) as { service_id: string }[]).map((r) => r.service_id)
+}
+
+/** Posters to pick from when the Watchlist is empty: recent and classic films and series, mixed. */
+export async function loadPicks(): Promise<Card[]> {
+  const lists = await Promise.all(MIXED.map((b) => cards(b, {}, 10)))
+  return interleave(lists, new Set(), 33)
+}
+
+// ---- Invites (admins) ------------------------------------------------------
+
+export type Invite = {
+  id: string; token: string; created_by: string | null; make_admin: boolean; created_at: string; expires_at: string
+  used_by: string | null; used_email: string | null; used_at: string | null; joined_at: string | null
+}
+
+export const inviteState = (inv: Invite): 'waiting' | 'joined' | 'expired' =>
+  inv.joined_at ? 'joined' : new Date(inv.expires_at) <= new Date() ? 'expired' : 'waiting'
+
+export async function loadInvites(): Promise<Invite[]> {
+  return unwrap(await supabase.from('invites').select('*').order('created_at', { ascending: false })) as Invite[]
+}
+export async function createInvite(): Promise<Invite> {
+  return unwrap(await supabase.rpc('create_invite')) as Invite
+}
+export async function cancelInvite(id: string) {
+  unwrap(await supabase.rpc('cancel_invite', { invite_id: id }))
+}
+export async function restoreInvite(inv: Invite) {
+  unwrap(await supabase.rpc('restore_invite', { inv }))
+}
+
+/** "18 Nov" */
+export function shortDate(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`
+}
+
 export async function saveTitle(userId: string, titleId: number, notify: boolean) {
   unwrap(await supabase.from('watchlist').upsert({ user_id: userId, title_id: titleId, notify, updated_at: new Date().toISOString() }))
 }

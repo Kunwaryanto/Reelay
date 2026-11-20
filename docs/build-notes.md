@@ -70,6 +70,18 @@ Copied from the notes beside the screens on the Current page of the design canva
 • /i/<token> opens Start. Ask redeem-invite with { token }: valid → Join Reelay; expired or used → the sheet with the reason. On Send code ask it with { token, email }: created or existing → signInWithOtp({ shouldCreateUser: false }) and the usual code. Without a link, signInWithOtp with shouldCreateUser false; a “signups not allowed” error means no account → the “Reelay is invite only” sheet.
 • An invite is spent only at the account’s first sign-in (joined_at), so a mistyped email doesn’t burn the link.
 
+Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: tapping a waiting row shares that link again; where the share sheet is missing the link is copied ("Link copied").
+
+## Watchlist (built 20 Nov, `src/screens/Watchlist.tsx`)
+
+- List from board v128, empty state (pick wall) from v189.
+- **No Your services yet:** `user_services` is empty until that screen is built, so every service counts as yours. The sections then read "Leaving soon", "Streaming now" and "Not streaming in Sweden", and the switch reads "Only what’s streaming". Once services are picked the designed names and the services label appear on their own.
+- Leaving soon = leaves within 30 days on one of your services.
+- Swipe a row left for Remove (opens past 44px); the bell on a not-streaming row turns Notify on and off.
+- The sort sheet is mounted on the body so it covers the tab bar.
+- Pick wall: 33 posters from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
+- Not built yet: long press on a row, the "New season" note, the link from the services label to Your services.
+
 ## Settings pages: Credits, Privacy, policy and terms
 
 • Credits: two lists in the Settings row style, Data (TMDB · Titles, posters and cast; JustWatch · Where to watch; Streaming Availability · Leaving dates; IMDb · IMDb rating; MDBList · Rotten Tomatoes and Letterboxd scores; Wikidata · Awards) and Design (Inter · Typeface by Rasmus Andersson · SIL Open Font License; Material Symbols · Icons by Google · Apache License 2.0).

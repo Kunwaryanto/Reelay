@@ -11,6 +11,12 @@ type Ctx = {
   isNotifying: (id: number) => boolean
   toggleSaved: (id: number, title: string) => void
   toggleNotify: (id: number) => void
+  /** the saved list has arrived (from the phone or the server) */
+  loaded: boolean
+  /** every saved title id, local changes included */
+  ids: number[]
+  /** save several at once, without a toast each (the empty Watchlist's Add) */
+  addMany: (ids: number[]) => Promise<void>
 }
 const C = createContext<Ctx | null>(null)
 export const useSaved = () => useContext(C)!
@@ -20,6 +26,7 @@ export function SavedProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id
   const toast = useToast()
   const q = useQuery<Saved[]>(userId ? `watchlist:${userId}` : null, loadWatchlist)
+  const loaded = q.data !== undefined
   // local changes win until the server copy catches up
   const [local, setLocal] = useState<Record<number, Saved | null>>({})
 
@@ -29,16 +36,25 @@ export function SavedProvider({ children }: { children: ReactNode }) {
   }, [local, q.data])
 
   const write = useCallback((id: number, next: Saved | null, prev: Saved | null) => {
-    if (!userId) return
+    if (!userId) return Promise.resolve()
     setLocal((l) => ({ ...l, [id]: next }))
     const job = next ? saveTitle(userId, id, next.notify) : unsaveTitle(userId, id)
-    job.catch(() => {
+    return job.then(() => {}, () => {
       setLocal((l) => ({ ...l, [id]: prev }))
       toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to save.' })
     })
   }, [userId, toast])
 
+  const ids = useMemo(() => {
+    const set = new Set((q.data ?? []).map((s) => s.title_id))
+    for (const [id, v] of Object.entries(local)) { if (v) set.add(Number(id)); else set.delete(Number(id)) }
+    return [...set]
+  }, [q.data, local])
+
   const value = useMemo<Ctx>(() => ({
+    ids,
+    loaded,
+    addMany: (list) => Promise.all(list.filter((id) => !get(id)).map((id) => write(id, { title_id: id, notify: false }, null))).then(() => {}),
     isSaved: (id) => !!get(id),
     isNotifying: (id) => !!get(id)?.notify,
     toggleSaved: (id, title) => {
@@ -58,7 +74,7 @@ export function SavedProvider({ children }: { children: ReactNode }) {
       write(id, { title_id: id, notify: true }, prev)
       toast({ text: 'We’ll let you know when it’s on.', action: 'Undo', run: () => write(id, prev, { title_id: id, notify: true }) })
     },
-  }), [get, write, toast])
+  }), [get, write, toast, ids, loaded])
 
   return <C.Provider value={value}>{children}</C.Provider>
 }
