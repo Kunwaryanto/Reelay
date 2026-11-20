@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQuery } from '../lib/query'
+import { standalone } from '../lib/runway'
 import { Button, GlassButton, Icon, IconButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
 
 const LAST_EMAIL = 'reelay:last-email'
@@ -98,7 +99,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     if (step !== 'code' || ok) { setStep(next); setSendErr('') }
     // Safari only opens the keyboard for a field focused during the tap itself, and the sign-in page isn't there
     // yet. So focus a stand-in field now (the keyboard comes up) and hand the focus to the real one once it exists.
-    if (!STANDALONE && next !== 'gone') {
+    if (!standalone && next !== 'gone') {
       const stand = document.createElement('input')
       stand.setAttribute('aria-hidden', 'true')
       stand.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0'
@@ -262,10 +263,9 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
 
 // In the Home Screen app sign-in is a sheet. In Safari it's its own page: Safari moves its whole visible area
 // around its bars while the keyboard opens, which a sheet can't hide but a plain page doesn't mind.
-const STANDALONE = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
 
 function SignIn(props: { open: boolean; onClose: () => void; keyboard: boolean; label: string; children: ReactNode }) {
-  if (STANDALONE) return <Sheet {...props} />
+  if (standalone) return <Sheet {...props} />
   return <SignInPage {...props} />
 }
 
@@ -273,7 +273,7 @@ function SignInPage({ open, onClose, label, children }: { open: boolean; onClose
   const [shown, setShown] = useState(open)
   const [closing, setClosing] = useState(false)
   const close = useRef(onClose)
-  close.current = onClose
+  useEffect(() => { close.current = onClose })
   // a history entry, so Safari's back swipe and button close the page
   useEffect(() => {
     if (!open) return

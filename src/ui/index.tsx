@@ -319,8 +319,8 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
  * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
 // The room the keyboard takes at the bottom of the app, measured the first time a sheet with a field opens on
-// this phone, and kept (separately for the Home Screen app and Safari).
-const KB_KEY = `reelay:kb-room:${matchMedia('(display-mode: standalone)').matches ? 'app' : 'safari'}`
+// this phone, and kept. (Sheets with fields are only used in the Home Screen app; Safari has a sign-in page.)
+const KB_KEY = 'reelay:kb-room:app'
 const storedRoom = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
 
 /**
@@ -353,7 +353,7 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
       const t = setTimeout(() => { d.close(); delete d.dataset.closing }, reduce ? 0 : 380)
       return () => clearTimeout(t)
     }
-  }, [open])
+  }, [open, keyboard])
 
 
   // First time only: wait for the keyboard to settle, measure the room it takes, keep it, then slide up.
@@ -458,8 +458,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function TabBar({ hidden }: { hidden?: boolean }) {
   const { tab, setTab, dimmed } = useNav()
   const items: [Tab, string, ReactNode][] = [
-    ['now', 'Now', <HomeIcon />], ['browse', 'Browse', <Icon name="browse" />],
-    ['watchlist', 'Watchlist', <Icon name="bookmark" />], ['search', 'Search', <Icon name="search" />],
+    ['now', 'Now', <HomeIcon key="i" />], ['browse', 'Browse', <Icon key="i" name="browse" />],
+    ['watchlist', 'Watchlist', <Icon key="i" name="bookmark" />], ['search', 'Search', <Icon key="i" name="search" />],
   ]
   return (
     <nav className="tabbar" aria-label="Main" data-dim={dimmed} data-hidden={hidden} inert={hidden}>

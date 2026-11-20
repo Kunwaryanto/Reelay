@@ -1,11 +1,10 @@
 /* Reelay app styles. Values come from tokens.css; layout numbers come from the Current boards. */
 
-/* The page itself is screen-tall and nothing is fixed to the viewport, everywhere:
-   - Home Screen app: iOS lays the page out 59pt short of the screen and cuts fixed layers off there.
-   - Safari 26: content runs behind the status bar and the floating address bar only when no fixed layer
-     touches those edges; otherwise Safari paints the bars a solid colour.
-   overflow: clip (not hidden) so iOS can't scroll the app to reveal a focused field.
-   Signed-in use is meant for the Home Screen app; in Safari, sign-in is its own page (Start.tsx). */
+/* Layout: the app fills the page and nothing is fixed to the viewport (iOS cuts fixed layers off short of the
+   screen in the Home Screen app). overflow: clip (not hidden) so iOS can't scroll the app to reveal a field.
+   --safe-top / --safe-bottom: how far UI keeps clear of the app's top and bottom edges.
+   --edge-b: how far the app runs below the usable area (only in Safari, see the runway at the end).
+   In Safari, sign-in is its own page (Start.tsx) and the signed-in app runs behind Safari's bars (lib/runway.ts). */
 :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --edge-b: 0px; }
 html, body { height: 100%; overflow: hidden; }
 /* Home Screen app only: iOS reports a viewport 59pt shorter than the screen there, so size to the large viewport.
@@ -332,25 +331,6 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 .ptr[data-state='armed'] .activity line, .ptr[data-state='busy'] .activity line, .ptr[data-state='done'] .activity line { opacity: calc(0.23 + var(--i) * 0.11); }
 @keyframes activity { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ptr .activity { animation-duration: 3s !important; } }
-
-/* ---- Screen check (temporary, for the black band at the bottom) ---- */
-html.screen-check, html.screen-check body { background: #ff00ff; }
-.sc { position: fixed; inset: 0; z-index: 1000; pointer-events: none; font: 500 11px/1.35 ui-monospace, Menlo, monospace; color: #fff; }
-.sc-ruler { position: absolute; z-index: 1000; pointer-events: none; font: 500 11px/1.35 ui-monospace, Menlo, monospace; top: 0; right: 0; width: 46px; border-left: 1px solid #ffff00; background: rgba(0, 0, 0, 0.35); }
-.sc-ruler span { position: absolute; right: 3px; translate: 0 -50%; color: #ffff00; }
-.sc-ruler span::before { content: ''; position: absolute; right: 100%; top: 50%; width: 8px; border-top: 1px solid #ffff00; margin-right: 3px; }
-.sc-mark { position: fixed; left: 0; padding: 0 6px; height: 16px; line-height: 16px; color: #000; }
-.sc-fixed-bottom { bottom: 0; background: #ff3b30; }
-.sc-lvh { top: calc(100lvh - 16px); left: 90px; background: #00e5ff; }
-.sc-screen { position: absolute; left: 180px; background: #ffff00; }
-.sc-abs { position: absolute; z-index: 1000; left: 0; background: #34c759; font: 500 11px/16px ui-monospace, Menlo, monospace; }
-.sc-actions button[data-on='true'] { background: #34c759; }
-.sc-panel { position: fixed; left: 8px; right: 54px; top: calc(var(--safe-top) + 60px); max-height: 60%; overflow: auto; pointer-events: auto; padding: 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.85); }
-.sc-panel pre { margin: 0; white-space: pre-wrap; word-break: break-all; font: inherit; }
-.sc-actions { display: flex; gap: 8px; margin-top: 10px; }
-.sc-actions button, .sc-show { pointer-events: auto; height: 34px; padding: 0 12px; border: 0; border-radius: 17px; background: #fff; color: #000; font: 600 13px/1 var(--font, system-ui); }
-.sc-show { position: fixed; left: 8px; top: calc(var(--safe-top) + 60px); }
-
 
 /* ---- Sign-in page (Safari) ---- */
 .signin-page { position: absolute; inset: 0; z-index: 50; background: var(--bg); padding: calc(var(--safe-top) + 64px) var(--margin) 24px; overflow-y: auto; animation: page-in var(--dur-sheet) var(--ease-sheet); }

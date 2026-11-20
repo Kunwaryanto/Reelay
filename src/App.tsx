@@ -10,7 +10,6 @@ import Soon from './screens/Soon'
 import Start from './screens/Start'
 import Title from './screens/Title'
 import { OfflinePill, TabBar, ToastProvider } from './ui'
-import { ScreenCheck } from './ui/ScreenCheck'
 
 function renderPage(path: string) {
   const title = path.match(/^\/title\/(\d+)$/)
@@ -53,5 +52,5 @@ function Gate() {
 }
 
 export default function App() {
-  return <AuthProvider><ToastProvider><Gate /><ScreenCheck /></ToastProvider></AuthProvider>
+  return <AuthProvider><ToastProvider><Gate /></ToastProvider></AuthProvider>
 }

@@ -3,7 +3,8 @@
 // document is made a little taller than the screen and held scrolled by --run-top: the app reaches up behind the
 // status bar and down behind the address bar, and its UI keeps inside the visible part (see html[data-runway]).
 
-const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+/** Running as the Home Screen app (not in a browser tab). */
+export const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
 const phone = matchMedia('(pointer: coarse) and (max-width: 760px)').matches
 export const canRunway = !standalone && phone
 
