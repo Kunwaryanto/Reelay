@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQuery } from '../lib/query'
-import { standalone } from '../lib/runway'
-import { Button, GlassButton, Icon, IconButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
+import { Button, GlassButton, Icon, IconButton, PosterWall, QuietButton, Spinner, Wordmark } from '../ui'
 
 const LAST_EMAIL = 'reelay:last-email'
 
@@ -97,9 +96,9 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const openSheet = () => {
     const next = step !== 'code' || ok ? (invite === 'expired' || invite === 'used' ? 'gone' : 'email') : step
     if (step !== 'code' || ok) { setStep(next); setSendErr('') }
-    // Safari only opens the keyboard for a field focused during the tap itself, and the sign-in page isn't there
+    // iOS only opens the keyboard for a field focused during the tap itself, and the sign-in page isn't there
     // yet. So focus a stand-in field now (the keyboard comes up) and hand the focus to the real one once it exists.
-    if (!standalone && next !== 'gone') {
+    if (next !== 'gone') {
       const stand = document.createElement('input')
       stand.setAttribute('aria-hidden', 'true')
       stand.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0'
@@ -198,7 +197,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
         <p>{joining ? 'You’re invited.' : 'Reelay is invite only.'}</p>
       </main>
 
-      <SignIn open={open} onClose={() => setOpen(false)} keyboard={step === 'email' || step === 'code'} label={joining ? 'Join Reelay' : 'Continue with email'}>
+      <SignInPage open={open} onClose={() => setOpen(false)} label={joining ? 'Join Reelay' : 'Continue with email'}>
         {step === 'email' && (
           <form className="stepin" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); send() }}>
             <h2 className="sheet-title">{joining ? 'Join Reelay' : 'Continue with email'}</h2>
@@ -256,19 +255,14 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
             {sendErr && <p className="field-error" role="alert">{SEND_ERR[sendErr]}</p>}
           </div>
         )}
-      </SignIn>
+      </SignInPage>
     </div>
   )
 }
 
-// In the Home Screen app sign-in is a sheet. In Safari it's its own page: Safari moves its whole visible area
-// around its bars while the keyboard opens, which a sheet can't hide but a plain page doesn't mind.
-
-function SignIn(props: { open: boolean; onClose: () => void; keyboard: boolean; label: string; children: ReactNode }) {
-  if (standalone) return <Sheet {...props} />
-  return <SignInPage {...props} />
-}
-
+// Sign-in is its own page, in Safari and the Home Screen app: iOS moves the visible area around (Safari's bars,
+// the keyboard, letters vs numbers keyboards) in ways a bottom sheet can't hide, but a page with its fields at the
+// top doesn't mind.
 function SignInPage({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
   const [shown, setShown] = useState(open)
   const [closing, setClosing] = useState(false)
