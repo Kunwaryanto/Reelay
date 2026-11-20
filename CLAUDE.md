@@ -25,7 +25,8 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 
 - **Target: Safari on iOS 26 and later**, as a Home Screen web app, and in Safari for Start, sign-in and invite links. Any feature that Safari on iOS 26 supports may be used without a fallback, even if it isn't Baseline Widely available.
 - Features Safari doesn't support may only be used as progressive enhancement that falls back to the designed look (e.g. `corner-shape: squircle` falls back to ordinary rounded corners). No polyfills.
-- Exception: the "Made for iPhone" desktop page must work in current Chrome, Edge, Firefox and Safari (Baseline Widely available).
+- Other phones (Android, Chrome) can use Reelay too, best effort: nothing may block them, but we design and test for iPhone.
+- Exception: the "Made for your phone" desktop page must work in current Chrome, Edge, Firefox and Safari (Baseline Widely available).
 - Front-end work uses the `modern-web-guidance` skill (`.agents/skills/modern-web-guidance`, from Google Chrome). Apply its guides with the target above; it does not apply to the sync, database or CI.
 
 ## Rules
