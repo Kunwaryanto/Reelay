@@ -351,7 +351,13 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
  */
 // The room the keyboard takes at the bottom of the app, measured the first time a sheet with a field opens on
 // this phone, and kept. (Sheets with fields are only used in the Home Screen app; Safari has a sign-in page.)
-const KB_KEY = 'reelay:kb-room:app'
+const KB_KEY = 'reelay:kb-height' // (renamed: the old value was measured after iOS had moved the page, so too small)
+
+// The visible height without a keyboard, kept up to date while no field is focused. The keyboard's height is how
+// much that shrinks; measuring it this way doesn't depend on iOS moving the page or the visual viewport.
+let openHeight = window.visualViewport?.height ?? window.innerHeight
+const typing = () => { const a = document.activeElement; return a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement }
+window.visualViewport?.addEventListener('resize', () => { if (!typing()) openHeight = window.visualViewport!.height })
 const storedRoom = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
 
 /**
@@ -396,7 +402,7 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     const place = () => {
       clearTimeout(quiet); clearTimeout(limit)
       const box = d.offsetParent
-      const room = vv && box ? Math.round(box.getBoundingClientRect().bottom - (vv.offsetTop + vv.height)) : 0
+      const room = vv && box ? Math.round(openHeight - vv.height) : 0
       if (room > 150) {
         d.style.setProperty('--kb-room', `${room}px`)
         try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
