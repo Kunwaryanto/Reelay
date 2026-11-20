@@ -52,6 +52,14 @@ Copied from the notes beside the screens on the Current page of the design canva
 • An email without an account gets “Reelay is invite only” in the sheet instead of a code, with Use another email. An expired or used link opens the sheet with the reason and “I already have an account”.
 • The email sheet has a quiet Privacy Policy link under Send code (tell people about their data where the email is collected). Terms of use live in Settings › Privacy.
 
+## Invite friends (admins only)
+
+• Settings › Invite friends sits under Your services, only when profiles.is_admin. The row shows “n waiting”.
+• The page: one line on how links work, then “+ New invite link”, the 32px grey pill. It calls create_invite() and opens navigator.share with “You’re invited to Reelay” and https://usereelay.vercel.app/i/<token>.
+• Sent list from the invites table: Waiting (joined_at null and not expired; “works until <date>”; Cancel calls cancel_invite, Undo calls restore_invite with the removed row), Joined (used_email, “Joined <date>”), Expired. The nightly sync removes joined and expired ones after 30 days.
+• /i/<token> opens Start. Ask redeem-invite with { token }: valid → Join Reelay; expired or used → the sheet with the reason. On Send code ask it with { token, email }: created or existing → signInWithOtp({ shouldCreateUser: false }) and the usual code. Without a link, signInWithOtp with shouldCreateUser false; a “signups not allowed” error means no account → the “Reelay is invite only” sheet.
+• An invite is spent only at the account’s first sign-in (joined_at), so a mistyped email doesn’t burn the link.
+
 ## Home Screen setup
 
 • Manifest: name and short_name “Reelay”, display standalone, start_url / (opens on Now), scope /, id /, background_color and theme_color #000000.

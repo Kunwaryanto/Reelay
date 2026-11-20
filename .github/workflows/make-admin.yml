@@ -1,0 +1,30 @@
+# Makes someone an admin (they can create invite links in Settings).
+# If the email already has an account, it becomes an admin straight away.
+# If not, this makes a one-time admin invite link, shown in the run summary.
+name: Make admin
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Email address'
+        required: true
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      EMAIL: ${{ inputs.email }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Find the database address
+        run: |
+          npx supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          echo "POOLER_URL=$(cat supabase/.temp/pooler-url)" >> "$GITHUB_ENV"
+      - name: Make admin
+        run: node scripts/make-admin.mjs

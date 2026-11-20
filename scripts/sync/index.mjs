@@ -391,6 +391,8 @@ async function reconcile(runStart) {
   );
   await db.query(`delete from public.availability_events where happened_on < current_date - 90`);
   await db.query(`delete from public.tmdb_search_cache where fetched_at < now() - interval '1 day'`);
+  // Invites: joined or expired ones leave the Sent list after 30 days.
+  await db.query(`delete from public.invites where coalesce(joined_at, expires_at) < now() - interval '30 days'`);
   log(`events: ${added.rowCount} added, ${left.rowCount} left; ${kept.rowCount} titles no longer streaming`);
 }
 

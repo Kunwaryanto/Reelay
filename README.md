@@ -27,5 +27,7 @@ npm run dev
 - **Site:** Vercel builds every push to `main`.
 - **Supabase settings:** the `Supabase config` workflow sends `supabase/config.toml` and the email template to Supabase when they change.
 - **Database:** the `Supabase migrations` workflow applies new files in `supabase/migrations` when they reach `main`.
+- **Edge Functions:** the `Supabase functions` workflow deploys `supabase/functions` when they change.
+- **Admins:** run the `Make admin` workflow with an email. An existing account becomes an admin; otherwise the run summary shows a one-time admin invite link.
 
 See `CLAUDE.md` for links to the design canvas and decisions doc.
