@@ -214,8 +214,10 @@ button.pill-open { padding: 0 12px 0 10px; }
 .sheet-body { position: relative; background: var(--sheet); box-shadow: var(--sheet-edge); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; corner-shape: squircle; padding: 32px var(--margin) calc(20px + env(safe-area-inset-bottom, 0px)); }
 /* covers the gap under the sheet while it is dragged */
 .sheet-body::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 100vh; background: var(--sheet); }
-/* Sheet with a field: its bottom padding is the keyboard's room, so the content sits just above the keyboard. */
-.sheet[data-keyboard] .sheet-body { padding-bottom: calc(20px + var(--kb-room, 0px)); }
+/* Sheet with a field: its bottom padding is the room the keyboard took when it opened (measured), so the content sits just above it. */
+.sheet[data-keyboard] .sheet-body { padding-bottom: calc(20px + max(var(--kb-room, 0px), env(safe-area-inset-bottom, 0px))); }
+/* held below the screen while the keyboard comes up */
+.sheet[data-waiting] { transform: translateY(110%); transition: none; }
 /* the sheet is dragged, not scrolled */
 .sheet-body { touch-action: none; }
 /* Where iOS doesn't draw the page (under Safari's floating address bar, past the bottom of the viewport),
