@@ -62,6 +62,13 @@ Copied from the notes beside the screens on the Current page of the design canva
 • /i/<token> opens Start. Ask redeem-invite with { token }: valid → Join Reelay; expired or used → the sheet with the reason. On Send code ask it with { token, email }: created or existing → signInWithOtp({ shouldCreateUser: false }) and the usual code. Without a link, signInWithOtp with shouldCreateUser false; a “signups not allowed” error means no account → the “Reelay is invite only” sheet.
 • An invite is spent only at the account’s first sign-in (joined_at), so a mistyped email doesn’t burn the link.
 
+## Settings pages: Credits, Privacy, policy and terms
+
+• Credits: two lists in the Settings row style, Data (TMDB · Titles, posters and cast; JustWatch · Where to watch; Streaming Availability · Leaving dates; IMDb · IMDb rating; MDBList · Rotten Tomatoes and Letterboxd scores; Wikidata · Awards) and Design (Inter · Typeface by Rasmus Andersson · SIL Open Font License; Material Symbols · Icons by Google · Apache License 2.0).
+• Under them, 12px grey: “This product uses the TMDB API but is not endorsed or certified by TMDB.” (with TMDB’s approved plain white logo, tinted #808080, about 10px tall, from themoviedb.org/about/logos-attribution), “Streaming data by JustWatch.” (required by TMDB), “Information courtesy of IMDb (imdb.com). Used with permission.”, the trademark line, “Reelay 0.1 · Made in Sweden”.
+• Settings › Privacy: Privacy policy and Terms of use open as pages inside Reelay (chevron), never Safari. Intro: “…so they follow you to other devices. If someone invited you, they see your email once you join.” / “No ads, no tracking, and your data is never sold.”
+• /privacy and /terms are public pages (readable signed out). Back returns to Settings › Privacy, or to Start when opened directly. Text from the “Reelay · Privacy, Terms and Credits” doc (https://claude.ai/artifact/S7MsbsHbJiMiuGMB4LJyE2); the data table becomes a list: item, why, legal basis · how long.
+
 ## Home Screen setup
 
 • Manifest: name and short_name “Reelay”, display standalone, start_url / (opens on Now), scope /, id /, background_color and theme_color #000000.
