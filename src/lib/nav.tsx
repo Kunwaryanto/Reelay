@@ -151,8 +151,13 @@ const SLIDE = { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: '
 const LEAVE = 0.7 // pane-leave: translateX(70%), opacity 0.55
 const at = (x: number, dim = false) => ({ transform: `translateX(${x}px)`, opacity: dim ? 0.55 : 1 })
 
-/** Snapping and the swipe parallax back on. */
-function unlockStrip(strip: HTMLElement) {
+/** The slide each strip is running, so a late unlock from a finished slide can't unlock a newer one. */
+const current = new WeakMap<HTMLElement, number>()
+let slides = 0
+
+/** Snapping and the swipe parallax back on (only if `slide` is still the strip's latest). */
+function unlockStrip(strip: HTMLElement, slide?: number) {
+  if (slide !== undefined && current.get(strip) !== slide) return
   strip.style.scrollSnapType = ''
   delete strip.dataset.sliding
 }
@@ -165,6 +170,8 @@ function slidePanes(strip: HTMLElement, moves: [Element | undefined, Keyframe[]]
   // and no scroll-driven pane-leave (it would jump with the strip).
   strip.style.scrollSnapType = 'none'
   strip.dataset.sliding = ''
+  const id = ++slides
+  current.set(strip, id)
   const anims = list.map(([el, frames]) => el.animate(frames, SLIDE))
   let over = false
   const end = () => {
@@ -175,13 +182,13 @@ function slidePanes(strip: HTMLElement, moves: [Element | undefined, Keyframe[]]
     done()
     // A frame later, once the scroll-driven timelines have caught up with the jump.
     // (The timer covers a frame that never comes, e.g. the app was sent to the background.)
-    requestAnimationFrame(() => unlockStrip(strip))
-    setTimeout(() => unlockStrip(strip), 100)
+    requestAnimationFrame(() => unlockStrip(strip, id))
+    setTimeout(() => unlockStrip(strip, id), 100)
   }
   // Never leave the strip locked: if the animation is cancelled or its promise never settles, end anyway.
   const watchdog = setTimeout(end, SLIDE.duration + 250)
   anims[0].finished.then(end, end)
-  return () => { if (over) return; over = true; clearTimeout(watchdog); anims.forEach((a) => a.cancel()); unlockStrip(strip) }
+  return () => { if (over) return; over = true; clearTimeout(watchdog); anims.forEach((a) => a.cancel()); unlockStrip(strip, id) }
 }
 
 /** One tab: its first page plus whatever has been pushed on top. Stays mounted while another tab shows. */
