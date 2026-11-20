@@ -18,10 +18,11 @@ export function summonKeyboard() {
   setTimeout(() => { mine.remove(); if (stand === mine) stand = null }, 1000)
 }
 
-/** Hand the summoned keyboard to the real field. Does nothing if no tap asked for it. */
-export function takeKeyboard(field: HTMLInputElement | null) {
-  if (!stand || !field) return
+/** Hand the summoned keyboard to the real field. False if no tap asked for it. */
+export function takeKeyboard(field: HTMLInputElement | null): boolean {
+  if (!stand || !field) return false
   field.focus({ preventScroll: true })
   stand.remove()
   stand = null
+  return true
 }

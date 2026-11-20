@@ -465,10 +465,17 @@ html[data-runway] .tabbar { touch-action: none; }
 .search[data-drawer='true'] .s-stage { transform: translateX(290px); }
 .s-stage-scrim { position: absolute; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.35); }
 .s-recents-btn { position: absolute; z-index: 2; top: calc(var(--safe-top) + 19px); left: 14px; }
-.s-list { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 21px); bottom: calc(86px + var(--edge-b)); overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; transition: bottom 250ms var(--ease-out); }
+.s-list { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 21px); bottom: calc(86px + var(--edge-b)); overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; }
 /* First time on this phone: held back until the keyboard is measured, then they rise into place. */
-.s-field, .s-list { transition: bottom 250ms var(--ease-out), opacity 200ms var(--ease-out); }
+/* The field and the prompt lift above the keyboard together (--lift is set on .search), at the keyboard's own pace. */
+.s-field, .s-idle { transform: translateY(calc(var(--lift, 0px) * -1)); transition: transform 380ms var(--ease-sheet), opacity 200ms var(--ease-out); }
+.s-list { transition: opacity 200ms var(--ease-out); }
+.s-list[data-idle='true'] { overflow: visible; }
 .s-field[data-pending='true'], .s-list[data-pending='true'] { opacity: 0; transition: none; }
+/* Opened from the tab bar: already in place, so no movement, only a fade. */
+.search[data-arriving='true'] .s-field, .search[data-arriving='true'] .s-idle { transition: none; }
+.search[data-arriving='true'] .s-stage { animation: s-arrive 240ms var(--ease-out) both; }
+@keyframes s-arrive { from { opacity: 0; } }
 .s-list[data-idle='true'] { top: calc(var(--safe-top) + 77px); }
 .s-idle { margin-top: auto; padding: 0 var(--margin) 16px; }
 .s-idle h1 { margin: 0 0 18px; font: 500 20px/22px var(--font); letter-spacing: var(--track-title); white-space: pre-line; }
@@ -501,4 +508,4 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-input input::-webkit-search-cancel-button, .s-input input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
 .s-input button { flex: none; width: 36px; height: 40px; padding: 0; border: 0; background: none; color: var(--text-faint); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .s-close { flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-@media (prefers-reduced-motion: reduce) { .s-recents, .s-stage, .s-list, .s-field { transition: none; } .s-idea:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .s-recents, .s-stage, .s-list, .s-field, .s-idle { transition: none; } .search[data-arriving='true'] .s-stage { animation: none; } .s-idea:active { transform: none; } }

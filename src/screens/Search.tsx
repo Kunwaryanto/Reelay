@@ -1,6 +1,6 @@
 // Search: the field sits at the bottom, above the keyboard. Before typing: a prompt and three ideas, with recents
 // in a drawer on the left. While typing: results with type pills, filter chips read from the words, and a sort sheet.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import { SERVICE_NAME, kindWord, loadMyServices } from '../lib/catalogue'
@@ -101,7 +101,16 @@ export default function Search() {
   }, [])
 
   // Opened from the tab bar: the keyboard is already on its way up (see keyboard.ts), so the field rises with it.
-  useEffect(() => { if (tab === 'search') takeKeyboard(input.current) }, [tab])
+  // It happens before the first paint, so Search appears with the field already in its place above the keyboard
+  // and only fades in: nothing has to chase the keyboard.
+  const [arriving, setArriving] = useState(false)
+  useLayoutEffect(() => {
+    if (tab !== 'search' || !takeKeyboard(input.current)) return
+    setTyping(true)
+    setArriving(true)
+    const t = setTimeout(() => setArriving(false), 450)
+    return () => clearTimeout(t)
+  }, [tab])
 
   const { found, error, waiting, retry } = useSearch(q, removed)
   const hasQ = q.trim().length > 0
@@ -145,10 +154,13 @@ export default function Search() {
         }
           : { title: `Nothing for “${q.trim()}”`, body: 'Try a service, genre or year.', action: '', run: () => {}, popular: true }
 
-  const fieldBottom = typing && room ? `${room + 12}px` : undefined
+  // How far the field (and the prompt above it) lift to clear the keyboard. Moved with a transform, not `bottom`,
+  // so Safari animates it without laying the page out again on every frame.
+  const lift = typing && room ? `calc(${room + 12}px - 34px - var(--edge-b))` : '0px'
+  const up = typing && room > 0
 
   return (
-    <main className="search" data-drawer={drawer}>
+    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift } as React.CSSProperties}>
       <nav className="s-recents" aria-label="Recent searches" inert={!drawer}>
         <div className="s-recents-head">
           <h2>Recents</h2>
@@ -182,7 +194,8 @@ export default function Search() {
         <div className="s-list noscroll" data-idle={!hasQ} data-pending={pending}
           // dragging the results puts the keyboard away, like iOS lists do
           onTouchMove={() => { if (typing) input.current?.blur() }}
-          style={fieldBottom ? { bottom: `calc(${fieldBottom} + 52px)` } : undefined}>
+          // results end above the lifted field (the prompt moves with the field instead)
+          style={up && hasQ ? { bottom: `${room + 12 + 52}px` } : undefined}>
           {!hasQ ? (
             <div className="s-idle">
               <h1>{'What are we\nwatching '}{hour >= 17 || hour < 4 ? 'tonight' : 'today'}?</h1>
@@ -245,7 +258,7 @@ export default function Search() {
           )}
         </div>
 
-        <form className="s-field" role="search" data-pending={pending} style={fieldBottom ? { bottom: fieldBottom } : undefined}
+        <form className="s-field" role="search" data-pending={pending}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
           <div className="s-input"
             // Focus it ourselves, without scrolling: left alone, iOS scrolls the whole app up to reveal the field.
