@@ -1,5 +1,11 @@
 -- Sharing is dropped (no public title pages), so the catalogue is for signed-in users only.
 -- The sync connects as the database owner and is not affected by these grants or RLS.
+-- Take every lock up front, in one statement, so a running sync makes this wait instead of deadlock.
+
+set local lock_timeout = '60s';
+lock table public.services, public.titles, public.people, public.credits,
+  public.availability, public.availability_events, public.scores, public.awards
+  in access exclusive mode;
 
 revoke select on public.services, public.titles, public.people, public.credits,
   public.availability, public.availability_events, public.scores, public.awards,
