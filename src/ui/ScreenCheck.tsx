@@ -57,6 +57,8 @@ function measure() {
     'sheet body': rect('.sheet-body'),
     'sheet math': (window as Window & { __sheet?: string }).__sheet ?? 'not opened yet',
     scrollY: Math.round(window.scrollY),
+    'chrome-b': getComputedStyle(document.documentElement).getPropertyValue('--chrome-b'),
+    start: rect('.start'),
   }
 }
 

@@ -1,7 +1,14 @@
 /* Reelay app styles. Values come from tokens.css; layout numbers come from the Current boards. */
 
-html, body { height: 100%; overflow: hidden; }
-#root { position: fixed; inset: 0; min-height: 0; overflow: hidden; background: var(--bg); }
+/* The page itself is screen-tall and nothing is fixed to the viewport, everywhere:
+   - Home Screen app: iOS lays the page out 59pt short of the screen and cuts fixed layers off there.
+   - Safari 26: content runs behind the status bar and the floating address bar only when no fixed layer
+     touches those edges; otherwise Safari paints the bars a solid colour.
+   overflow: clip (not hidden) so iOS can't scroll the app to reveal a focused field.
+   --chrome-b (main.tsx) is how much of the bottom Safari's address bar covers; 0 in the Home Screen app. */
+html, body { height: 100lvh; overflow: hidden; }
+body { position: relative; }
+#root { position: absolute; inset: 0; min-height: 0; overflow: clip; background: var(--bg); }
 /* On a computer the app sits in a phone-wide column until the desktop page is built. */
 @media (min-width: 500px) { #root { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 
@@ -33,7 +40,7 @@ button { font: inherit; color: inherit; }
 }
 @keyframes pane-leave { to { transform: translateX(70%); opacity: 0.55; } }
 
-.page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: 110px; -webkit-overflow-scrolling: touch; }
+.page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: calc(110px + var(--chrome-b, 0px)); -webkit-overflow-scrolling: touch; }
 .page-plain { padding: calc(env(safe-area-inset-top, 0px) + 50px) var(--margin) 110px; }
 .page-bar { margin-left: -14px; height: var(--hit); display: flex; align-items: center; }
 .page-title { margin: 16px 0 0; font: var(--type-title); letter-spacing: var(--track-title); }
@@ -121,7 +128,7 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .hero-art { transform: none !important; } .hero-dots i { animation: none; } }
 
 /* ---- Long-press menu ---- */
-.hold { position: fixed; inset: 0; z-index: 30; }
+.hold { position: absolute; inset: 0; z-index: 30; }
 .hold-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0); -webkit-backdrop-filter: blur(0px) saturate(100%); backdrop-filter: blur(0px) saturate(100%); transition: background var(--dur-menu-close) var(--ease-sheet), -webkit-backdrop-filter var(--dur-menu-close) var(--ease-sheet), backdrop-filter var(--dur-menu-close) var(--ease-sheet); }
 .hold[data-open='true'] .hold-back { background: rgba(0, 0, 0, 0.3); -webkit-backdrop-filter: var(--blur-backdrop); backdrop-filter: var(--blur-backdrop); transition-duration: var(--dur-menu-open); }
 .hold-poster { position: absolute; border-radius: 16px; corner-shape: squircle; overflow: hidden; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); transform-origin: 0 0; transition: transform var(--dur-menu-close) var(--ease-sheet); }
@@ -178,7 +185,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* ---- Settings (sprint 1) ---- */
 .settings-block { margin-top: var(--section-gap); }
 .version { margin: 12px 0 0; font: var(--type-meta); color: var(--text-faint); }
-.action-sheet { position: fixed; inset: 0; z-index: 30; }
+.action-sheet { position: absolute; inset: 0; z-index: 30; }
 .action-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
 .action-body { position: absolute; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); animation: sheet-up var(--dur-sheet) var(--ease-sheet); text-align: center; }
 .action-group { border-radius: 14px; overflow: hidden; background: rgba(44, 44, 46, 0.92); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); }
@@ -192,14 +199,14 @@ button.pill-open { padding: 0 12px 0 10px; }
 .load-failed { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .load-failed p { margin: 0; font: var(--type-body); color: var(--text-muted); }
 .load-failed[data-compact='true'] { flex-direction: row; justify-content: space-between; width: 100%; }
-.offline-pill { position: fixed; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 20px); left: 50%; translate: -50% 0; height: 28px; padding: 0 12px; border-radius: var(--radius-pill-28); background: rgba(40, 40, 40, 0.7); -webkit-backdrop-filter: var(--blur-pill); backdrop-filter: var(--blur-pill); display: flex; align-items: center; font: var(--type-meta); font-weight: 500; animation: rise-in 250ms var(--ease-out); }
+.offline-pill { position: absolute; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 20px); left: 50%; translate: -50% 0; height: 28px; padding: 0 12px; border-radius: var(--radius-pill-28); background: rgba(40, 40, 40, 0.7); -webkit-backdrop-filter: var(--blur-pill); backdrop-filter: var(--blur-pill); display: flex; align-items: center; font: var(--type-meta); font-weight: 500; animation: rise-in 250ms var(--ease-out); }
 
 /* ---- Sheet ---- */
-.sheet { position: fixed; z-index: 50; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
+.sheet { position: absolute; z-index: 50; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
   transform: translateY(calc(var(--drag, 0px) - var(--kb, 0px))); transition: transform var(--dur-sheet) var(--ease-sheet), overlay var(--dur-sheet) allow-discrete, display var(--dur-sheet) allow-discrete; }
 @media (min-width: 500px) { .sheet { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 .sheet[style*='--drag'] { transition: none; }
-.sheet-scrim { position: fixed; z-index: 49; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity var(--dur-sheet) var(--ease-sheet); }
+.sheet-scrim { position: absolute; z-index: 49; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity var(--dur-sheet) var(--ease-sheet); }
 .sheet-scrim[data-open='true'] { opacity: 1; pointer-events: auto; }
 @starting-style { .sheet[open] { transform: translateY(100%); } }
 .sheet[data-closing='true'] { transform: translateY(110%); }
@@ -251,14 +258,14 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 }
 
 /* ---- Toast ---- */
-.toasts { position: fixed; z-index: 40; left: var(--margin); right: var(--margin); bottom: 92px; pointer-events: none; }
+.toasts { position: absolute; z-index: 40; left: var(--margin); right: var(--margin); bottom: calc(92px + var(--chrome-b, 0px)); pointer-events: none; }
 @media (min-width: 500px) { .toasts { left: 50%; right: auto; width: 350px; margin-left: -175px; } }
 .toast { min-height: 48px; padding: 0 8px 0 16px; border-radius: 14px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; animation: rise-in 250ms var(--ease-out); }
 .toast span { font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast button { flex: none; height: var(--hit); padding: 0 8px; border: 0; background: none; font: var(--type-text); font-weight: 500; color: #fff; cursor: pointer; }
 
 /* ---- Tab bar ---- */
-.tabbar { position: absolute; z-index: 10; left: 0; right: 0; bottom: 0; height: var(--tab-bar); pointer-events: none; color: #fff; transition: opacity var(--dur-nav-show) var(--ease-out), transform var(--dur-sheet) var(--ease-sheet); }
+.tabbar { position: absolute; z-index: 10; left: 0; right: 0; bottom: var(--chrome-b, 0px); height: var(--tab-bar); pointer-events: none; color: #fff; transition: opacity var(--dur-nav-show) var(--ease-out), transform var(--dur-sheet) var(--ease-sheet); }
 .tabbar[data-hidden='true'] { opacity: 0; transform: translateY(100%); }
 .tabbar-fade i { position: absolute; inset: 0; transition: opacity var(--dur-nav-show) var(--ease-out); }
 .tabbar-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(transparent 0%, #000 50%); mask-image: linear-gradient(transparent 0%, #000 50%); }
@@ -271,7 +278,7 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 .tabbar[data-dim='true'] .tabbar-row { opacity: 0.4; transition-duration: var(--dur-nav-hide); }
 
 /* ---- Start ---- */
-.start { position: absolute; inset: 0; overflow: hidden; }
+.start { position: absolute; inset: 0; overflow: clip; }
 .start-wall { position: absolute; inset: 0; opacity: 0; transition: opacity var(--dur-wall-in) var(--ease-out); }
 .start-wall[data-ready='true'] { opacity: 1; }
 .start-word { position: absolute; left: 0; right: 0; top: 43.6%; margin: 0; display: flex; justify-content: center; }
@@ -332,11 +339,3 @@ html.screen-check, html.screen-check body { background: #ff00ff; }
 .sc-actions button, .sc-show { pointer-events: auto; height: 34px; padding: 0 12px; border: 0; border-radius: 17px; background: #fff; color: #000; font: 600 13px/1 var(--font, system-ui); }
 .sc-show { position: fixed; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 60px); }
 
-/* Home Screen app: iOS lays the page out 59pt (the status bar) shorter than the screen and cuts fixed layers
-   off there, leaving a black band at the bottom. Make the page itself screen-tall and position the app and
-   its layers inside it instead of fixed to the viewport. (Safari keeps the normal fixed layout.) */
-@media (display-mode: standalone) {
-  html, body { height: 100lvh; }
-  body { position: relative; }
-  #root, .sheet, .sheet-scrim, .toasts, .hold, .action-sheet { position: absolute; }
-}
