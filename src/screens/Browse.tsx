@@ -44,8 +44,11 @@ function useWarmCovers(covers: Record<string, string | null> | undefined) {
 function CategoryCard({ cat, cover, pick }: { cat: Category; cover: string | null | undefined; pick: Pick }) {
   const { push } = useNavActions()
   const href = hrefOf(cat, pick)
-  // Like posters: the picture fades in once it is decoded, so it never draws in strips or pops in.
-  const [ready, setReady] = useState(false)
+  // Picture, colour wash and name are one: all three fade in together once the picture is decoded (or there is
+  // none), over the plain card. Nothing shows on its own first.
+  const [loaded, setLoaded] = useState(false)
+  const ready = loaded || cover === null
+  const setReady = setLoaded
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
   return (
     <a className="br-card press" href={href} data-ready={ready} onClick={(e) => { e.preventDefault(); push(href) }}>

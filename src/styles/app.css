@@ -519,8 +519,11 @@ html[data-runway] .tabbar { touch-action: none; }
 .br-grid { margin-top: 12px; padding: 0 var(--margin); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .br-grid-page { margin-top: 0; padding-top: calc(var(--safe-top) + 75px); }
 .br-card { position: relative; display: block; height: 96px; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; -webkit-touch-callout: none; }
-.br-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
-.br-card[data-ready='true'] img { opacity: 1; }
+.br-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+/* One piece: picture, wash, hairline and name stay hidden until the picture is ready, then fade in together. */
+.br-card > * { opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
+.br-card[data-ready='true'] > * { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .br-card > * { transition: none; } }
 .br-tint { position: absolute; inset: 0; }
 .br-label { position: absolute; left: 14px; right: 14px; bottom: 12px; font: var(--type-heading); letter-spacing: var(--track-heading); }
 .br-none { margin: calc(var(--safe-top) + 90px) var(--margin) 0; font: var(--type-body); color: var(--text-faint); }
