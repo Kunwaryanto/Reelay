@@ -1,12 +1,18 @@
 # Fills the catalogue: titles streaming in Sweden, where they stream, leaving dates and scores.
-# Manual for now; a nightly schedule is added once a full run has been checked.
+# Runs every night at about 03:17 Swedish winter time (04:17 in summer): what streams where is updated in full,
+# new titles are added, and the oldest 2,500 titles get their details refreshed.
 name: Nightly sync
 on:
+  schedule:
+    - cron: '17 2 * * *'
   workflow_dispatch:
     inputs:
       limit:
         description: 'Test on this many titles (0 = full sync)'
         default: '100'
+      refresh:
+        description: 'Type all to refetch every title''s details (takes hours)'
+        default: ''
 concurrency:
   group: nightly-sync
   cancel-in-progress: false
@@ -21,6 +27,7 @@ jobs:
       MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
       STREAMING_AVAILABILITY_KEY: ${{ secrets.STREAMING_AVAILABILITY_KEY }}
       SYNC_LIMIT: ${{ inputs.limit || '0' }}
+      SYNC_REFRESH: ${{ inputs.refresh }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
