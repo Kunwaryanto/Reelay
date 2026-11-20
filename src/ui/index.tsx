@@ -7,6 +7,7 @@ import wordmarkSvg from '../../public/brand/wordmark.svg?raw'
 import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
+import { summonKeyboard } from '../lib/keyboard'
 import { SERVICE_NAME, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { useRequestFailed } from '../lib/query'
@@ -553,7 +554,7 @@ export function TabBar({ hidden }: { hidden?: boolean }) {
       <div className="tabbar-fade" aria-hidden="true"><i /><i /><i /></div>
       <div className="tabbar-row">
         {items.map(([id, label, icon]) => (
-          <button key={id} type="button" aria-label={label} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{icon}</button>
+          <button key={id} type="button" aria-label={label} aria-current={tab === id ? 'page' : undefined} onClick={() => { if (id === 'search' && tab !== 'search') summonKeyboard(); setTab(id) }}>{icon}</button>
         ))}
       </div>
     </nav>

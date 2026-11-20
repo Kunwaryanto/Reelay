@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import { SERVICE_NAME, kindWord, loadMyServices } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
-import { useNavActions } from '../lib/nav'
+import { takeKeyboard } from '../lib/keyboard'
+import { useNav, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import {
   addRecent, loadIdeas, loadPopular, readRecents, search, writeRecents,
@@ -71,6 +72,7 @@ function Row({ h, onOpen }: { h: Hit; onOpen: () => void }) {
 export default function Search() {
   const { session } = useAuth()
   const { push, setTab } = useNavActions()
+  const { tab } = useNav()
   const uid = session?.user.id
   const input = useRef<HTMLInputElement>(null)
   const [q, setQ] = useState('')
@@ -97,6 +99,9 @@ export default function Search() {
     window.addEventListener('online', set); window.addEventListener('offline', set)
     return () => { window.removeEventListener('online', set); window.removeEventListener('offline', set) }
   }, [])
+
+  // Opened from the tab bar: the keyboard is already on its way up (see keyboard.ts), so the field rises with it.
+  useEffect(() => { if (tab === 'search') takeKeyboard(input.current) }, [tab])
 
   const { found, error, waiting, retry } = useSearch(q, removed)
   const hasQ = q.trim().length > 0
