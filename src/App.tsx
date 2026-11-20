@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { NavProvider, TabStack, useNav, type Tab } from './lib/nav'
 import { SavedProvider } from './lib/saved'
+import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
 import Now from './screens/Now'
 import Settings from './screens/Settings'
@@ -25,6 +26,8 @@ const ROOT: Record<Tab, React.ReactNode> = {
 
 function Shell() {
   const { path } = useNav()
+  // Safari: run the app behind the status bar and address bar while signed in (Start stays as it is)
+  useEffect(() => { setRunway(true); return () => setRunway(false) }, [])
   return (
     <SavedProvider>
       {(Object.keys(ROOT) as Tab[]).map((tab) => <TabStack key={tab} tab={tab} root={ROOT[tab]} render={renderPage} />)}
