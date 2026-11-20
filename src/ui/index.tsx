@@ -348,6 +348,9 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
       const box = d.offsetParent ?? document.documentElement
       const bottom = d.offsetParent ? box.getBoundingClientRect().bottom : window.innerHeight
       d.style.setProperty('--kb', `${Math.max(0, bottom - (vv.offsetTop + vv.height))}px`)
+      // temporary: read by the screen check, to see why the sheet sits too high in the Home Screen app
+      ;(window as Window & { __sheet?: string }).__sheet =
+        `kb ${Math.round(Math.max(0, bottom - (vv.offsetTop + vv.height)))} · box bottom ${Math.round(bottom)} · parent ${d.offsetParent ? (d.offsetParent as HTMLElement).className : 'none'} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)} · scrollY ${Math.round(window.scrollY)} · inner ${window.innerHeight}`
     }
     set()
     vv.addEventListener('resize', set); vv.addEventListener('scroll', set); window.addEventListener('scroll', set)

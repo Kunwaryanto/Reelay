@@ -54,6 +54,9 @@ function measure() {
     root: rect('#root'),
     tabbar: rect('.tabbar'),
     sheet: rect('.sheet'),
+    'sheet body': rect('.sheet-body'),
+    'sheet math': (window as Window & { __sheet?: string }).__sheet ?? 'not opened yet',
+    scrollY: Math.round(window.scrollY),
   }
 }
 
@@ -88,10 +91,10 @@ export function ScreenCheck() {
     const update = (why: string) => {
       const r = measure()
       setNow(r)
-      const sig = `inner ${r.inner} · visual ${r.visual} · 100% ${r['100%']} · root ${r.root}`
+      const sig = `inner ${r.inner} · visual ${r.visual} · scrollY ${r.scrollY} · sheet ${r['sheet body']} · ${r['sheet math']}`
       if (sig !== last.current) {
         last.current = sig
-        setLog((l) => [`${r.time} ${why}: ${sig}`, ...l].slice(0, 12))
+        setLog((l) => [`${r.time} ${why}: ${sig}`, ...l].slice(0, 20))
       }
     }
     update('open')
@@ -99,7 +102,7 @@ export function ScreenCheck() {
     const onVV = () => update('keyboard/viewport')
     const onOrient = () => setTimeout(() => update('rotate'), 400)
     const onVis = () => { if (!document.hidden) setTimeout(() => update('back to app'), 300) }
-    const tick = setInterval(() => update('check'), 2000)
+    const tick = setInterval(() => update('check'), 500)
     addEventListener('resize', onResize)
     visualViewport?.addEventListener('resize', onVV)
     addEventListener('orientationchange', onOrient)
