@@ -466,6 +466,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-stage-scrim { position: absolute; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.35); }
 .s-recents-btn { position: absolute; z-index: 2; top: calc(var(--safe-top) + 19px); left: 14px; }
 .s-list { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 21px); bottom: calc(86px + var(--edge-b)); overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; transition: bottom 250ms var(--ease-out); }
+/* First time on this phone: held back until the keyboard is measured, then they rise into place. */
+.s-field, .s-list { transition: bottom 250ms var(--ease-out), opacity 200ms var(--ease-out); }
+.s-field[data-pending='true'], .s-list[data-pending='true'] { opacity: 0; transition: none; }
 .s-list[data-idle='true'] { top: calc(var(--safe-top) + 77px); }
 .s-idle { margin-top: auto; padding: 0 var(--margin) 16px; }
 .s-idle h1 { margin: 0 0 18px; font: 500 20px/22px var(--font); letter-spacing: var(--track-title); white-space: pre-line; }
@@ -490,7 +493,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-nothing > div { margin-top: 12px; }
 .s-nothing h3 { margin-top: 28px; }
 .s-nothing .s-results { margin: 4px calc(var(--margin) * -1) 0; }
-.s-field { position: absolute; z-index: 3; left: var(--margin); right: var(--margin); bottom: calc(34px + var(--edge-b)); margin: 0; display: flex; align-items: center; gap: 8px; transition: bottom 250ms var(--ease-out); }
+.s-field { position: absolute; z-index: 3; left: var(--margin); right: var(--margin); bottom: calc(34px + var(--edge-b)); margin: 0; display: flex; align-items: center; gap: 8px; }
 .s-input { flex: 1; min-width: 0; height: 40px; border-radius: 21px / 50%; background: var(--fill); display: flex; align-items: center; }
 .s-input > .ms { flex: none; margin-left: 12px; color: var(--text-faint); }
 .s-input input { flex: 1; min-width: 0; height: 40px; margin: 0; padding: 0 8px; border: 0; outline: 0; border-radius: 0; background: none; color: #fff; font: var(--type-field); caret-color: #fff; -webkit-appearance: none; appearance: none; }

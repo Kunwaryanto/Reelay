@@ -363,10 +363,11 @@ const storedRoom = () => { try { return Number(localStorage.getItem(KB_KEY)) || 
 
 /**
  * The room the on-screen keyboard takes while `typing`, in px (0 when it's away). Uses the height measured before
- * on this phone, or a guess the first time, and measures again once the keyboard has settled. For a field that sits
- * at the bottom of the screen and has to ride above the keyboard (Search).
+ * on this phone (the sign-in sheet and Search share it) and measures again each time the keyboard settles. The very
+ * first time there is nothing to go on: `pending` is true until the keyboard has settled and been measured, so the
+ * caller can hold its field back and bring it in at the right place. For a field at the bottom of the screen (Search).
  */
-export function useKeyboardRoom(isTyping: boolean): number {
+export function useKeyboardRoom(isTyping: boolean): { room: number; pending: boolean } {
   const touch = useMemo(() => matchMedia('(pointer: coarse)').matches, [])
   const [measured, setMeasured] = useState(storedRoom)
   const [absent, setAbsent] = useState(false)
@@ -386,8 +387,9 @@ export function useKeyboardRoom(isTyping: boolean): number {
     vv.addEventListener('resize', moved)
     return () => { clearTimeout(quiet); clearTimeout(none); setAbsent(false); vv.removeEventListener('resize', moved) }
   }, [isTyping, touch])
-  if (!isTyping || !touch || absent) return 0
-  return measured || Math.round(window.innerHeight * 0.42)
+  if (!isTyping || !touch || absent) return { room: 0, pending: false }
+  // never measured on this phone: wait for the keyboard to settle instead of guessing
+  return { room: measured, pending: !measured }
 }
 
 /**

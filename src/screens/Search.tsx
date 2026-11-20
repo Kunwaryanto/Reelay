@@ -85,7 +85,7 @@ export default function Search() {
   const [typing, setTyping] = useState(false)
   const [recents, setRecents] = useState(readRecents)
   const [online, setOnline] = useState(navigator.onLine)
-  const room = useKeyboardRoom(typing)
+  const { room, pending } = useKeyboardRoom(typing)
   const [hour] = useState(() => new Date().getHours())
 
   const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
@@ -179,7 +179,7 @@ export default function Search() {
           </button>
         )}
 
-        <div className="s-list noscroll" data-idle={!hasQ}
+        <div className="s-list noscroll" data-idle={!hasQ} data-pending={pending}
           // dragging the results puts the keyboard away, like iOS lists do
           onTouchMove={() => { if (typing) input.current?.blur() }}
           style={fieldBottom ? { bottom: `calc(${fieldBottom} + 52px)` } : undefined}>
@@ -245,7 +245,7 @@ export default function Search() {
           )}
         </div>
 
-        <form className="s-field" role="search" style={fieldBottom ? { bottom: fieldBottom } : undefined}
+        <form className="s-field" role="search" data-pending={pending} style={fieldBottom ? { bottom: fieldBottom } : undefined}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
           <div className="s-input"
             // Focus it ourselves, without scrolling: left alone, iOS scrolls the whole app up to reveal the field.
