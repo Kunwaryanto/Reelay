@@ -57,6 +57,16 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const [resent, setResent] = useState(false)
   const [ok, setOk] = useState(false)
   const [secs, setSecs] = useState(60)
+  // A web page can't see what's on the clipboard without pasting it, so Paste shows once you've been away
+  // from Reelay while waiting for the code (most likely to copy it from your email), not before.
+  const [cameBack, setCameBack] = useState(false)
+  useEffect(() => {
+    if (step !== 'code') { setCameBack(false); return }
+    let left = false
+    const onVis = () => { if (document.hidden) left = true; else if (left) setCameBack(true) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [step])
   const [shake, setShake] = useState(0)
   const [ready, setReady] = useState(false)
   const [wallReady, setWallReady] = useState(false)
@@ -239,7 +249,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
               {checking && <><Spinner light /><span>Checking…</span></>}
               {resent && !checking && !codeErr && <><span className="resent">New code sent</span><span aria-hidden="true">·</span></>}
               {!ok && codeErr && <span className="err">{CODE_ERR[codeErr]}</span>}
-              {!ok && !checking && 'clipboard' in navigator && code.length === 0 && (
+              {!ok && !checking && cameBack && 'clipboard' in navigator && code.length === 0 && (
                 <><button type="button" className="paste" onClick={pasteButton}>Paste</button><span aria-hidden="true">·</span></>
               )}
               {!ok && !checking && (
