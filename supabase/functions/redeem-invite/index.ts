@@ -18,7 +18,8 @@ const cors = {
 };
 
 function reply(body: Record<string, unknown>, status = 200, origin = '') {
-  const allow = origin.startsWith('http://localhost:') ? origin : SITE;
+  // the live site, Vercel's preview links for this project, and local development
+  const allow = origin.startsWith('http://localhost:') || /^https:\/\/reelay-[a-z0-9-]+\.vercel\.app$/.test(origin) ? origin : SITE;
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, 'Access-Control-Allow-Origin': allow, 'Content-Type': 'application/json' },
