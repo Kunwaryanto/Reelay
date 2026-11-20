@@ -318,7 +318,7 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
  * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
  * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
-const KB_KEY = 'reelay:keyboard-height'
+const KB_KEY = 'reelay:kb-settled' // (renamed: the old key could hold a mid-animation value)
 const savedKb = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
 
 /** `keyboard`: a field is focused as the sheet opens, so it should rise straight to where the keyboard will be. */
@@ -353,21 +353,31 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     const vv = window.visualViewport
     let last = -1
     let frame = 0
+    let prev = -1
+    let steady = 0
     const openedAt = Date.now()
     const expected = keyboard ? savedKb() : 0
     const check = () => {
       const d = ref.current
       if (d) {
-        // the bottom the sheet would have without any lift: the bottom of what it sits in (fixed: the viewport)
+        // the bottom the sheet would have without any lift: the bottom of what it sits in
         const bottom = d.offsetParent ? d.offsetParent.getBoundingClientRect().bottom : window.innerHeight
-        const measured = Math.max(0, Math.round(bottom - (vv.offsetTop + vv.height)))
-        // while the keyboard is still on its way up, keep the expected height instead of dropping back
-        const kb = Date.now() - openedAt < 900 && measured < expected ? expected : measured
+        const raw = Math.max(0, Math.round(bottom - (vv.offsetTop + vv.height)))
+        // iOS reports passing and sometimes extreme values while the keyboard moves: only act on a value
+        // that has held for a few frames, and never lift more than 70% of the screen
+        const measured = Math.min(raw, Math.round(window.innerHeight * 0.7))
+        steady = measured === prev ? steady + 1 : 0
+        prev = measured
+        let kb = last < 0 ? expected : last
+        if (steady >= 3) kb = measured
+        // while the keyboard is still on its way up, don't drop below where it will end up
+        if (Date.now() - openedAt < 900 && kb < expected) kb = expected
         if (kb !== last) { last = kb; d.style.setProperty('--kb', `${kb}px`) }
-        if (measured > 150 && measured !== expected) { try { localStorage.setItem(KB_KEY, String(measured)) } catch { /* private mode */ } }
+        // remember the keyboard's height once it has settled, for the next opening
+        if (steady === 12 && measured > 150) { try { localStorage.setItem(KB_KEY, String(measured)) } catch { /* private mode */ } }
         // temporary: read by the screen check
         ;(window as Window & { __sheet?: string }).__sheet =
-          `kb ${kb} · box bottom ${Math.round(bottom)} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)} · scrollY ${Math.round(window.scrollY)}`
+          `kb ${kb} · raw ${raw} · steady ${steady} · box bottom ${Math.round(bottom)} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)}`
       }
       frame = requestAnimationFrame(check)
     }
