@@ -51,12 +51,14 @@ button { font: inherit; color: inherit; }
 .wordmark { display: inline-block; }
 .wordmark svg { display: block; height: 100%; width: auto; overflow: visible; }
 .wordmark[data-rise='true'] { overflow: clip; padding-bottom: 8px; margin-bottom: -8px; }
-.wordmark[data-rise='true'] .l { transform: translateY(110%); transform-box: view-box; animation: letter-rise 700ms var(--ease-out) forwards; }
+.wordmark[data-rise='true'] .l { transform: translateY(110%); opacity: 0; transform-box: view-box; animation: letter-rise 700ms var(--ease-out) forwards, letter-fade 560ms var(--ease-out) forwards; }
 .wordmark .l:nth-child(1) { animation-delay: 150ms; } .wordmark .l:nth-child(2) { animation-delay: 195ms; }
 .wordmark .l:nth-child(3) { animation-delay: 240ms; } .wordmark .l:nth-child(4) { animation-delay: 285ms; }
 .wordmark .l:nth-child(5) { animation-delay: 330ms; } .wordmark .l:nth-child(6) { animation-delay: 375ms; }
 @keyframes letter-rise { to { transform: none; } }
-@media (prefers-reduced-motion: reduce) { .wordmark[data-rise='true'] .l { animation: none; transform: none; } }
+/* each letter fades in as it rises, starting a little after it begins to move */
+@keyframes letter-fade { from { opacity: 0; } 15% { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wordmark[data-rise='true'] .l { animation: none; transform: none; opacity: 1; } }
 
 /* ---- Buttons ---- */
 .btn { min-width: 112px; height: var(--button); padding: 0 22px; border: 0; border-radius: var(--radius-pill-44); background: #fff; color: #000; font: var(--type-text); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -204,6 +206,9 @@ button.pill-open { padding: 0 12px 0 10px; }
 .sheet-body { position: relative; background: var(--sheet); box-shadow: var(--sheet-edge); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; corner-shape: squircle; padding: 32px var(--margin) calc(20px + env(safe-area-inset-bottom, 0px)); }
 /* covers the gap under the sheet while it rides above the keyboard or is dragged */
 .sheet-body::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 100vh; background: var(--sheet); }
+/* Where iOS doesn't draw the page (under Safari's floating address bar, past the bottom of the viewport),
+   it shows the page background. While a sheet is open, make that the sheet's grey so it never shows as black. */
+html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); }
 .sheet-grab { position: absolute; top: 0; left: 0; right: 0; height: 28px; touch-action: none; }
 .sheet-grab span { position: absolute; top: 6px; left: 50%; width: 28px; height: 3px; margin-left: -14px; border-radius: 1.5px; background: var(--grabber); }
 .sheet-title { margin: 0; font: var(--type-title); letter-spacing: var(--track-title); }
