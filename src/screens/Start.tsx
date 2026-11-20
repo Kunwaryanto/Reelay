@@ -174,8 +174,15 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   // The Paste button: iOS shows its own small Paste confirmation next to it, then we get the text.
+  // If iOS first asks "Allow Paste", the read that triggered the question can fail even when you allow it.
+  // Then try once more straight away, while the tap still counts, so you don't have to press Paste twice.
   async function pasteButton() {
-    try { takeCode(await navigator.clipboard.readText()) } catch { codeInput.current?.focus() }
+    const tapped = Date.now()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { takeCode(await navigator.clipboard.readText()); return } catch {
+        if (Date.now() - tapped > 4500) break
+      }
+    }
   }
 
   function takeCode(text: string): boolean {
