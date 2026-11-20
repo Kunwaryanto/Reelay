@@ -1,0 +1,177 @@
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
+import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, type Card } from '../lib/catalogue'
+import { tmdbImage } from '../lib/images'
+import { useDimOnScroll, useNav } from '../lib/nav'
+import { useQuery } from '../lib/query'
+import { useSaved } from '../lib/saved'
+import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+
+function heroMeta(c: Card): string {
+  const service = c.availability[0]?.service_id
+  const parts = [service ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
+  if (c.kind === 'series' && c.seasons) parts.push(c.seasons === 1 ? '1 season' : `${c.seasons} seasons`)
+  else if (c.genres?.[0]) parts.push(c.genres[0])
+  return parts.filter(Boolean).join(' · ')
+}
+
+function Hero({ items }: { items: Card[] }) {
+  const { push } = useNav()
+  const [index, setIndex] = useState(0)
+  const [dir, setDir] = useState(1)
+  const [paused, setPaused] = useState(false)
+  const x0 = useRef<number | null>(null)
+  const swiped = useRef(false)
+  const n = items.length
+
+  const go = (d: number) => { setDir(d); setIndex((i) => (i + d + n) % n) }
+
+  useEffect(() => {
+    if (paused || n < 2) return
+    const t = setTimeout(() => go(1), 5000)
+    return () => clearTimeout(t)
+  })
+  useEffect(() => {
+    const vis = () => setPaused(document.hidden)
+    document.addEventListener('visibilitychange', vis)
+    return () => document.removeEventListener('visibilitychange', vis)
+  }, [])
+
+  return (
+    <section className="hero" aria-label="On now" aria-roledescription="carousel">
+      <div className="hero-stage"
+        onPointerDown={(e) => { x0.current = e.clientX; swiped.current = false; setPaused(true) }}
+        onPointerUp={(e) => {
+          const dx = x0.current == null ? 0 : e.clientX - x0.current
+          x0.current = null; setPaused(false)
+          if (Math.abs(dx) > 40 && n > 1) { swiped.current = true; go(dx < 0 ? 1 : -1) }
+        }}
+        onPointerCancel={() => { x0.current = null; setPaused(false) }}>
+        {items.map((h, i) => {
+          const on = i === index
+          const art = tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')
+          return (
+            <a key={h.id} className="hero-slide" data-on={on} href={`/title/${h.id}`} aria-label={`${h.title}, ${heroMeta(h)}`}
+              aria-hidden={!on} tabIndex={on ? 0 : -1} style={{ '--from': `${8 * dir}%` } as CSSProperties}
+              onClick={(e) => { e.preventDefault(); if (!swiped.current) push(`/title/${h.id}`) }}>
+              {art && <img className="hero-art" src={art} alt="" draggable={false} fetchPriority={i === 0 ? 'high' : undefined} loading={i === 0 ? undefined : 'lazy'} />}
+              <div className="hero-shade" aria-hidden="true" />
+              <div className="hero-text">
+                {h.logo_path ? <img className="hero-logo" src={tmdbImage(h.logo_path, 'w500')} alt="" draggable={false} /> : <span className="hero-name">{h.title}</span>}
+                <span className="hero-meta">{heroMeta(h)}</span>
+              </div>
+            </a>
+          )
+        })}
+      </div>
+      {n > 1 && (
+        <div className="hero-dots" aria-hidden="true">
+          {items.map((h, i) => <span key={h.id} data-on={i === index}>{i === index && <i key={index} style={{ animationPlayState: paused ? 'paused' : 'running' }} />}</span>)}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
+function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
+  const saved = useSaved()
+  const [open, setOpen] = useState(false)
+  const lift = useRef<HTMLDivElement>(null)
+  // Measured once without the press shrink; the copy starts at the shrunk size it had, then lifts.
+  const [rect] = useState(() => {
+    const r = held.cover.getBoundingClientRect()
+    const w = held.cover.offsetWidth, h = held.cover.offsetHeight
+    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h, pressed: r.width / w }
+  })
+  // Lift a copy of the poster as it is on screen (same image, already loaded, with its service mark)
+  // and hide the original until the copy has landed back on it, so there's never two or a blank one.
+  useLayoutEffect(() => {
+    const copy = held.cover.cloneNode(true) as HTMLElement
+    lift.current?.append(copy)
+    held.cover.style.visibility = 'hidden'
+    const r = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
+    return () => { cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
+  }, [held.cover])
+  const close = () => { setOpen(false); setTimeout(onClose, 280) }
+
+  const { card } = held
+  const vw = window.innerWidth, vh = window.innerHeight
+  const scale = 1.25
+  const w = rect.width * scale, h = rect.height * scale
+  const menuH = 34 + 44 * 2
+  const left = Math.min(Math.max(16, rect.left + rect.width / 2 - w / 2), vw - w - 16)
+  const top = Math.min(Math.max(60, rect.top + rect.height / 2 - h / 2), vh - h - menuH - 40)
+  const menuLeft = Math.min(Math.max(16, left), vw - 250 - 16)
+  const avail = card.availability[0]
+  const isSaved = saved.isSaved(card.id)
+
+  return (
+    <div className="hold" role="dialog" aria-label={card.title} data-open={open}>
+      <div className="hold-back" onClick={close} />
+      <div ref={lift} className="hold-poster" aria-hidden="true" style={{
+        left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+        transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
+          : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
+      }} />
+      <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
+        <div className="hold-title">{card.title}</div>
+        <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title); close() }}>
+          <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name={isSaved ? 'bookmark_remove' : 'bookmark_add'} size={20} />
+        </button>
+        {avail ? (
+          <a role="menuitem" href={openLink(avail, card.title)} target="_blank" rel="noreferrer" onClick={close}>
+            <span>Open in {SERVICE_NAME[avail.service_id] ?? avail.service_id}</span><Icon name="arrow_outward" size={20} />
+          </a>
+        ) : (
+          <button type="button" role="menuitem" onClick={() => { saved.toggleNotify(card.id); close() }}>
+            <span>Notify me</span><Icon name="notifications" size={20} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function Now() {
+  const { push } = useNav()
+  const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
+  const onScroll = useDimOnScroll()
+  const { bind, indicator } = usePullToRefresh(q.retry)
+  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
+  const [slow, setSlow] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 300); return () => clearTimeout(t) }, [])
+
+  return (
+    <>
+    <main className="page noscroll" onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
+      onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
+      <h1 className="sr-only">Now</h1>
+      <div className="now-settings"><IconButton label="Settings" glass onClick={() => push('/settings')}><GearIcon /></IconButton></div>
+
+      {q.loading && slow && <div className="launch"><Wordmark height={32} rise /></div>}
+      {q.error && <div className="page-center"><LoadFailed what="Reelay" retry={q.retry} retrying={q.retrying} /></div>}
+
+      {q.data && (
+        <div className="rise">
+          {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
+          {q.data.rows.map((row, r) => (
+            <section key={row.id} className="row">
+              <SectionHeader title={row.title} />
+              <PosterRow>
+                {row.items.map((card) => {
+                  const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined
+                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} onHold={(c, cover) => setHeld({ card: c, cover })} />
+                })}
+              </PosterRow>
+            </section>
+          ))}
+          {q.data.rows.length === 0 && q.data.hero.length === 0 && <p className="empty">Nothing to show yet. The catalogue is still filling up.</p>}
+        </div>
+      )}
+      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
+    </main>
+    {indicator}
+    </>
+  )
+}

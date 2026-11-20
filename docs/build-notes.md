@@ -21,6 +21,8 @@ Copied from the notes beside the screens on the Current page of the design canva
 ## Long press on a poster (try it on Now)
 
 • Like iOS, scrolling always wins: rows keep native horizontal swipe (no touch-action or preventDefault on cards), the page keeps vertical scroll. The hold only starts a timer; moving more than 8px before 0.45 s, or the browser taking over the gesture (pointercancel), cancels it. A tap that stops a moving row doesn't open anything.
+• Press feedback waits 90 ms, then the poster sinks slowly to 95% over the hold; a finger that lands only to scroll never moves it. A quick tap still shows a brief press.
+• The lifted poster is a copy of the one on screen (same image and service mark) starting at the pressed size; the original is hidden while the menu is open. The backdrop blur itself animates in.
 • Hold 0.45 s without moving. The poster lifts into a larger preview, the screen and tab bar blur, a glass menu grows from under it. Tap outside: it settles back.
 • Menu = the actions from the title page, never new ones. Title as a small header, then:
   – Default: Add to / Remove from Watchlist, Open in [service].
@@ -42,9 +44,15 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 • Wrong code and a rejected email shake (no haptics on the web). Never on expired, too many tries or a failed send.
 • Poster wall: the camera mostly sways sideways; every column keeps climbing (at least 48 px/s, bob capped at 12 px/s), so no row lingers on the same posters. Same wall on Start, sign-in states and the install card.
+• Poster wall is drawn on one canvas (hundreds of animated layers flickered on iPhone). It fades in once most posters are decoded; late ones fade in one by one. Posters come from start_wall(): 12 each of recent films, recent series, classic films and classic series, mixed (recent = last five years, classic = 15 years and older).
+• Intro (20 Nov): each wordmark letter starts invisible about one and a half letters low, rises and fades to white, 55 ms apart. As the last letters land (0.7 s) the button rises 24px from nothing, the invite line 80 ms later, same easing. This intro is Start's own; in-app content keeps the 8px rise.
 • Reduce Motion: no shake, no letter rise, wall stands still; red outlines and messages stay.
 • Code only: the email carries the 6-digit code and no link (a link would sign in Safari, not the installed app). Code length, expiry and attempt limits come from Supabase Auth. The resend countdown is 60 s.
-• Email field: autocomplete="email"; code field: autocomplete="one-time-code" for the From Mail suggestion.
+• Email field: autocomplete="email"; code field: autocomplete="one-time-code" for the From Mail suggestion (iOS only suggests codes from Apple Mail and Messages, not the Gmail app). Safari offers contact details through its AutoFill button, not as a typed suggestion; a page can't change that.
+• After signing in, the email is kept on the phone (localStorage) and filled in the next time sign-in opens. Signing out keeps it. The privacy policy should mention this.
+• Code: a real input sits transparent over the six boxes, so typing, pasting and Mail autofill all work. Any six digits in pasted text count. It is checked as soon as six digits are in, and goes in by itself 0.7 s after success (no Continue button, no Paste button). Signing in always lands on Now.
+• Home Screen app: sign-in is a sheet that never moves with the keyboard (a web page can't follow the iOS keyboard smoothly). The first time on a phone it waits invisibly for the keyboard, measures the room it takes, stores it and slides up; after that it opens straight away at that height. The height is constant, keyboard open or closed. Drag down anywhere on it (not on fields or buttons) to close.
+• Safari: sign-in is its own page (slides in from the right; back button or Safari's back swipe closes it), field at the top. Safari moves its whole visible area around its bars when the keyboard opens, which a sheet can't hide. The tap on Sign in focuses a stand-in field so the keyboard opens with the page.
 • Reelay is a web app. In Safari on iPhone, when it isn't installed yet, the start screen shows the Add to Home Screen card (iOS 26 steps: ••• → Share → Add to Home Screen → Add). Older Safari layouts have Share in the toolbar: show two steps there. “Sign in here” opens sign-in; don't show the card again each visit, remind once when someone turns on a notification (those need the installed app).
 
 • Invite only (v287): without a link the glass button says Sign in, 120px from the bottom; “Reelay is invite only.” sits alone 40px from the bottom (12px, grey). No terms line.
@@ -147,7 +155,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 ## Platform (from modern-web-guidance, checked against Safari on iOS 26)
 
 • Navigation: pages that push in from the right (title, person, Settings sub-pages) use the "stack drill-down" pattern: views side by side in a horizontal scroll-snap stack, so swiping back from the left edge follows the finger like iOS. Behind the page you're leaving, the previous page sits shifted left and dimmed, as on iOS. Back button and browser history stay in step. Safari has no scrollsnapchange: use the guide's IntersectionObserver fallback.
-• Sheets (filters, services, Settings drawers): native <dialog> with showModal(). Safari lacks closedby="any": add the guide's tap-outside fallback. Safari lacks the overlay property: use the guide's data-closing fallback for the closing animation. Swipe-down-to-close is our own gesture on top.
+• Sheets (filters, services, Settings drawers): native <dialog> opened with show() plus our own scrim, not showModal(): iOS cuts the top layer off above the bottom of the screen in Home Screen apps. Tap on the scrim and Escape close it. Safari lacks the overlay property: use the guide's data-closing fallback for the closing animation. Swipe-down-to-close is our own gesture on top.
 • Long-press menu: popover (top layer, light dismiss), positioned from the poster's rect as in the prototype; no anchor positioning needed.
 • Poster rows: native scroll snap only; no JS scrolling.
 • View transitions (same-document) for page changes; without support the change is instant.
@@ -156,3 +164,9 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Posters and photos load straight from image.tmdb.org (decided 20 Nov). The privacy policy says TMDB sees visitors' IP addresses when images load. Keep image URLs behind one helper (src/lib/images.ts) so routing them through our own site later is a one-line change.
 • Long grids and lists: content-visibility: auto with contain-intrinsic-size on off-screen blocks only, never above the fold.
 • Reduce Motion per animation (nested @media), never a global animation-duration override.
+• Layout (20 Nov): nothing is position: fixed. In the Home Screen app iOS 26 lays the page out 59pt (the status bar) shorter than the screen and cuts fixed layers off there, so html/body are 100lvh (standalone only) and the app and its layers are positioned inside. #root is overflow: clip so iOS can't scroll the app to reveal a field.
+• Safari, signed in (src/lib/runway.ts): Safari 26 only draws page content behind the status bar and its address bar while the document is scrolled. The document is 80px + screen + 140px tall and held scrolled by 80px, so the app runs behind both bars; UI stays inside the visible part through --safe-top, --safe-bottom and --edge-b, and the tab bar's blur and wash continue to the bottom. Undocumented Safari behaviour: recheck after Safari updates. Start in Safari keeps the plain layout and fades the wall to black at the top.
+• Top buttons (back, settings, offline pill) sit 12px lower than first drawn, clear of the status bar blur in the Home Screen app.
+• Pages bounce natively at both ends (overscroll-behavior-y: contain); the tab bar keeps its state during the bounce. Pull to refresh on Now and title pages works like Safari's: the spinner stays put, spokes appear as you pull, it spins once far enough, and the page is held below it while loading.
+• Icons: weight = 6000 / size, clamped 250–400, so strokes look the same at every size.
+• Now mixes films and series, recent and classics, in every row, and shows a title once on the page (hero included); Leaving soon lists everything that leaves.
