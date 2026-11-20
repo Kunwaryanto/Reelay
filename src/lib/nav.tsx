@@ -26,11 +26,21 @@ type Nav = {
 }
 
 const Ctx = createContext<Nav | null>(null)
+/** The ways to move. They never change, so components that only navigate don't re-render on every push or scroll. */
+type NavActions = Pick<Nav, 'push' | 'back' | 'setTab' | 'setDimmed'>
+const ActionsCtx = createContext<NavActions | null>(null)
 const StackCtx = createContext<{ state: State; popTo: (tab: Tab, length: number) => void } | null>(null)
 
 export function useNav(): Nav {
   const v = useContext(Ctx)
   if (!v) throw new Error('useNav outside NavProvider')
+  return v
+}
+
+/** push, back, setTab and setDimmed only: use this in anything big (rows of posters), so it doesn't re-render with the nav state. */
+export function useNavActions(): NavActions {
+  const v = useContext(ActionsCtx)
+  if (!v) throw new Error('useNavActions outside NavProvider')
   return v
 }
 
@@ -122,37 +132,45 @@ export function NavProvider({ children }: { children: ReactNode }) {
     [state, push, back, setTab, dimmed],
   )
   const stack = useMemo(() => ({ state, popTo }), [state, popTo])
+  const actions = useMemo<NavActions>(() => ({ push, back, setTab, setDimmed }), [push, back, setTab])
 
-  return <Ctx.Provider value={nav}><StackCtx.Provider value={stack}>{children}</StackCtx.Provider></Ctx.Provider>
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <Ctx.Provider value={nav}><StackCtx.Provider value={stack}>{children}</StackCtx.Provider></Ctx.Provider>
+    </ActionsCtx.Provider>
+  )
 }
 
 // ---------------------------------------------------------------------------
 
-// cubic-bezier(0.32, 0.72, 0, 1), the iOS drawer curve (--ease-sheet)
-function easeSheet(t: number): number {
-  const x1 = 0.32, y1 = 0.72, x2 = 0, y2 = 1
-  const bez = (a: number, b: number, u: number) => 3 * a * u * (1 - u) ** 2 + 3 * b * u ** 2 * (1 - u) + u ** 3
-  let lo = 0, hi = 1
-  for (let i = 0; i < 20; i++) { const mid = (lo + hi) / 2; if (bez(x1, x2, mid) < t) lo = mid; else hi = mid }
-  return bez(y1, y2, (lo + hi) / 2)
-}
+// Push and pop move the pages with transform animations, which Safari runs off the main thread,
+// so a page that is still rendering can't make the slide stutter. The strip jumps (push) or waits (pop)
+// and the animations draw the movement, including the leaving page's slower slide and dim that the
+// scroll-driven pane-leave animation in app.css draws during a swipe. Only the finger's swipe back scrolls.
+const SLIDE = { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' as const } // --ease-sheet
+const LEAVE = 0.7 // pane-leave: translateX(70%), opacity 0.55
+const at = (x: number, dim = false) => ({ transform: `translateX(${x}px)`, opacity: dim ? 0.55 : 1 })
 
-function slide(el: HTMLElement, to: number, done?: () => void) {
-  const from = el.scrollLeft
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (reduce || Math.abs(to - from) < 2) { el.scrollLeft = to; done?.(); return () => {} }
-  const ms = 380
-  const start = performance.now()
-  let raf = 0
-  el.style.scrollSnapType = 'none'
-  const step = (now: number) => {
-    const t = Math.min(1, (now - start) / ms)
-    el.scrollLeft = from + (to - from) * easeSheet(t)
-    if (t < 1) raf = requestAnimationFrame(step)
-    else { el.style.scrollSnapType = ''; done?.() }
-  }
-  raf = requestAnimationFrame(step)
-  return () => { cancelAnimationFrame(raf); el.style.scrollSnapType = '' }
+/** Run the keyframes on each pane, then call done. Returns a cancel. */
+function slidePanes(strip: HTMLElement, moves: [Element | undefined, Keyframe[]][], done: () => void): () => void {
+  const list = moves.filter((m): m is [Element, Keyframe[]] => !!m[0])
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !list.length) { done(); return () => {} }
+  // While the animations draw the slide: no snapping (it would chase the moving panes)
+  // and no scroll-driven pane-leave (it would jump with the strip).
+  strip.style.scrollSnapType = 'none'
+  strip.dataset.sliding = ''
+  const anims = list.map(([el, frames]) => el.animate(frames, SLIDE))
+  let over = false
+  const snapBack = () => { strip.style.scrollSnapType = ''; delete strip.dataset.sliding }
+  anims[0].finished.then(() => {
+    if (over) return
+    over = true
+    anims.forEach((a) => a.cancel())
+    done()
+    // A frame later, once the scroll-driven timelines have caught up with the jump.
+    requestAnimationFrame(snapBack)
+  }, () => {})
+  return () => { if (over) return; over = true; anims.forEach((a) => a.cancel()); snapBack() }
 }
 
 /** One tab: its first page plus whatever has been pushed on top. Stays mounted while another tab shows. */
@@ -174,8 +192,19 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
     if (pages.length >= shown.length) { setShown(pages); return }
     const target = pages.length * el.clientWidth
     if (el.scrollLeft <= target + 2) { setShown(pages); return }
+    // slide the top page and the one under it right, then jump the strip back and drop the page
+    const w = el.clientWidth
+    const top = Math.round(el.scrollLeft / w)
+    const shift = w * (top - pages.length)
     sliding.current = true
-    const cancel = slide(el, target, () => { sliding.current = false; setShown(pages) })
+    const cancel = slidePanes(el, [
+      [el.children[top], [at(0), at(shift)]],
+      [el.children[top - 1], [at(LEAVE * w, true), at(shift)]],
+    ], () => {
+      el.scrollLeft = target
+      sliding.current = false
+      setShown(pages)
+    })
     return () => { cancel(); sliding.current = false }
   }, [pages, shown])
 
@@ -185,8 +214,14 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
     const target = shown.length * el.clientWidth
     if (first.current) { first.current = false; el.scrollLeft = target; return }
     if (el.scrollLeft < target - 2 && shown === pages) {
+      // jump the strip to the new page, then slide it and the page under it in from where they were
+      const from = target - el.scrollLeft
       sliding.current = true
-      const cancel = slide(el, target, () => { sliding.current = false })
+      const cancel = slidePanes(el, [
+        [el.children[shown.length], [at(from), at(0)]],
+        [el.children[shown.length - 1], [at(from), at(LEAVE * el.clientWidth, true)]],
+      ], () => { sliding.current = false })
+      el.scrollLeft = target
       return () => { cancel(); sliding.current = false }
     }
   }, [shown, pages])
@@ -215,7 +250,7 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
 
 /** For a page's scroll area: tells the tab bar to dim on the way down and return on the way up. */
 export function useDimOnScroll() {
-  const { setDimmed } = useNav()
+  const { setDimmed } = useNavActions()
   const last = useRef(0)
   return useCallback((e: UIEvent<HTMLElement>) => {
     const el = e.currentTarget

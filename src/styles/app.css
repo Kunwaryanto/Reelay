@@ -43,6 +43,8 @@ button { font: inherit; color: inherit; }
   }
 }
 @keyframes pane-leave { to { transform: translateX(70%); opacity: 0.55; } }
+/* Push and pop draw the same movement with their own animations (nav.tsx). */
+.stack[data-sliding] > .pane { animation: none; }
 
 .page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: calc(110px + var(--edge-b)); -webkit-overflow-scrolling: touch; }
 .page-plain { padding: calc(var(--safe-top) + 50px) var(--margin) 110px; }
@@ -422,7 +424,7 @@ html[data-runway] .tabbar { touch-action: none; }
 /* ---- Watchlist, empty: a wall to pick from ---- */
 .pick { overflow: hidden; padding: 0; }
 .pick-pan { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-.pick-wall { position: absolute; left: 50%; top: 50%; width: 808px; height: 1192px; margin: -596px 0 0 -404px; will-change: transform; }
+.pick-wall { position: absolute; left: 50%; top: 50%; width: 944px; height: 1496px; margin: -748px 0 0 -472px; will-change: transform; }
 .pick-wall[data-settle='true'] { transition: transform 600ms var(--ease-out); }
 .pick-poster { position: absolute; width: 128px; height: 192px; padding: 0; border: 0; border-radius: 10px; corner-shape: squircle; overflow: hidden; background: var(--surface); cursor: pointer; transition: transform 160ms var(--ease-out); -webkit-touch-callout: none; }
 .pick-poster:active { transform: scale(0.97); }

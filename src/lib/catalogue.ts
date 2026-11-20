@@ -200,8 +200,8 @@ export async function loadMyServices(): Promise<string[]> {
 
 /** Posters to pick from when the Watchlist is empty: recent and classic films and series, mixed. */
 export async function loadPicks(): Promise<Card[]> {
-  const lists = await Promise.all(MIXED.map((b) => cards(b, {}, 10)))
-  return interleave(lists, new Set(), 33)
+  const lists = await Promise.all(MIXED.map((b) => cards(b, {}, 15)))
+  return interleave(lists, new Set(), 49)
 }
 
 // ---- Invites (admins) ------------------------------------------------------

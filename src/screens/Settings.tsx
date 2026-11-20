@@ -1,11 +1,12 @@
 // So far: Invite friends (admins) and the account. The full Settings comes later.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
 import { useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { clearSavedData } from '../lib/query'
-import { BackButton, Icon } from '../ui'
+import { BUILD, newVersionOut, reloadApp } from '../lib/update'
+import { BackButton, Icon, Spinner } from '../ui'
 
 export default function Settings() {
   const { email, signOut, isAdmin, session } = useAuth()
@@ -14,6 +15,9 @@ export default function Settings() {
   const waiting = (invites.data ?? []).filter((i) => inviteState(i) === 'waiting').length
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState('')
+  const [fresh, setFresh] = useState(false)
+  const [reloading, setReloading] = useState(false)
+  useEffect(() => { newVersionOut().then(setFresh) }, [])
 
   const out = async () => {
     if (!navigator.onLine) { setAsking(false); setError('Connect to sign out'); return }
@@ -41,7 +45,17 @@ export default function Settings() {
           <li className="row-plain"><span className="row-text"><b>Signed in with email</b><small>{email}</small></span></li>
           <li><button type="button" onClick={() => { setError(''); setAsking(true) }}><span className="row-text"><b>Sign out</b>{error && <small className="err">{error}</small>}</span></button></li>
         </ul>
-        <p className="version">Version 0.1</p>
+      </section>
+      {/* Temporary while testing */}
+      <section className="settings-block">
+        <h2 className="block-title">Testing</h2>
+        <ul className="rows">
+          <li><button type="button" disabled={reloading} onClick={() => { setReloading(true); reloadApp() }}>
+            <span className="row-text"><b>Reload Reelay</b><small>Gets the latest version without adding it to the Home Screen again.</small></span>
+            {reloading ? <Spinner light /> : fresh && <span className="row-note">New version</span>}
+          </button></li>
+        </ul>
+        <p className="version">Version 0.1 · {BUILD}</p>
       </section>
 
       {asking && (

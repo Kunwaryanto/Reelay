@@ -8,7 +8,7 @@ import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { SERVICE_NAME, type Card } from '../lib/catalogue'
-import { useNav, type Tab } from '../lib/nav'
+import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { useRequestFailed } from '../lib/query'
 
 // ---- Icons -----------------------------------------------------------------
@@ -88,7 +88,7 @@ export function IconButton({ label, glass, children, ...rest }: BtnProps & { lab
 }
 
 export function BackButton({ glass }: { glass?: boolean }) {
-  const { back } = useNav()
+  const { back } = useNavActions()
   return <IconButton label="Back" glass={glass} onClick={back}><Icon name="chevron_left" size={20} /></IconButton>
 }
 
@@ -132,7 +132,7 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
 }
 
 export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: string | null; eager?: boolean; onHold?: (card: Card, cover: HTMLElement) => void }) {
-  const { push } = useNav()
+  const { push } = useNavActions()
   const service = card.availability[0]?.service_id
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`

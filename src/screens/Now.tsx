@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
-import { useDimOnScroll, useNav } from '../lib/nav'
+import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
@@ -16,7 +16,7 @@ function heroMeta(c: Card): string {
 }
 
 function Hero({ items }: { items: Card[] }) {
-  const { push } = useNav()
+  const { push } = useNavActions()
   const [index, setIndex] = useState(0)
   const [dir, setDir] = useState(1)
   const [paused, setPaused] = useState(false)
@@ -134,7 +134,7 @@ function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement };
 }
 
 export default function Now() {
-  const { push } = useNav()
+  const { push } = useNavActions()
   const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)

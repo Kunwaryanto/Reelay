@@ -72,6 +72,10 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: tapping a waiting row shares that link again; where the share sheet is missing the link is copied ("Link copied").
 
+## Page slides (20 Nov)
+
+Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
+
 ## Watchlist (built 20 Nov, `src/screens/Watchlist.tsx`)
 
 - List from board v128, empty state (pick wall) from v189.
@@ -79,7 +83,7 @@ Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: 
 - Leaving soon = leaves within 30 days on one of your services.
 - Swipe a row left for Remove (opens past 44px); the bell on a not-streaming row turns Notify on and off.
 - The sort sheet is mounted on the body so it covers the tab bar.
-- Pick wall: 33 posters from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
+- Pick wall: 49 posters (7 × 7, so the tilted wall reaches every corner when panned) from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
 - Not built yet: long press on a row, the "New season" note, the link from the services label to Your services.
 
 ## Settings pages: Credits, Privacy, policy and terms

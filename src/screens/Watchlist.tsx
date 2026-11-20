@@ -211,12 +211,15 @@ function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, on
 
 // ---- Empty: pick from a wall ------------------------------------------------
 
+// 7 × 7 posters: enough to cover the screen, tilted and panned to either edge
+const COLS = 7, ROWS = 7
+const PICKS = COLS * ROWS
 const BX = 150, BY = 140 // how far the wall pans; past it, it pulls back like iOS
 const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
 const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
 
 function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: number[]) => void }) {
-  const q = useQuery<Card[]>('picks', loadPicks, { maxAge: 60 * 60 * 1000 })
+  const q = useQuery<Card[]>(`picks:${PICKS}`, loadPicks, { maxAge: 60 * 60 * 1000 })
   const [sel, setSel] = useState<number[]>([])
   const [pan, setPan] = useState({ x: 0, y: 0, settle: false })
   const d = useRef<{ x: number; y: number; px: number; py: number; moved: boolean; lx: number; ly: number; lt: number; vx: number; vy: number } | null>(null)
@@ -251,11 +254,11 @@ function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: num
         onPointerCancel={() => { d.current = null }}>
         <div className="pick-wall" data-settle={pan.settle} style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) rotate(-6deg)` }}>
           {(q.data ?? []).map((c, i) => {
-            const col = i % 6, row = Math.floor(i / 6)
+            const col = i % COLS, row = Math.floor(i / COLS)
             const on = sel.includes(c.id)
             return (
               <button key={c.id} type="button" className="pick-poster" aria-pressed={on} aria-label={c.title} data-dim={n > 0 && !on}
-                style={{ left: col * 136, top: row * 200 + (col % 2 ? 96 : 0) }}
+                style={{ left: col * 136, top: row * 200 + (col % 2 ? 0 : 96) }}
                 onClick={() => { if (!dragged.current) setSel((s) => (on ? s.filter((x) => x !== c.id) : [...s, c.id])) }}>
                 {c.poster_path && <img src={tmdbImage(c.poster_path, 'w342')} alt="" draggable={false} decoding="async" />}
                 <i aria-hidden="true" />

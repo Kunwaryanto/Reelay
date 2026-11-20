@@ -15,6 +15,7 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 ## Stack
 
 - Vite + React + TypeScript, deployed on Vercel from `main` to https://usereelay.vercel.app.
+- Testing branch: `sprint-2` is the one staging branch (decided 20 Nov). New work is pushed there so its preview URL stays the same: https://reelay-git-sprint-2-kunwaryanto.vercel.app. Merge it into `main` when a round is approved. Settings has a temporary Reload Reelay row and shows the build (commit) so a Home Screen install can pick up a new deploy.
 - Supabase (database, auth with 6-digit email code). Everything Supabase is in `supabase/`:
   migrations in `supabase/migrations`, auth settings in `supabase/config.toml`, email template in `supabase/templates`.
   The `Supabase migrations` workflow applies new migrations when they reach `main` (`supabase db push`); `Supabase status` lists what's applied. Never change the database by hand in the dashboard; add a migration.
