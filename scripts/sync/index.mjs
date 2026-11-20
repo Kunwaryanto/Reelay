@@ -1,12 +1,15 @@
 // Nightly catalogue sync for Reelay. Runs in GitHub Actions (see .github/workflows/nightly-sync.yml).
 //
 // 1. Services: map TMDB's Swedish providers to ours.
-// 2. Titles: everything streaming in Sweden on our services (TMDB discover), with details,
-//    cast and crew, and where it streams (TMDB watch providers, data from JustWatch).
-// 3. Leaving dates: Streaming Availability's list of titles leaving in Sweden.
-// 4. Scores: IMDb's daily ratings file, then MDBList for Rotten Tomatoes and Letterboxd.
-// 5. Full runs only: titles that are no longer streaming lose their rows, and "added"/"left"
-//    events are written by comparing with the night before.
+// 2. Where things stream: TMDB discover lists every title on each of our services in Sweden
+//    (data from JustWatch). That list alone decides availability, every night.
+// 3. Title details (text, images, cast and crew): fetched for titles we don't have yet, plus the
+//    SYNC_REFRESH_PER_RUN titles whose details are oldest, so the whole catalogue is refreshed about
+//    every two weeks. SYNC_REFRESH=all refetches every title (slow: hours).
+// 4. Leaving dates: Streaming Availability's list of titles leaving in Sweden.
+// 5. Scores: IMDb's daily ratings file, then MDBList for Rotten Tomatoes and Letterboxd.
+// 6. Full runs only: offers that are gone lose their rows, "added"/"left" events are written by
+//    comparing with the night before, and old rows are cleaned up.
 //
 // SYNC_LIMIT > 0 runs a test on that many titles (no deletions, no events).
 
@@ -24,6 +27,8 @@ const LIMIT = Number(process.env.SYNC_LIMIT || 0);
 const FULL = LIMIT === 0;
 const MDBLIST_PER_RUN = Number(process.env.MDBLIST_PER_RUN || 900);
 const SA_PAGES = Number(process.env.SA_PAGES || 10);
+const REFRESH_ALL = process.env.SYNC_REFRESH === 'all';
+const REFRESH_PER_RUN = Number(process.env.SYNC_REFRESH_PER_RUN || 2500);
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 // ---------------------------------------------------------------------------
@@ -119,39 +124,54 @@ async function syncServices() {
 // ---------------------------------------------------------------------------
 // 2. Titles streaming in Sweden
 // ---------------------------------------------------------------------------
-async function discover(providerMap) {
-  const seen = new Map(); // key "movie:123" -> popularity
-  for (const kind of ['movie', 'tv']) {
-    for (const [svc, pid] of Object.entries(providerMap)) {
-      for (let page = 1; page <= 500; page++) {
-        const r = await tmdb(`/discover/${kind}`, {
-          watch_region: 'SE',
-          with_watch_providers: String(pid),
-          with_watch_monetization_types: 'flatrate|free|ads',
-          sort_by: 'popularity.desc',
-          include_adult: 'false',
-          page: String(page),
-        });
-        for (const t of r?.results ?? []) {
-          const key = `${kind}:${t.id}`;
-          if (!seen.has(key)) seen.set(key, t.popularity ?? 0);
-        }
-        if (!r || page >= r.total_pages) break;
-        if (!FULL && page >= 1) break; // test runs: first page per service is plenty
-      }
-      if (FULL) log(`  discovered ${kind} on ${svc}: total so far ${seen.size}`);
-    }
-  }
-  let keys = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
-  if (!FULL) keys = keys.slice(0, LIMIT);
-  log('titles to sync:', keys.length);
-  return keys;
-}
+const MONETIZATION = [['flatrate', 'subscription'], ['free', 'free'], ['ads', 'free']];
 
-const tmdbToService = (providerMap) => {
-  const inv = new Map(Object.entries(providerMap).map(([k, v]) => [v, k]));
-  return (pid) => inv.get(pid);
-};
+// Every title on our services in Sweden: key "movie:123" -> { pop, offers: Map(service -> type) }.
+// Any failed request aborts the run: a gap here would look like titles leaving.
+async function discover(providerMap) {
+  const seen = new Map();
+  const combos = [];
+  for (const kind of ['movie', 'tv'])
+    for (const [svc, pid] of Object.entries(providerMap))
+      for (const [monet, type] of MONETIZATION) combos.push({ kind, svc, pid, monet, type });
+  const errors = [];
+  let next = 0;
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (next < combos.length && !errors.length) {
+      const { kind, svc, pid, monet, type } = combos[next++];
+      try {
+        for (let page = 1; page <= 500; page++) {
+          const r = await tmdb(`/discover/${kind}`, {
+            watch_region: 'SE',
+            with_watch_providers: String(pid),
+            with_watch_monetization_types: monet,
+            sort_by: 'popularity.desc',
+            include_adult: 'false',
+            page: String(page),
+          });
+          if (!r) throw new Error('no result');
+          for (const t of r.results ?? []) {
+            const key = `${kind}:${t.id}`;
+            let e = seen.get(key);
+            if (!e) seen.set(key, (e = { pop: t.popularity ?? 0, offers: new Map() }));
+            // a subscription offer wins over a free one on the same service
+            if (!e.offers.has(svc) || type === 'subscription') e.offers.set(svc, type);
+          }
+          if (page >= r.total_pages) break;
+          if (page === 500) log(`  ${kind} on ${svc} (${monet}) has more than 10,000 titles: the rest are missed`);
+          if (!FULL) break; // test runs: first page per service is plenty
+        }
+      } catch (e) {
+        errors.push(`${kind} ${svc} ${monet}: ${e.message}`);
+      }
+    }
+  }));
+  if (errors.length) throw new Error(`discover failed, nothing changed: ${errors.join('; ')}`);
+  const perService = {};
+  for (const e of seen.values()) for (const svc of e.offers.keys()) perService[svc] = (perService[svc] ?? 0) + 1;
+  log(`discovered ${seen.size} titles; by service: ${JSON.stringify(perService)}`);
+  return seen;
+}
 
 function seRating(kind, d) {
   if (kind === 'movie') {
@@ -163,31 +183,37 @@ function seRating(kind, d) {
 
 async function fetchTitle(key) {
   const [kind, id] = key.split(':');
-  const append = ['external_ids', 'watch/providers', 'images', kind === 'movie' ? 'credits,release_dates' : 'aggregate_credits,content_ratings'].join(',');
+  const append = ['external_ids', 'images', kind === 'movie' ? 'credits,release_dates' : 'aggregate_credits,content_ratings'].join(',');
   const d = await tmdb(`/${kind}/${id}`, { append_to_response: append, include_image_language: 'en,null' });
   return d ? { kind, d } : null;
 }
 
-async function upsertPerson(c, p) {
-  const r = await c.query(
-    `insert into public.people (tmdb_id, name, profile_path, known_for) values ($1,$2,$3,$4)
-     on conflict (tmdb_id) do update set name = excluded.name, profile_path = excluded.profile_path,
-       known_for = coalesce(excluded.known_for, public.people.known_for)
-     returning id`,
-    [p.id, p.name, p.profile_path ?? null, p.known_for_department ?? null],
-  );
-  return r.rows[0].id;
+// Saves one title with its cast and crew. Where it streams is saved separately, from discover.
+// Parallel saves can deadlock on shared people, and TMDB sometimes gives two titles the same IMDb or
+// Wikidata id: both are retried here.
+async function saveTitle(t) {
+  let dropIds = false;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await saveTitleOnce(t, dropIds);
+    } catch (e) {
+      if (attempt >= 4) throw e;
+      if (e.code === '40P01') { await sleep(200 * attempt + Math.random() * 300); continue; } // deadlock
+      if (e.code === '23505' && /imdb_id|wikidata_id/.test(e.constraint ?? '')) { dropIds = true; continue; }
+      throw e;
+    }
+  }
 }
 
-async function saveTitle({ kind, d }, svcOf) {
+async function saveTitleOnce({ kind, d }, dropIds) {
   const film = kind === 'movie';
   const first = film ? d.release_date : d.first_air_date;
   const lastSeason = film ? null : [...(d.seasons ?? [])].filter((s) => s.season_number > 0 && s.air_date).sort((a, b) => b.season_number - a.season_number)[0];
   const logo = d.images?.logos?.find((l) => l.iso_639_1 === 'en') ?? d.images?.logos?.[0];
   const row = [
     d.id, film ? 'film' : 'series',
-    d.external_ids?.imdb_id || d.imdb_id || null,
-    d.external_ids?.wikidata_id || null,
+    dropIds ? null : d.external_ids?.imdb_id || d.imdb_id || null,
+    dropIds ? null : d.external_ids?.wikidata_id || null,
     film ? d.title : d.name,
     film ? d.original_title : d.original_name,
     first ? Number(first.slice(0, 4)) : null,
@@ -205,14 +231,29 @@ async function saveTitle({ kind, d }, svcOf) {
     logo?.file_path ?? null,
     d.popularity ?? 0,
   ];
+  // Top 10 cast, plus directors (films) or creators (series).
+  const cast = film
+    ? (d.credits?.cast ?? []).slice(0, 10).map((c) => ({ p: c, role: 'cast', character: c.character, order: c.order }))
+    : (d.aggregate_credits?.cast ?? []).slice(0, 10).map((c, i) => ({ p: c, role: 'cast', character: c.roles?.[0]?.character, order: i }));
+  const crew = film
+    ? (d.credits?.crew ?? []).filter((c) => c.job === 'Director').map((c, i) => ({ p: c, role: 'director', order: i }))
+    : (d.created_by ?? []).map((c, i) => ({ p: { ...c, known_for_department: 'Writing' }, role: 'creator', order: i }));
+  const credits = [...cast, ...crew].filter((cr) => cr.p?.id && cr.p.name);
+  // People in one statement, always in the same order, so two saves rarely wait on each other.
+  const people = [...new Map(credits.map((cr) => [cr.p.id, cr.p])).values()].sort((a, b) => a.id - b.id);
+
   const c = await db.connect();
-  await c.query('begin');
   try {
+    await c.query('begin');
+    // An IMDb or Wikidata id another title already has is left empty here (the first title keeps it).
     const t = await c.query(
       `insert into public.titles (tmdb_id, kind, imdb_id, wikidata_id, title, original_title, year, end_year,
          runtime_min, seasons, last_season_on, overview, genres, original_language, countries, age_rating,
          poster_path, backdrop_path, logo_path, popularity, keep_reason, synced_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'streaming', now())
+       values ($1,$2,
+         case when exists (select 1 from public.titles o where o.imdb_id = $3 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $3 end,
+         case when exists (select 1 from public.titles o where o.wikidata_id = $4 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $4 end,
+         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'streaming', now())
        on conflict (tmdb_id, kind) do update set
          imdb_id = excluded.imdb_id, wikidata_id = excluded.wikidata_id, title = excluded.title,
          original_title = excluded.original_title, year = excluded.year, end_year = excluded.end_year,
@@ -220,57 +261,73 @@ async function saveTitle({ kind, d }, svcOf) {
          overview = excluded.overview, genres = excluded.genres, original_language = excluded.original_language,
          countries = excluded.countries, age_rating = excluded.age_rating, poster_path = excluded.poster_path,
          backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path, popularity = excluded.popularity,
-         keep_reason = 'streaming', synced_at = now()
+         synced_at = now()
        returning id`,
       row,
     );
     const titleId = t.rows[0].id;
 
-    // Cast and crew: top 10 cast, plus directors (films) or creators (series).
     await c.query('delete from public.credits where title_id = $1', [titleId]);
-    const cast = film
-      ? (d.credits?.cast ?? []).slice(0, 10).map((c) => ({ p: c, role: 'cast', character: c.character, order: c.order }))
-      : (d.aggregate_credits?.cast ?? []).slice(0, 10).map((c, i) => ({ p: c, role: 'cast', character: c.roles?.[0]?.character, order: i }));
-    const crew = film
-      ? (d.credits?.crew ?? []).filter((c) => c.job === 'Director').map((c, i) => ({ p: c, role: 'director', order: i }))
-      : (d.created_by ?? []).map((c, i) => ({ p: { ...c, known_for_department: 'Writing' }, role: 'creator', order: i }));
-    for (const cr of [...cast, ...crew]) {
-      const pid = await upsertPerson(c, cr.p);
-      await c.query(
-        `insert into public.credits (title_id, person_id, role, character, sort_order) values ($1,$2,$3,$4,$5)
-         on conflict do nothing`,
-        [titleId, pid, cr.role, cr.character || null, cr.order ?? 0],
+    if (people.length) {
+      const saved = await c.query(
+        `insert into public.people (tmdb_id, name, profile_path, known_for)
+         select * from unnest($1::int[], $2::text[], $3::text[], $4::text[])
+         on conflict (tmdb_id) do update set name = excluded.name, profile_path = excluded.profile_path,
+           known_for = coalesce(excluded.known_for, public.people.known_for)
+         returning id, tmdb_id`,
+        [people.map((p) => p.id), people.map((p) => p.name), people.map((p) => p.profile_path ?? null), people.map((p) => p.known_for_department ?? null)],
       );
-    }
-
-    // Where it streams in Sweden.
-    const se = d['watch/providers']?.results?.SE ?? {};
-    const offers = new Map();
-    for (const [bucket, type] of [['flatrate', 'subscription'], ['free', 'free'], ['ads', 'free']]) {
-      for (const p of se[bucket] ?? []) {
-        const svc = svcOf(p.provider_id);
-        if (svc && !offers.has(svc)) offers.set(svc, type);
-      }
-    }
-    for (const [svc, type] of offers) {
+      const idOf = new Map(saved.rows.map((r) => [r.tmdb_id, r.id]));
       await c.query(
-        `insert into public.availability (title_id, service_id, type, seen_at) values ($1,$2,$3, now())
-         on conflict (title_id, service_id) do update set type = excluded.type, seen_at = now()`,
-        [titleId, svc, type],
+        `insert into public.credits (title_id, person_id, role, character, sort_order)
+         select $1, * from unnest($2::bigint[], $3::text[], $4::text[], $5::int[])
+         on conflict do nothing`,
+        [titleId, credits.map((cr) => idOf.get(cr.p.id)), credits.map((cr) => cr.role), credits.map((cr) => cr.character || null), credits.map((cr) => cr.order ?? 0)],
       );
     }
     await c.query('commit');
-    return { titleId, services: [...offers.keys()] };
+    return titleId;
   } catch (e) {
-    await c.query('rollback');
+    await c.query('rollback').catch(() => {});
     throw e;
   } finally {
     c.release();
   }
 }
 
+// Where things stream, straight from discover, for every title we have. Also keeps popularity fresh.
+async function saveAvailability(found, keys) {
+  const rows = [];
+  for (const key of keys) {
+    const [k, id] = key.split(':');
+    const e = found.get(key);
+    for (const [svc, type] of e.offers) rows.push([Number(id), k === 'movie' ? 'film' : 'series', svc, type, e.pop]);
+  }
+  let offers = 0;
+  for (let i = 0; i < rows.length; i += 2000) {
+    const chunk = rows.slice(i, i + 2000);
+    const cols = [0, 1, 2, 3, 4].map((j) => chunk.map((r) => r[j]));
+    const r = await db.query(
+      `insert into public.availability (title_id, service_id, type, seen_at)
+       select t.id, x.svc, x.type, now()
+       from unnest($1::int[], $2::text[], $3::text[], $4::text[]) as x(tmdb_id, kind, svc, type)
+       join public.titles t on t.tmdb_id = x.tmdb_id and t.kind = x.kind
+       on conflict (title_id, service_id) do update set type = excluded.type, seen_at = now()`,
+      cols.slice(0, 4),
+    );
+    offers += r.rowCount;
+    await db.query(
+      `update public.titles t set popularity = x.pop, keep_reason = 'streaming'
+       from (select distinct on (tmdb_id, kind) * from unnest($1::int[], $2::text[], $3::real[]) as u(tmdb_id, kind, pop)) x
+       where t.tmdb_id = x.tmdb_id and t.kind = x.kind and (t.popularity is distinct from x.pop or t.keep_reason <> 'streaming')`,
+      [cols[0], cols[1], cols[4]],
+    );
+  }
+  log(`availability: ${offers} offers saved`);
+}
+
 // ---------------------------------------------------------------------------
-// 3. Leaving dates (Streaming Availability)
+// 4. Leaving dates (Streaming Availability)
 // ---------------------------------------------------------------------------
 async function syncLeavingDates() {
   const key = env('STREAMING_AVAILABILITY_KEY', false);
@@ -312,7 +369,7 @@ async function syncLeavingDates() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Scores
+// 5. Scores
 // ---------------------------------------------------------------------------
 async function syncImdbRatings() {
   const ids = new Map((await db.query('select id, imdb_id from public.titles where imdb_id is not null')).rows.map((r) => [r.imdb_id, r.id]));
@@ -367,7 +424,7 @@ async function syncMdblist() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Full runs: drop what's gone, record added/left
+// 6. Full runs: drop what's gone, record added/left, clean up
 // ---------------------------------------------------------------------------
 async function reconcile(runStart) {
   // The very first full run sees everything for the first time: that isn't "new".
@@ -383,38 +440,68 @@ async function reconcile(runStart) {
      select title_id, service_id, 'left' from gone on conflict do nothing`,
     [runStart],
   );
-  const kept = await db.query(
+  // Titles with nothing streaming: kept while someone has saved them or they have awards.
+  await db.query(
     `update public.titles t set keep_reason = case
-       when exists (select 1 from public.watchlist w where w.title_id = t.id) then 'saved'
-       when exists (select 1 from public.awards a where a.title_id = t.id) then 'award' else keep_reason end
-     where not exists (select 1 from public.availability a where a.title_id = t.id) and keep_reason = 'streaming'`,
+       when exists (select 1 from public.watchlist w where w.title_id = t.id) then 'saved' else 'award' end
+     where not exists (select 1 from public.availability a where a.title_id = t.id)
+       and (exists (select 1 from public.watchlist w where w.title_id = t.id) or exists (select 1 from public.awards a where a.title_id = t.id))`,
   );
+  // The rest stay 90 days after their details were last fetched (old links still open them), then go.
+  const dropped = await db.query(
+    `delete from public.titles t
+     where not exists (select 1 from public.availability a where a.title_id = t.id)
+       and not exists (select 1 from public.watchlist w where w.title_id = t.id)
+       and not exists (select 1 from public.awards a where a.title_id = t.id)
+       and t.synced_at < now() - interval '90 days'`,
+  );
+  const idle = (await db.query('select count(*)::int n from public.titles t where not exists (select 1 from public.availability a where a.title_id = t.id)')).rows[0].n;
   await db.query(`delete from public.availability_events where happened_on < current_date - 90`);
   await db.query(`delete from public.tmdb_search_cache where fetched_at < now() - interval '1 day'`);
   // Invites: joined or expired ones leave the Sent list after 30 days.
   await db.query(`delete from public.invites where coalesce(joined_at, expires_at) < now() - interval '30 days'`);
-  log(`events: ${added.rowCount} added, ${left.rowCount} left; ${kept.rowCount} titles no longer streaming`);
+  // Sign-in log (who signed in when, with IP address): 30 days, as the privacy policy says.
+  try {
+    const a = await db.query(`delete from auth.audit_log_entries where created_at < now() - interval '30 days'`);
+    log(`sign-in log: ${a.rowCount} old entries removed`);
+  } catch (e) {
+    log('sign-in log: could not clean up:', e.message);
+  }
+  log(`events: ${added.rowCount} added, ${left.rowCount} left; ${idle} titles kept with nothing streaming, ${dropped.rowCount} old ones removed`);
 }
 
 // ---------------------------------------------------------------------------
 async function main() {
-  const runStart = new Date();
+  const runStart = (await db.query('select now() as t')).rows[0].t;
   log(FULL ? 'full sync' : `test sync, ${LIMIT} titles`);
   const providerMap = await syncServices();
-  const svcOf = tmdbToService(providerMap);
-  const keys = await discover(providerMap);
+  const found = await discover(providerMap);
+  let keys = [...found.entries()].sort((a, b) => b[1].pop - a[1].pop).map(([k]) => k);
+  if (!FULL) keys = keys.slice(0, LIMIT);
+
+  const have = new Map((await db.query('select tmdb_id, kind, synced_at from public.titles')).rows
+    .map((r) => [`${r.kind === 'film' ? 'movie' : 'tv'}:${r.tmdb_id}`, r.synced_at]));
+  // Safety: if TMDB suddenly lists far fewer titles than we have streaming, don't trust it.
+  const streaming = (await db.query('select count(distinct title_id)::int n from public.availability')).rows[0].n;
+  if (FULL && streaming > 1000 && keys.length < streaming * 0.7) {
+    throw new Error(`discover found ${keys.length} titles but ${streaming} are streaming in the database: stopped, nothing changed`);
+  }
+
+  const fresh = keys.filter((k) => !have.has(k));
+  const known = keys.filter((k) => have.has(k));
+  const stale = REFRESH_ALL ? known : [...known].sort((a, b) => have.get(a) - have.get(b)).slice(0, FULL ? REFRESH_PER_RUN : LIMIT);
+  log(`titles: ${keys.length} streaming, ${fresh.length} new, ${stale.length} of ${known.length} known ones refreshed`);
   let done = 0;
-  const results = await pool(keys.map((key) => ({ key })), 8, async ({ key }) => {
+  const todo = [...fresh, ...stale];
+  const results = await pool(todo.map((key) => ({ key })), 8, async ({ key }) => {
     const t = await fetchTitle(key);
     if (!t) return null;
-    const r = await saveTitle(t, svcOf);
+    const id = await saveTitle(t);
     if (++done % 500 === 0) log(`  ${done} titles saved`);
-    return r;
+    return id;
   });
-  const saved = results.filter(Boolean);
-  const perService = {};
-  for (const r of saved) for (const s of r.services) perService[s] = (perService[s] ?? 0) + 1;
-  log(`titles saved: ${saved.length}; by service: ${JSON.stringify(perService)}`);
+  log(`title details saved: ${results.filter(Boolean).length} of ${todo.length}`);
+  await saveAvailability(found, keys);
   await syncLeavingDates();
   await syncImdbRatings();
   await syncMdblist();

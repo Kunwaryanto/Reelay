@@ -18,7 +18,7 @@ const summary = (line) => {
 const user = await db.query('select id from auth.users where lower(email) = $1', [email]);
 if (user.rowCount) {
   await db.query('update public.profiles set is_admin = true where user_id = $1', [user.rows[0].id]);
-  summary(`${email} is now an admin. Invite friends shows up in their Settings.`);
+  summary(`${email} is now an admin. Invite friends shows up in their Settings the next time they open Reelay.`);
 } else {
   const inv = await db.query(
     `insert into public.invites (token, make_admin) values (public.new_invite_token(), true) returning token, expires_at`,
