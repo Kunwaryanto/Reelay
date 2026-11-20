@@ -50,7 +50,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Invite only (v287): without a link the glass button says Sign in, 120px from the bottom; “Reelay is invite only.” sits alone 40px from the bottom (12px, grey). No terms line.
 • From a valid invite link: Join Reelay and “You’re invited.” It never says who sent it.
 • An email without an account gets “Reelay is invite only” in the sheet instead of a code, with Use another email. An expired or used link opens the sheet with the reason and “I already have an account”.
-• The email sheet has a quiet Privacy Policy link under Send code (tell people about their data where the email is collected). Terms of use live in Settings › Privacy.
+• No privacy or terms line on Start or in the sheet while Reelay is invite only among friends; the privacy policy and terms live in Settings › Privacy. If Reelay opens up, bring the line back (archived Start v18).
 
 ## Invite friends (admins only)
 
