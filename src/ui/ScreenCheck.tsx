@@ -55,7 +55,6 @@ function measure() {
     tabbar: rect('.tabbar'),
     sheet: rect('.sheet'),
     'sheet body': rect('.sheet-body'),
-    'sheet math': (window as Window & { __sheet?: string }).__sheet ?? 'not opened yet',
     scrollY: Math.round(window.scrollY),
     'chrome-b': getComputedStyle(document.documentElement).getPropertyValue('--chrome-b'),
     start: rect('.start'),
@@ -93,7 +92,7 @@ export function ScreenCheck() {
     const update = (why: string) => {
       const r = measure()
       setNow(r)
-      const sig = `inner ${r.inner} · visual ${r.visual} · scrollY ${r.scrollY} · sheet ${r['sheet body']} · ${r['sheet math']}`
+      const sig = `inner ${r.inner} · visual ${r.visual} · scrollY ${r.scrollY} · sheet ${r['sheet body']}`
       if (sig !== last.current) {
         last.current = sig
         setLog((l) => [`${r.time} ${why}: ${sig}`, ...l].slice(0, 20))

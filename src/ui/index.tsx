@@ -314,15 +314,16 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
 // ---- Sheet -----------------------------------------------------------------
 
 /**
- * Bottom sheet on a native <dialog>. Tap outside, Escape or a swipe down closes it; it rides above the keyboard.
+ * Bottom sheet on a native <dialog>. Tap outside, Escape or a swipe down closes it.
  * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
  * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
-const KB_KEY = 'reelay:kb-settled' // (renamed: the old key could hold a mid-animation value)
-const savedKb = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
-
-/** `keyboard`: a field is focused as the sheet opens, so it should rise straight to where the keyboard will be. */
-export function Sheet({ open, onClose, label, keyboard, children }: { open: boolean; onClose: () => void; label: string; keyboard?: boolean; children: ReactNode }) {
+/**
+ * `tall`: for sheets with a text field. The sheet opens almost to the top with its content at the top, so the
+ * keyboard only ever covers its empty lower part and the sheet never has to move with the keyboard (a web page
+ * can't follow the keyboard smoothly on iOS).
+ */
+export function Sheet({ open, onClose, label, tall, children }: { open: boolean; onClose: () => void; label: string; tall?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const drag = useRef<{ y: number; dy: number } | null>(null)
 
@@ -331,9 +332,6 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     if (!d) return
     if (open && !d.open) {
       delete d.dataset.closing
-      // Rise straight to where the keyboard will end up (its height from last time), instead of stopping at the
-      // bottom and then being pushed up again as the keyboard arrives.
-      d.style.setProperty('--kb', `${keyboard ? savedKb() : 0}px`)
       d.show()
     }
     else if (!open && d.open) {
@@ -345,45 +343,6 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     }
   }, [open])
 
-  // Keep the sheet above the on-screen keyboard. iOS doesn't reliably tell us when the keyboard has finished
-  // opening or closing in Home Screen apps (resize events stop partway), and briefly scrolls the page while
-  // it opens, so while the sheet is open its position is checked every frame and corrected when it's off.
-  useEffect(() => {
-    if (!open || !window.visualViewport) return
-    const vv = window.visualViewport
-    let last = -1
-    let frame = 0
-    let prev = -1
-    let steady = 0
-    const openedAt = Date.now()
-    const expected = keyboard ? savedKb() : 0
-    const check = () => {
-      const d = ref.current
-      if (d) {
-        // the bottom the sheet would have without any lift: the bottom of what it sits in
-        const bottom = d.offsetParent ? d.offsetParent.getBoundingClientRect().bottom : window.innerHeight
-        const raw = Math.max(0, Math.round(bottom - (vv.offsetTop + vv.height)))
-        // iOS reports passing and sometimes extreme values while the keyboard moves: only act on a value
-        // that has held for a few frames, and never lift more than 70% of the screen
-        const measured = Math.min(raw, Math.round(window.innerHeight * 0.7))
-        steady = measured === prev ? steady + 1 : 0
-        prev = measured
-        let kb = last < 0 ? expected : last
-        if (steady >= 3) kb = measured
-        // while the keyboard is still on its way up, don't drop below where it will end up
-        if (Date.now() - openedAt < 900 && kb < expected) kb = expected
-        if (kb !== last) { last = kb; d.style.setProperty('--kb', `${kb}px`) }
-        // remember the keyboard's height once it has settled, for the next opening
-        if (steady === 12 && measured > 150) { try { localStorage.setItem(KB_KEY, String(measured)) } catch { /* private mode */ } }
-        // temporary: read by the screen check
-        ;(window as Window & { __sheet?: string }).__sheet =
-          `kb ${kb} · raw ${raw} · steady ${steady} · box bottom ${Math.round(bottom)} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)}`
-      }
-      frame = requestAnimationFrame(check)
-    }
-    frame = requestAnimationFrame(check)
-    return () => cancelAnimationFrame(frame)
-  }, [open, keyboard])
 
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
@@ -396,7 +355,7 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
   return (
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
-    <dialog ref={ref} className="sheet" aria-label={label} aria-modal="true"
+    <dialog ref={ref} className="sheet" data-tall={tall || undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
       onPointerDown={(e) => { if ((e.target as HTMLElement).closest('.sheet-grab')) drag.current = { y: e.clientY, dy: 0 } }}
       onPointerMove={(e) => {

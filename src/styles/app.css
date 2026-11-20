@@ -203,7 +203,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 
 /* ---- Sheet ---- */
 .sheet { position: absolute; z-index: 50; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
-  transform: translateY(calc(var(--drag, 0px) - var(--kb, 0px))); transition: transform var(--dur-sheet) var(--ease-sheet), overlay var(--dur-sheet) allow-discrete, display var(--dur-sheet) allow-discrete; }
+  transform: translateY(var(--drag, 0px)); transition: transform var(--dur-sheet) var(--ease-sheet), overlay var(--dur-sheet) allow-discrete, display var(--dur-sheet) allow-discrete; }
 @media (min-width: 500px) { .sheet { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 .sheet[style*='--drag'] { transition: none; }
 .sheet-scrim { position: absolute; z-index: 49; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity var(--dur-sheet) var(--ease-sheet); }
@@ -212,8 +212,11 @@ button.pill-open { padding: 0 12px 0 10px; }
 .sheet[data-closing='true'] { transform: translateY(110%); }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-scrim { transition: none; } }
 .sheet-body { position: relative; background: var(--sheet); box-shadow: var(--sheet-edge); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; corner-shape: squircle; padding: 32px var(--margin) calc(20px + env(safe-area-inset-bottom, 0px)); }
-/* covers the gap under the sheet while it rides above the keyboard or is dragged */
+/* covers the gap under the sheet while it is dragged */
 .sheet-body::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 100vh; background: var(--sheet); }
+/* Tall sheet (fields): reaches almost to the top, content at the top, scrolls inside if text is very large. */
+.sheet[data-tall] { top: calc(env(safe-area-inset-top, 0px) + 12px); height: auto; }
+.sheet[data-tall] .sheet-body { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 /* Where iOS doesn't draw the page (under Safari's floating address bar, past the bottom of the viewport),
    it shows the page background. While a sheet is open, make that the sheet's grey so it never shows as black. */
 html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); }
