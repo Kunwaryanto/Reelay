@@ -5,6 +5,7 @@ import { SavedProvider } from './lib/saved'
 import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
 import Browse, { browsePage } from './screens/Browse'
+import Desktop, { isDesktop } from './screens/Desktop'
 import Invites from './screens/Invites'
 import Now from './screens/Now'
 import Person from './screens/Person'
@@ -68,5 +69,7 @@ function Gate() {
 }
 
 export default function App() {
+  // a computer gets one page, whatever the address
+  if (isDesktop()) return <Desktop />
   return <AuthProvider><ToastProvider><Gate /></ToastProvider></AuthProvider>
 }
