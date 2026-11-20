@@ -4,6 +4,8 @@ import {
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react'
 import wordmarkSvg from '../../public/brand/wordmark.svg?raw'
+import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
+import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { SERVICE_NAME, type Card } from '../lib/catalogue'
 import { useNav, type Tab } from '../lib/nav'
@@ -95,21 +97,33 @@ export const Pill = ({ selected, children, ...rest }: BtnProps & { selected?: bo
 
 // ---- Posters ---------------------------------------------------------------
 
-const MARK_FILE: Record<string, [string, number]> = { 'svt-play': ['svt-play', 19.3], skyshowtime: ['skyshowtime', 20.3] }
+// Built into the app as data URLs, so a mark never loads (or arrives) separately from its poster.
+const svgUrl = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`
+const MARK_IMG: Record<string, [string, number]> = { 'svt-play': [svgUrl(svtPlaySvg), 19.3], skyshowtime: [svgUrl(skyShowtimeSvg), 20.3] }
 
 export function ServiceMark({ service }: { service: string }) {
-  const file = MARK_FILE[service]
-  if (file) return <img className="mark" src={`/icons/services/${file[0]}.svg`} alt="" style={{ width: file[1], height: 8 }} />
+  const mark = MARK_IMG[service]
+  if (mark) return <img className="mark" src={mark[0]} alt="" style={{ width: mark[1], height: 8 }} />
   return <span className="mark-text">{(SERVICE_NAME[service] ?? service).toUpperCase()}</span>
 }
 
+// A poster row near the screen (about one screen ahead) loads all its posters, so they're usually ready
+// by the time you scroll to them. Safari's own lazy loading only starts when an image is almost on screen.
+const NearContext = createContext(false)
+
+/**
+ * A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the
+ * image, its edge line and the service mark fade in together.
+ */
 export function Cover({ path, service, eager, sizes = '147px' }: { path: string | null; service?: string; eager?: boolean; sizes?: string }) {
-  const [ready, setReady] = useState(false)
+  const near = useContext(NearContext)
+  const [ready, setReady] = useState(!path)
+  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
   return (
-    <div className="cover">
+    <div className="cover" data-ready={ready}>
       {path && (
         <img src={tmdbImage(path, 'w342')} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
-          loading={eager ? undefined : 'lazy'} decoding="async" data-ready={ready} onLoad={() => setReady(true)} />
+          loading={eager || near ? undefined : 'lazy'} decoding="async" onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
@@ -191,7 +205,24 @@ export function SectionHeader({ title, onViewAll }: { title: string; onViewAll?:
   )
 }
 
-export const PosterRow = ({ children }: { children: ReactNode }) => <div className="row-scroll noscroll"><div className="row-track">{children}</div></div>
+export function PosterRow({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [near, setNear] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || near) return
+    // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setNear(true) },
+      { root: el.closest('.page'), rootMargin: '100% 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [near])
+  return (
+    <NearContext.Provider value={near}>
+      <div ref={ref} className="row-scroll noscroll"><div className="row-track">{children}</div></div>
+    </NearContext.Provider>
+  )
+}
 
 // ---- States ----------------------------------------------------------------
 
