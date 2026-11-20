@@ -86,6 +86,12 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 - Language is left out until there is Swedish copy to switch to.
 - A temporary Testing section stays at the bottom (Reload, Show onboarding again, build and layout numbers).
 
+## Not available, Notify me permission, long press on rows (21 Nov)
+
+- **This title / person isn’t available** (v272): the Start poster wall at 62% black, the heading with a soft shadow and a glass Search pill; Back and the tab bar stay. Shown for a removed title or person and for an address the app doesn't know.
+- **Notify me** asks iOS for permission the first time (inside the tap). Blocked: it says so and doesn't turn on. In Safari it saves and says notifications need the Home Screen app.
+- **Long press** now also works on Watchlist rows and Search rows, with the same menu. The small row poster lifts to about 150px wide.
+
 ## Person (built 21 Nov, `src/screens/Person.tsx`)
 
 - Board v231. Opened from the cast on a title page and from People in Search (`/person/<id>`).

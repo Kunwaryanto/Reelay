@@ -88,6 +88,8 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   // and hide the original until the copy has landed back on it, so there's never two or a blank one.
   useLayoutEffect(() => {
     const copy = held.cover.cloneNode(true) as HTMLElement
+    // a lazy image doesn't paint again in the copy until it has been seen: make it load now
+    copy.querySelectorAll('img').forEach((img) => { img.loading = 'eager' })
     lift.current?.append(copy)
     held.cover.style.visibility = 'hidden'
     const r = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
@@ -97,7 +99,8 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
 
   const { card } = held
   const vw = window.innerWidth, vh = window.innerHeight
-  const scale = 1.25
+  // small posters (list rows) lift to a size worth looking at
+  const scale = Math.max(1.25, Math.min(3, 150 / rect.width))
   const w = rect.width * scale, h = rect.height * scale
   const menuH = 34 + 44 * 2
   const left = Math.min(Math.max(16, rect.left + rect.width / 2 - w / 2), vw - w - 16)
@@ -111,6 +114,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
       <div className="hold-back" onClick={close} />
       <div ref={lift} className="hold-poster" aria-hidden="true" style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+        borderRadius: 20 / scale, // 16px once lifted, whatever the starting size
         transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
           : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
       }} />

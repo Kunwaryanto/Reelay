@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { useAuth } from './auth'
 import { loadWatchlist, saveTitle, unsaveTitle, type Saved } from './catalogue'
+import { askPermission, permission } from './push'
 import { useQuery } from './query'
 import { useToast } from '../ui'
 import { useState } from 'react'
@@ -70,9 +71,19 @@ export function SavedProvider({ children }: { children: ReactNode }) {
     toggleNotify: (id) => {
       const prev = get(id)
       if (prev?.notify) { write(id, { ...prev, notify: false }, prev); return }
+      const perm = permission()
+      if (perm === 'denied') { toast({ text: 'Notifications are off for Reelay. Turn them on in iOS Settings.' }); return }
       // Notify me always saves the title
-      write(id, { title_id: id, notify: true }, prev)
-      toast({ text: 'We’ll let you know when it’s on.', action: 'Undo', run: () => write(id, prev, { title_id: id, notify: true }) })
+      const on = () => {
+        write(id, { title_id: id, notify: true }, prev)
+        toast({
+          text: perm === 'unsupported' ? 'Saved. Notifications need the Home Screen app.' : 'We’ll let you know when it’s on.',
+          action: 'Undo', run: () => write(id, prev, { title_id: id, notify: true }),
+        })
+      }
+      // the first Notify me asks iOS (this runs inside the tap, which iOS requires)
+      if (perm === 'default') askPermission().then((answer) => { if (answer === 'denied') toast({ text: 'Notifications are off for Reelay.' }); else on() })
+      else on()
     },
   }), [get, write, toast, ids, loaded])
 

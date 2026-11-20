@@ -10,7 +10,8 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, GearIcon, Icon, IconButton, LoadFailed, Sheet } from '../ui'
+import { Button, GearIcon, Icon, IconButton, LoadFailed, Sheet, useLongPress } from '../ui'
+import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'film' | 'series'
 type Sort = 'added' | 'leaving' | 'rated' | 'az'
@@ -37,6 +38,7 @@ export default function Watchlist() {
   const [onlyMine, setOnlyMine] = useState(false)
   const [sheet, setSheet] = useState(false)
   const [open, setOpen] = useState<number | null>(null) // the row swiped open
+  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
 
   // Titles saved elsewhere in the app aren't in this list's data yet: fetch again when one is missing.
   const have = useMemo(() => new Set((q.data ?? []).map((t) => t.id)), [q.data])
@@ -121,7 +123,7 @@ export default function Watchlist() {
               <WatchRow key={r.t.id} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
                 where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming in Sweden' : null}
-                onNotify={() => saved.toggleNotify(r.t.id)}
+                onNotify={() => saved.toggleNotify(r.t.id)} onHold={(card, cover) => { setOpen(null); setHeld({ card, cover }) }}
                 onOpen={() => push(`/title/${r.t.id}`)} onRemove={() => { setOpen(null); saved.toggleSaved(r.t.id, r.t.title) }} />
             ))}
           </ul>
@@ -129,6 +131,7 @@ export default function Watchlist() {
       ))}
       {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
+      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over the tab bar, so outside the page, but inside #root: its clip keeps iOS from scrolling the document */}
       {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
         <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('added'); setOnlyMine(false) }}>Reset</button></div>
@@ -151,13 +154,15 @@ export default function Watchlist() {
 }
 
 /** One saved title. Swipe left to reveal Remove; a tap opens the title. */
-function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
+function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify, onHold }: {
+  onHold: (card: Card, cover: HTMLElement) => void
   row: Row; group: string; showKind: boolean; note: string | null; where: string | null; onNotify: () => void
   open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
 }) {
   const { t, service } = row
   const g = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const swiped = useRef(false)
+  const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
   const [dx, setDx] = useState<number | null>(null)
   const base = open ? -88 : 0
   const x = dx === null ? base : Math.max(-96, Math.min(0, base + dx))
@@ -191,10 +196,11 @@ function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, on
           setDx(null)
         }}
         onPointerCancel={() => { g.current = null; setDx(null) }}>
-       <a href={`/title/${t.id}`} draggable={false} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
+       <a href={`/title/${t.id}`} draggable={false} {...hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
         onClick={(e) => {
           e.preventDefault()
           if (swiped.current) { swiped.current = false; return }
+          if (hold.fired()) return
           if (open) { setOpen(false); return }
           onOpen()
         }}>

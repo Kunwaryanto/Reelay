@@ -9,6 +9,7 @@ import { useQuery } from '../lib/query'
 import { supabase } from '../lib/supabase'
 import { BackButton, Button, Icon, LoadFailed, Sheet, TitleCard } from '../ui'
 import { HoldMenu } from './Now'
+import { Gone } from './Title'
 
 type Role = 'cast' | 'director' | 'creator' | 'writer'
 type Credit = { role: Role; character: string | null; title: Card }
@@ -57,7 +58,7 @@ export default function Person({ id }: { id: number }) {
       : sort === 'new' ? (b.title.year ?? 0) - (a.title.year ?? 0) : (a.title.year ?? 9999) - (b.title.year ?? 9999))
 
   if (q.error) return <main className="page"><div className="page-back"><BackButton /></div><div className="page-center"><LoadFailed what="this person" retry={q.retry} retrying={q.retrying} /></div></main>
-  if (q.data === null) return <main className="page"><div className="page-back"><BackButton /></div><div className="page-center"><p className="gone-text">This person isn’t available</p></div></main>
+  if (q.data === null) return <main className="page"><div className="page-back"><BackButton glass /></div><Gone what="person" /></main>
   const total = new Set((p?.credits ?? []).map((c) => c.title.id)).size
 
   return (

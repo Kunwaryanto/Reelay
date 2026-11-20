@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
-import { SERVICE_NAME, kindWord, loadMyServices } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, loadMyServices, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
 import { useNav, useNavActions } from '../lib/nav'
@@ -12,7 +12,8 @@ import {
   addRecent, loadIdeas, loadPopular, readRecents, search, writeRecents,
   type Found, type Hit, type Idea, type Recent,
 } from '../lib/search'
-import { Button, Icon, LoadFailed, Sheet, SmallButton, useKeyboardRoom } from '../ui'
+import { Button, Icon, LoadFailed, Sheet, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
+import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 type Sort = 'best' | 'rated' | 'newest'
@@ -57,10 +58,13 @@ function useSearch(typed: string, removed: string[]) {
   }
 }
 
-function Row({ h, onOpen }: { h: Hit; onOpen: () => void }) {
+const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
+
+function Row({ h, onOpen, onHold }: { h: Hit; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
+  const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   return (
     <li>
-      <a className="s-row press-row" href={`/title/${h.id}`} onClick={(e) => { e.preventDefault(); onOpen() }}>
+      <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
         <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
         {h.rating !== null && <span className="s-rating"><span>IMDb</span><b>{h.rating.toFixed(1)}</b></span>}
@@ -84,6 +88,8 @@ export default function Search() {
   const [drawer, setDrawer] = useState(false)
   const [typing, setTyping] = useState(false)
   const [recents, setRecents] = useState(readRecents)
+  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
+  const hold = (card: Card, cover: HTMLElement) => { input.current?.blur(); setHeld({ card, cover }) }
   const [online, setOnline] = useState(navigator.onLine)
   const { room, pending } = useKeyboardRoom(typing)
   const [hour] = useState(() => new Date().getHours())
@@ -253,7 +259,7 @@ export default function Search() {
                 </ul>
               )}
               <ul className="s-results" data-waiting={waiting}>
-                {list.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} />)}
+                {list.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}
               </ul>
 
               {nothing && online && (
@@ -264,7 +270,7 @@ export default function Search() {
                   {nothing.popular && (popular.data ?? []).length > 0 && (
                     <>
                       <h3>Popular right now</h3>
-                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} />)}</ul>
+                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}</ul>
                     </>
                   )}
                 </section>
@@ -299,6 +305,7 @@ export default function Search() {
         </form>
       </div>
 
+      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
       {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
         <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('best'); setOnlyMine(false) }}>Reset</button></div>

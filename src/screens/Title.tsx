@@ -4,7 +4,8 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { BackButton, Icon, Laurel, LoadFailed, PosterRow, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
+import { supabase } from '../lib/supabase'
+import { BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -137,6 +138,27 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   )
 }
 
+async function loadWall(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('start_wall')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as string[]
+}
+
+/** For a link or old notification pointing at a title or person Reelay no longer has. */
+export function Gone({ what }: { what: 'title' | 'person' }) {
+  const { setTab } = useNavActions()
+  const wall = useQuery<string[]>('wall', loadWall, { maxAge: 24 * 60 * 60 * 1000 })
+  return (
+    <div className="gone-page">
+      <div className="gone-wall" aria-hidden="true"><PosterWall posters={wall.data ?? []} dim={0.62} /></div>
+      <div className="gone-body">
+        <h1>This {what} isn’t available</h1>
+        <GlassButton onClick={() => setTab('search')}>Search</GlassButton>
+      </div>
+    </div>
+  )
+}
+
 export default function Title({ id }: { id: number }) {
   const q = useQuery(Number.isFinite(id) ? `title:${id}` : null, () => loadTitle(id), { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
@@ -148,7 +170,7 @@ export default function Title({ id }: { id: number }) {
       onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
       <div className="page-back"><BackButton glass /></div>
       {q.error && <div className="page-center"><LoadFailed what="this title" retry={q.retry} retrying={q.retrying} /></div>}
-      {missing && <div className="page-center"><p className="gone">This title isn’t available</p></div>}
+      {missing && <Gone what="title" />}
       {q.data && <div className="rise"><Body t={q.data} stale={q.stale} /></div>}
     </main>
     {indicator}
