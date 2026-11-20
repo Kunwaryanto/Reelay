@@ -47,6 +47,11 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Email field: autocomplete="email"; code field: autocomplete="one-time-code" for the From Mail suggestion.
 • Reelay is a web app. In Safari on iPhone, when it isn't installed yet, the start screen shows the Add to Home Screen card (iOS 26 steps: ••• → Share → Add to Home Screen → Add). Older Safari layouts have Share in the toolbar: show two steps there. Continue in Safari opens sign-in; don't show the card again each visit, remind once when someone turns on a notification (those need the installed app).
 
+• Invite only (v287): without a link the glass button says Sign in, 120px from the bottom; “Reelay is invite only.” sits alone 40px from the bottom (12px, grey). No terms line.
+• From a valid invite link: Join Reelay and “You’re invited.” It never says who sent it.
+• An email without an account gets “Reelay is invite only” in the sheet instead of a code, with Use another email. An expired or used link opens the sheet with the reason and “I already have an account”.
+• The email sheet has a quiet Privacy Policy link under Send code (tell people about their data where the email is collected). Terms of use live in Settings › Privacy.
+
 ## Home Screen setup
 
 • Manifest: name and short_name “Reelay”, display standalone, start_url / (opens on Now), scope /, id /, background_color and theme_color #000000.
