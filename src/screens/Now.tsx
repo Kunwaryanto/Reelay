@@ -5,7 +5,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark } from '../ui'
+import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card): string {
   const service = c.availability[0]?.service_id
@@ -123,12 +123,15 @@ export default function Now() {
   const { push } = useNav()
   const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
+  const { bind, indicator } = usePullToRefresh(q.retry)
   const [held, setHeld] = useState<{ card: Card; rect: DOMRect } | null>(null)
   const [slow, setSlow] = useState(false)
   useEffect(() => { const t = setTimeout(() => setSlow(true), 300); return () => clearTimeout(t) }, [])
 
   return (
-    <main className="page noscroll" onScroll={onScroll}>
+    <>
+    <main className="page noscroll" onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
+      onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
       <h1 className="sr-only">Now</h1>
       <div className="now-settings"><IconButton label="Settings" glass onClick={() => push('/settings')}><GearIcon /></IconButton></div>
 
@@ -154,5 +157,7 @@ export default function Now() {
       )}
       {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
     </main>
+    {indicator}
+    </>
   )
 }

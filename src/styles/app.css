@@ -1,7 +1,8 @@
 /* Reelay app styles. Values come from tokens.css; layout numbers come from the Current boards. */
 
 html, body { height: 100%; overflow: hidden; }
-#root { position: fixed; inset: 0; min-height: 0; overflow: hidden; background: var(--bg); }
+/* --app-h is set in main.tsx for Home Screen apps, where iOS 26 can report a viewport shorter than the screen. */
+#root { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); min-height: 0; overflow: hidden; background: var(--bg); }
 /* On a computer the app sits in a phone-wide column until the desktop page is built. */
 @media (min-width: 500px) { #root { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 
@@ -29,7 +30,7 @@ button { font: inherit; color: inherit; }
 }
 @keyframes pane-leave { to { transform: translateX(70%); opacity: 0.55; } }
 
-.page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; padding-bottom: 110px; -webkit-overflow-scrolling: touch; }
+.page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: 110px; -webkit-overflow-scrolling: touch; }
 .page-plain { padding: calc(env(safe-area-inset-top, 0px) + 50px) var(--margin) 110px; }
 .page-bar { margin-left: -14px; height: var(--hit); display: flex; align-items: center; }
 .page-title { margin: 16px 0 0; font: var(--type-title); letter-spacing: var(--track-title); }
@@ -114,7 +115,7 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .hero-art { transform: none !important; } .hero-dots i { animation: none; } }
 
 /* ---- Long-press menu ---- */
-.hold { position: fixed; inset: 0; z-index: 30; }
+.hold { position: fixed; inset: 0 0 calc(var(--gap, 0px) * -1) 0; z-index: 30; }
 .hold-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.3); -webkit-backdrop-filter: var(--blur-backdrop); backdrop-filter: var(--blur-backdrop); opacity: 0; transition: opacity var(--dur-menu-close) var(--ease-sheet); }
 .hold-poster { position: absolute; border-radius: 16px; corner-shape: squircle; overflow: hidden; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); transform-origin: 0 0; transition: transform var(--dur-menu-close) var(--ease-sheet); }
 .hold-poster img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
@@ -170,7 +171,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* ---- Settings (sprint 1) ---- */
 .settings-block { margin-top: var(--section-gap); }
 .version { margin: 12px 0 0; font: var(--type-meta); color: var(--text-faint); }
-.action-sheet { position: fixed; inset: 0; z-index: 30; }
+.action-sheet { position: fixed; inset: 0 0 calc(var(--gap, 0px) * -1) 0; z-index: 30; }
 .action-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
 .action-body { position: absolute; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); animation: sheet-up var(--dur-sheet) var(--ease-sheet); text-align: center; }
 .action-group { border-radius: 14px; overflow: hidden; background: rgba(44, 44, 46, 0.92); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); }
@@ -187,7 +188,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .offline-pill { position: fixed; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; translate: -50% 0; height: 28px; padding: 0 12px; border-radius: var(--radius-pill-28); background: rgba(40, 40, 40, 0.7); -webkit-backdrop-filter: var(--blur-pill); backdrop-filter: var(--blur-pill); display: flex; align-items: center; font: var(--type-meta); font-weight: 500; animation: rise-in 250ms var(--ease-out); }
 
 /* ---- Sheet ---- */
-.sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
+.sheet { position: fixed; inset: auto 0 calc(var(--gap, 0px) * -1) 0; margin: 0; width: 100%; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #fff; overflow: visible;
   transform: translateY(calc(var(--drag, 0px) - var(--kb, 0px))); transition: transform var(--dur-sheet) var(--ease-sheet), overlay var(--dur-sheet) allow-discrete, display var(--dur-sheet) allow-discrete; }
 @media (min-width: 500px) { .sheet { left: 50%; right: auto; width: 390px; margin-left: -195px; } }
 .sheet[style*='--drag'] { transition: none; }
@@ -216,7 +217,9 @@ button.pill-open { padding: 0 12px 0 10px; }
 .sent-to .btn-quiet { flex: none; margin: -12px -8px -12px 0; }
 .code { position: relative; margin-top: 20px; display: flex; gap: 8px; transition: opacity var(--dur-press) var(--ease-out); }
 .code[data-dim='locked'] { opacity: 0.4; } .code[data-dim='checking'] { opacity: 0.6; }
-.code input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; font-size: 16px; caret-color: transparent; }
+.code input { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; outline: 0; background: transparent; font-size: 16px; color: transparent; -webkit-text-fill-color: transparent; caret-color: transparent; -webkit-tap-highlight-color: transparent; }
+/* The real input sits over the boxes, invisible, so long-press → Paste and the From Mail suggestion work. */
+.code input::selection { background: transparent; }
 .code > span { position: relative; flex: 1; height: 52px; border-radius: 12px; corner-shape: squircle; background: #000; box-shadow: inset 0 0 0 0.5px var(--hairline); display: flex; align-items: center; justify-content: center; font: 500 22px/26px var(--font); font-variant-numeric: tabular-nums; transition: box-shadow var(--dur-press) var(--ease-out); pointer-events: none; }
 .code > span[data-state='next'] { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.8); }
 .code > span[data-state='error'] { box-shadow: inset 0 0 0 0.5px var(--error); }
@@ -236,7 +239,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 }
 
 /* ---- Toast ---- */
-.toasts { position: fixed; z-index: 40; left: var(--margin); right: var(--margin); bottom: 92px; pointer-events: none; }
+.toasts { position: fixed; z-index: 40; left: var(--margin); right: var(--margin); bottom: calc(92px - var(--gap, 0px)); pointer-events: none; }
 @media (min-width: 500px) { .toasts { left: 50%; right: auto; width: 350px; margin-left: -175px; } }
 .toast { min-height: 48px; padding: 0 8px 0 16px; border-radius: 14px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; animation: rise-in 250ms var(--ease-out); }
 .toast span { font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -264,30 +267,11 @@ button.pill-open { padding: 0 12px 0 10px; }
 .start-ui[data-ready='true'] { opacity: 1; transform: none; pointer-events: auto; }
 .start-ui p { margin: 64px 0 0; font: var(--type-meta); color: var(--text-faint); }
 .wall { position: absolute; inset: 0; overflow: hidden; }
-.cam { position: absolute; left: 50%; top: 50%; width: 1746px; height: 2600px; margin: -1300px 0 0 -873px; }
-.cam-3, .cam-y, .cam-t, .cam-r, .cam-s { width: 100%; height: 100%; will-change: transform; }
-.cam-3 { transform-style: preserve-3d; animation: cam3 41s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-.cam-y { animation: camY 53s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-.cam-t { animation: camT 34s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-.cam-r { animation: camR 45s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-.cam-s { animation: camS 28s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-@keyframes cam3 { from { transform: perspective(1000px) rotateX(10deg); } to { transform: perspective(1000px) rotateX(22deg); } }
-@keyframes camY { from { transform: rotateY(-6deg); } to { transform: rotateY(6deg); } }
-@keyframes camT { from { transform: translate3d(-150px, 60px, 0); } to { transform: translate3d(150px, -60px, 0); } }
-@keyframes camR { from { transform: rotate(-10deg); } to { transform: rotate(-18deg); } }
-@keyframes camS { from { transform: scale(1.2); } to { transform: scale(1.6); } }
-.wall-grid { display: grid; grid-template-columns: repeat(12, 140px); gap: 6px; height: 2600px; overflow: clip; }
-.wob { will-change: transform; animation: wob cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-.col { display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; margin-top: calc(var(--p) * -1); will-change: transform; animation: flow linear infinite; }
-.col span { flex: none; height: 210px; border-radius: 12px; corner-shape: squircle; overflow: hidden; background: var(--surface); }
-.col img { width: 100%; height: 100%; object-fit: cover; display: block; }
-@keyframes flow { to { transform: translate3d(0, calc(var(--p) * -1), 0); } }
-@keyframes wob { from { transform: translate3d(0, var(--a), 0); } to { transform: translate3d(0, calc(var(--a) * -1), 0); } }
-.wall[data-still='true'] :is(.cam-3, .cam-y, .cam-t, .cam-r, .cam-s, .col, .wob) { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) {
-  .cam-3, .cam-y, .cam-t, .cam-r, .cam-s, .col, .wob { animation: none; }
-  .cam-3 { transform: perspective(1000px) rotateX(16deg); } .cam-r { transform: rotate(-14deg); } .cam-s { transform: scale(1.3); }
-}
+/* One canvas, tilted back in 3D. It is larger than the screen so the tilt never shows an edge. */
+.wall-canvas { position: absolute; left: -30%; top: -20%; width: 160%; height: 140%; transform: perspective(1000px) rotateX(16deg); animation: wall-tilt 41s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
+.wall-canvas[data-still='true'] { animation-play-state: paused; }
+@keyframes wall-tilt { from { transform: perspective(1000px) rotateX(10deg); } to { transform: perspective(1000px) rotateX(22deg); } }
+@media (prefers-reduced-motion: reduce) { .wall-canvas { animation: none; } }
 .wall-dim { position: absolute; inset: -8px; }
 .wall-fade { position: absolute; left: -8px; right: -8px; bottom: -8px; height: 368px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.7) 55%, #000 92%); }
 
@@ -297,3 +281,12 @@ button.pill-open { padding: 0 12px 0 10px; }
 .dev-art { padding: 10px; border-radius: 12px; background: linear-gradient(135deg, #6b2e3a, #2e4a6b); display: inline-flex; }
 .dev-white { padding: 8px; border-radius: 8px; background: #fff; display: inline-flex; }
 .dev-wide { margin: 28px calc(var(--margin) * -1) 0; }
+
+/* ---- Pull to refresh ---- */
+.ptr { position: absolute; z-index: 3; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; margin-left: -13px; width: 26px; height: 26px; color: #fff; pointer-events: none; opacity: min(1, calc(var(--p, 0) * 1.4)); filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)); }
+.activity line { opacity: clamp(0, calc(var(--p, 0) * 8 - var(--i)), 1); }
+.ptr[data-busy='true'] { opacity: 1; transition: opacity 200ms var(--ease-out); }
+.ptr[data-busy='true'] .activity { animation: activity 800ms steps(8) infinite; }
+.ptr[data-busy='true'] .activity line { opacity: calc(1 - var(--i) * 0.1); }
+@keyframes activity { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ptr[data-busy='true'] .activity { animation-duration: 2.4s; } }

@@ -1,6 +1,6 @@
 // Start and sign in. Code only: the email holds a 6-digit code. Reelay is invite only:
 // an invite link (/i/<token>) creates the account, otherwise only existing accounts get a code.
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQuery } from '../lib/query'
 import { Button, GlassButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
@@ -56,6 +56,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const [secs, setSecs] = useState(60)
   const [shake, setShake] = useState(0)
   const [ready, setReady] = useState(false)
+  const [wallReady, setWallReady] = useState(false)
   const tries = useRef(0)
   const sentAt = useRef(0)
   const emailInput = useRef<HTMLInputElement>(null)
@@ -130,7 +131,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     setResent(false)
     const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: value, type: 'email' })
     setChecking(false)
-    if (!error) { setOk(true); setCodeErr(''); return }
+    if (!error) { setOk(true); setCodeErr(''); setTimeout(onSignedIn, 700); return }
     tries.current++
     const kind: CodeErr = error.status === 429 || tries.current >= 5 ? 'locked'
       : Date.now() - sentAt.current > 60 * 60 * 1000 ? 'expired' : 'wrong'
@@ -139,14 +140,27 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     if (kind !== 'wrong') setSecs(0)
   }
 
+  // Typed, pasted or filled in from Mail: any 6 digits in a row is the code, and it is checked straight away.
   function typeCode(raw: string) {
     if (ok || checking || codeErr === 'locked') return
-    const digits = raw.replace(/\D/g, '').slice(0, 6)
-    // after an error the next digit starts a fresh code
-    const next = codeErr && digits.length > code.length ? digits.slice(-1) : digits
+    const digits = raw.replace(/\D/g, '')
+    let next: string
+    if (codeErr) next = digits.length > code.length ? digits.slice(code.length).slice(-6) : '' // after an error, start fresh
+    else next = digits.length > 6 ? digits.slice(-6) : digits
     setCode(next)
     setCodeErr('')
     if (next.length === 6) verify(next)
+  }
+
+  function pasteCode(e: ClipboardEvent<HTMLInputElement>) {
+    const text = e.clipboardData.getData('text')
+    const six = text.match(/\b\d{6}\b/)?.[0] ?? text.replace(/\D/g, '').slice(0, 6)
+    if (!six) return
+    e.preventDefault()
+    if (ok || checking || codeErr === 'locked') return
+    setCode(six)
+    setCodeErr('')
+    if (six.length === 6) verify(six)
   }
 
   const joining = invite === 'valid'
@@ -155,7 +169,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <div className="start">
-      <div className="start-wall" data-ready={ready}><PosterWall posters={wall.data ?? []} /></div>
+      <div className="start-wall" data-ready={wallReady}><PosterWall posters={wall.data ?? []} onReady={() => setWallReady(true)} /></div>
       <h1 className="start-word"><Wordmark height={32} rise /></h1>
       <main className="start-ui" data-ready={ready}>
         <GlassButton onClick={openSheet} disabled={invite === 'checking'}>{joining ? 'Join Reelay' : 'Sign in'}</GlassButton>
@@ -167,7 +181,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
           <form className="stepin" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); send() }}>
             <h2 className="sheet-title">{joining ? 'Join Reelay' : 'Continue with email'}</h2>
             <input ref={emailInput} className={`field ${sendErr === 'invalid' ? `nudge-${shakeClass}` : ''}`} data-error={sendErr === 'invalid'}
-              type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              id="email" name="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
               placeholder="Email" aria-label="Email" aria-invalid={sendErr === 'invalid'} value={email}
               onChange={(e) => { setEmail(e.target.value); setSendErr('') }} />
             {sendErr && <p className="field-error" role="alert">{SEND_ERR[sendErr]}</p>}
@@ -200,7 +214,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
             </div>
             <label className={`code ${codeErr === 'wrong' ? `shake-${shakeClass}` : ''}`} data-dim={codeErr === 'locked' ? 'locked' : checking ? 'checking' : undefined}>
               <input ref={codeInput} type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6}
-                aria-label="6-digit code" value={code} onChange={(e) => typeCode(e.target.value)} disabled={ok} />
+                aria-label="6-digit code" name="code" id="code" value={code} onChange={(e) => typeCode(e.target.value)} onPaste={pasteCode} disabled={ok} />
               {Array.from({ length: 6 }, (_, i) => (
                 <span key={i} aria-hidden="true" data-state={codeErr ? 'error' : ok || i === code.length ? 'next' : undefined}>
                   {code[i] ?? ''}{!ok && !codeErr && i === code.length && <i className="caret" />}
@@ -218,7 +232,6 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
               )}
             </p>
             {sendErr && <p className="field-error" role="alert">{SEND_ERR[sendErr]}</p>}
-            {ok && <div className="sheet-action"><Button onClick={onSignedIn}>Continue</Button></div>}
           </div>
         )}
       </Sheet>

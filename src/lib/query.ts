@@ -55,7 +55,8 @@ export type Query<T> = {
   /** the saved copy is older than a day: hide time-sensitive notes */
   stale: boolean
   retrying: boolean
-  retry: () => void
+  /** fetch again now (Try again, pull to refresh) */
+  retry: () => Promise<void>
 }
 
 const DAY = 24 * 60 * 60 * 1000

@@ -4,7 +4,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { BackButton, Icon, Laurel, LoadFailed, PosterRow, SectionHeader, TitleCard } from '../ui'
+import { BackButton, Icon, Laurel, LoadFailed, PosterRow, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -46,15 +46,15 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
           <div className="title-actions">
             {first ? (
               <a className="pill-open" href={openLink(first, t.title)} target="_blank" rel="noreferrer" aria-label={`Open in ${SERVICE_NAME[first.service_id] ?? first.service_id}`}>
-                {SERVICE_NAME[first.service_id] ?? first.service_id}<Icon name="north_east" size={15} weight={300} />
+                {SERVICE_NAME[first.service_id] ?? first.service_id}<Icon name="north_east" size={15} />
               </a>
             ) : (
               <button type="button" className="pill-open" data-on={notifying} aria-pressed={notifying} onClick={() => saved.toggleNotify(t.id)}>
-                <Icon name="notifications" size={16} weight={300} fill={notifying} />{notifying ? 'Notifying' : 'Notify me'}
+                <Icon name="notifications" size={16} fill={notifying} />{notifying ? 'Notifying' : 'Notify me'}
               </button>
             )}
             <button type="button" className="icon-btn" aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'} onClick={() => saved.toggleSaved(t.id, t.title)}>
-              <span><Icon name="bookmark" size={18} weight={300} fill={isSaved} /></span>
+              <span><Icon name="bookmark" size={18} fill={isSaved} /></span>
             </button>
           </div>
         </div>
@@ -137,13 +137,18 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
 export default function Title({ id }: { id: number }) {
   const q = useQuery(Number.isFinite(id) ? `title:${id}` : null, () => loadTitle(id), { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
+  const { bind, indicator } = usePullToRefresh(q.retry)
   const missing = !Number.isFinite(id) || (q.data === null && !q.loading)
   return (
-    <main className="page noscroll" onScroll={onScroll}>
+    <>
+    <main className="page noscroll" onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
+      onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
       <div className="page-back"><BackButton glass /></div>
       {q.error && <div className="page-center"><LoadFailed what="this title" retry={q.retry} retrying={q.retrying} /></div>}
       {missing && <div className="page-center"><p className="gone">This title isn’t available</p></div>}
       {q.data && <div className="rise"><Body t={q.data} stale={q.stale} /></div>}
     </main>
+    {indicator}
+    </>
   )
 }

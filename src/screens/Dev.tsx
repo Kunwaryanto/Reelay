@@ -34,8 +34,8 @@ export default function Dev() {
       <Spec name="Icon buttons" note="32 circle in a 44 tap area · glass over art · bookmark fills when saved">
         <IconButton label="Back"><Icon name="chevron_left" size={20} /></IconButton>
         <span className="dev-art"><IconButton label="Back" glass><Icon name="chevron_left" size={20} /></IconButton></span>
-        <IconButton label="Save"><Icon name="bookmark" size={18} weight={300} /></IconButton>
-        <IconButton label="Saved"><Icon name="bookmark" size={18} weight={300} fill /></IconButton>
+        <IconButton label="Save"><Icon name="bookmark" size={18} /></IconButton>
+        <IconButton label="Saved"><Icon name="bookmark" size={18} fill /></IconButton>
       </Spec>
       <Spec name="Pills" note="28 · selected white, else subtle fill">
         {['All', 'Films', 'Series'].map((p) => <Pill key={p} selected={pill === p} onClick={() => setPill(p)}>{p}</Pill>)}

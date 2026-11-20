@@ -42,7 +42,9 @@ function Gate() {
   if (session === undefined) return null // black, like the launch screen
   if (session === null) sawSignedOut.current = true
   if (location.pathname === '/dev' && !session) return <NavProvider><div className="pane solo"><Dev /></div></NavProvider>
-  if (!session || (sawSignedOut.current && !entering)) return <Start onSignedIn={() => setEntering(true)} />
+  if (!session || (sawSignedOut.current && !entering)) {
+    return <Start onSignedIn={() => { history.replaceState(null, '', '/'); setEntering(true) }} />
+  }
   return <NavProvider><Shell /></NavProvider>
 }
 
