@@ -189,7 +189,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
           <form className="stepin" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); send() }}>
             <h2 className="sheet-title">{joining ? 'Join Reelay' : 'Continue with email'}</h2>
             <input ref={emailInput} className={`field ${sendErr === 'invalid' ? `nudge-${shakeClass}` : ''}`} data-error={sendErr === 'invalid'}
-              id="email" name="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              id="email" name="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none"
               placeholder="Email" aria-label="Email" aria-invalid={sendErr === 'invalid'} value={email}
               onChange={(e) => { setEmail(e.target.value); setSendErr('') }} />
             {sendErr && <p className="field-error" role="alert">{SEND_ERR[sendErr]}</p>}

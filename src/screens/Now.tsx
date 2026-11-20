@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -74,13 +74,28 @@ function Hero({ items }: { items: Card[] }) {
 }
 
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
-function HoldMenu({ held, onClose }: { held: { card: Card; rect: DOMRect }; onClose: () => void }) {
+function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
   const saved = useSaved()
   const [open, setOpen] = useState(false)
-  useEffect(() => { const r = requestAnimationFrame(() => setOpen(true)); return () => cancelAnimationFrame(r) }, [])
+  const lift = useRef<HTMLDivElement>(null)
+  // Measured once, without the press shrink, so the lifted copy starts exactly on top of the poster.
+  const [rect] = useState(() => {
+    const r = held.cover.getBoundingClientRect()
+    const w = held.cover.offsetWidth, h = held.cover.offsetHeight
+    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h }
+  })
+  // Lift a copy of the poster as it is on screen (same image, already loaded, with its service mark)
+  // and hide the original until the copy has landed back on it, so there's never two or a blank one.
+  useLayoutEffect(() => {
+    const copy = held.cover.cloneNode(true) as HTMLElement
+    lift.current?.append(copy)
+    held.cover.style.visibility = 'hidden'
+    const r = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
+    return () => { cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
+  }, [held.cover])
   const close = () => { setOpen(false); setTimeout(onClose, 280) }
 
-  const { card, rect } = held
+  const { card } = held
   const vw = window.innerWidth, vh = window.innerHeight
   const scale = 1.25
   const w = rect.width * scale, h = rect.height * scale
@@ -94,12 +109,10 @@ function HoldMenu({ held, onClose }: { held: { card: Card; rect: DOMRect }; onCl
   return (
     <div className="hold" role="dialog" aria-label={card.title} data-open={open}>
       <div className="hold-back" onClick={close} />
-      <div className="hold-poster" aria-hidden="true" style={{
+      <div ref={lift} className="hold-poster" aria-hidden="true" style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
         transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})` : 'none',
-      }}>
-        {card.poster_path && <img src={tmdbImage(card.poster_path, 'w342')} alt="" />}
-      </div>
+      }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
         <div className="hold-title">{card.title}</div>
         <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title); close() }}>
@@ -124,7 +137,7 @@ export default function Now() {
   const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
-  const [held, setHeld] = useState<{ card: Card; rect: DOMRect } | null>(null)
+  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
   const [slow, setSlow] = useState(false)
   useEffect(() => { const t = setTimeout(() => setSlow(true), 300); return () => clearTimeout(t) }, [])
 
@@ -147,7 +160,7 @@ export default function Now() {
               <PosterRow>
                 {row.items.map((card) => {
                   const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined
-                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} onHold={(c, rect) => setHeld({ card: c, rect })} />
+                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} onHold={(c, cover) => setHeld({ card: c, cover })} />
                 })}
               </PosterRow>
             </section>

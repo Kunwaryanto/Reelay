@@ -117,10 +117,10 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
   )
 }
 
-export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: string | null; eager?: boolean; onHold?: (card: Card, rect: DOMRect) => void }) {
+export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: string | null; eager?: boolean; onHold?: (card: Card, cover: HTMLElement) => void }) {
   const { push } = useNav()
   const service = card.availability[0]?.service_id
-  const hold = useLongPress((el) => onHold?.(card, el.querySelector('.cover')!.getBoundingClientRect()))
+  const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
   return (
     <a className="card press" href={`/title/${card.id}`} {...hold.handlers}
@@ -291,7 +291,11 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
 
 // ---- Sheet -----------------------------------------------------------------
 
-/** Bottom sheet on a native <dialog>. Tap outside, Escape or a swipe down closes it; it rides above the keyboard. */
+/**
+ * Bottom sheet on a native <dialog>. Tap outside, Escape or a swipe down closes it; it rides above the keyboard.
+ * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
+ * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
+ */
 export function Sheet({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const drag = useRef<{ y: number; dy: number } | null>(null)
@@ -299,7 +303,7 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
   useEffect(() => {
     const d = ref.current
     if (!d) return
-    if (open && !d.open) { delete d.dataset.closing; d.showModal() }
+    if (open && !d.open) { delete d.dataset.closing; d.show() }
     else if (!open && d.open) {
       // Safari has no `overlay` transition yet: animate out, then close
       d.dataset.closing = 'true'
@@ -319,10 +323,19 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
     return () => { vv.removeEventListener('resize', set); vv.removeEventListener('scroll', set) }
   }, [open])
 
+  // A non-modal dialog doesn't close on Escape by itself
+  useEffect(() => {
+    if (!open) return
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [open, onClose])
+
   return (
-    <dialog ref={ref} className="sheet" aria-label={label}
+    <>
+    <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
+    <dialog ref={ref} className="sheet" aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       onPointerDown={(e) => { if ((e.target as HTMLElement).closest('.sheet-grab')) drag.current = { y: e.clientY, dy: 0 } }}
       onPointerMove={(e) => {
         if (!drag.current || !ref.current) return
@@ -340,6 +353,7 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
         {children}
       </div>
     </dialog>
+    </>
   )
 }
 

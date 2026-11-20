@@ -218,7 +218,10 @@ export function useDimOnScroll() {
   const { setDimmed } = useNav()
   const last = useRef(0)
   return useCallback((e: UIEvent<HTMLElement>) => {
-    const y = e.currentTarget.scrollTop
+    const el = e.currentTarget
+    const y = el.scrollTop
+    // Ignore the bounce past either end, so the tab bar keeps its state while the page springs back.
+    if (y < 0 || y > el.scrollHeight - el.clientHeight) return
     const d = y - last.current
     if (Math.abs(d) < 6) return
     last.current = y

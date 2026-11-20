@@ -9,18 +9,7 @@ import { createPortal } from 'react-dom'
  */
 
 const KEY = 'reelay:screen-check'
-const FIX_KEY = 'reelay:screen-fix'
-type Fix = 'off' | 'a' | 'b'
 
-// The fix being tried stays on after the readout is closed, so the app can be used normally with it.
-function readFix(): Fix {
-  try { const f = localStorage.getItem(FIX_KEY); return f === 'a' || f === 'b' ? f : 'off' } catch { return 'off' }
-}
-function applyFix(f: Fix) {
-  document.documentElement.dataset.screenFix = f
-  try { if (f === 'off') localStorage.removeItem(FIX_KEY); else localStorage.setItem(FIX_KEY, f) } catch { /* private mode */ }
-}
-applyFix(readFix())
 
 function probe(css: string): number {
   const el = document.createElement('div')
@@ -43,7 +32,6 @@ function measure() {
   const nav = navigator as Navigator & { standalone?: boolean }
   return {
     time: new Date().toLocaleTimeString('sv-SE'),
-    fix: document.documentElement.dataset.screenFix ?? 'off',
     ios: navigator.userAgent.match(/OS (\d+[_\d]*)/)?.[1]?.replace(/_/g, '.') ?? navigator.userAgent,
     standalone: `${matchMedia('(display-mode: standalone)').matches} / navigator ${nav.standalone}`,
     orientation: matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape',
@@ -78,7 +66,6 @@ export function ScreenCheck() {
   const [panel, setPanel] = useState(true)
   const [now, setNow] = useState<Reading | null>(null)
   const [log, setLog] = useState<string[]>([])
-  const [fix, setFix] = useState<Fix>(readFix)
   const last = useRef('')
 
   // five quick taps on the top edge
@@ -131,8 +118,6 @@ export function ScreenCheck() {
   const text = [...Object.entries(now).map(([k, v]) => `${k}: ${v}`), '', 'changes:', ...log].join('\n')
   const ticks = Array.from({ length: Math.ceil(screen.height / 50) + 1 }, (_, i) => i * 50)
 
-  const choose = (f: Fix) => { applyFix(f); setFix(f); setTimeout(() => setNow(measure()), 100) }
-
   return createPortal(
     <>
     {/* not fixed: a ruler as tall as the physical screen in the page itself, so the last number you can see
@@ -148,11 +133,6 @@ export function ScreenCheck() {
       {panel ? (
         <div className="sc-panel">
           <pre>{text}</pre>
-          <div className="sc-actions">
-            {(['off', 'a', 'b'] as Fix[]).map((f) => (
-              <button key={f} type="button" data-on={fix === f} onClick={() => choose(f)}>{f === 'off' ? 'No fix' : `Fix ${f.toUpperCase()}`}</button>
-            ))}
-          </div>
           <div className="sc-actions">
             <button type="button" onClick={() => navigator.clipboard?.writeText(text)}>Copy</button>
             <button type="button" onClick={() => setPanel(false)}>Hide panel</button>
