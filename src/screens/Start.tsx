@@ -57,16 +57,6 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const [resent, setResent] = useState(false)
   const [ok, setOk] = useState(false)
   const [secs, setSecs] = useState(60)
-  // A web page can't see what's on the clipboard without pasting it, so Paste shows once you've been away
-  // from Reelay while waiting for the code (most likely to copy it from your email), not before.
-  const [cameBack, setCameBack] = useState(false)
-  useEffect(() => {
-    if (step !== 'code') { setCameBack(false); return }
-    let left = false
-    const onVis = () => { if (document.hidden) left = true; else if (left) setCameBack(true) }
-    document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
-  }, [step])
   const [shake, setShake] = useState(0)
   const [ready, setReady] = useState(false)
   const [wallReady, setWallReady] = useState(false)
@@ -184,18 +174,6 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     if (takeCode(e.clipboardData.getData('text'))) e.preventDefault()
   }
 
-  // The Paste button: iOS shows its own small Paste confirmation next to it, then we get the text.
-  // If iOS first asks "Allow Paste", the read that triggered the question can fail even when you allow it.
-  // Then try once more straight away, while the tap still counts, so you don't have to press Paste twice.
-  async function pasteButton() {
-    const tapped = Date.now()
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try { takeCode(await navigator.clipboard.readText()); return } catch {
-        if (Date.now() - tapped > 4500) break
-      }
-    }
-  }
-
   function takeCode(text: string): boolean {
     const six = text.match(/\b\d{6}\b/)?.[0] ?? text.replace(/\D/g, '').slice(0, 6)
     if (!six) return false
@@ -268,9 +246,6 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
               {checking && <><Spinner light /><span>Checking…</span></>}
               {resent && !checking && !codeErr && <><span className="resent">New code sent</span><span aria-hidden="true">·</span></>}
               {!ok && codeErr && <span className="err">{CODE_ERR[codeErr]}</span>}
-              {!ok && !checking && cameBack && 'clipboard' in navigator && code.length === 0 && (
-                <><button type="button" className="paste" onClick={pasteButton}>Paste</button><span aria-hidden="true">·</span></>
-              )}
               {!ok && !checking && (
                 <button type="button" aria-disabled={secs > 0} data-ready={secs === 0} onClick={() => { if (secs === 0 && !sending) send(true) }}>
                   {secs > 0 ? `Send again in ${mm}` : 'Send again'}
