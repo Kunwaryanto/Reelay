@@ -208,7 +208,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
         <p>{joining ? 'You’re invited.' : 'Reelay is invite only.'}</p>
       </main>
 
-      <Sheet open={open} onClose={() => setOpen(false)} label={joining ? 'Join Reelay' : 'Continue with email'}>
+      <Sheet open={open} onClose={() => setOpen(false)} keyboard={step === 'email' || step === 'code'} label={joining ? 'Join Reelay' : 'Continue with email'}>
         {step === 'email' && (
           <form className="stepin" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); send() }}>
             <h2 className="sheet-title">{joining ? 'Join Reelay' : 'Continue with email'}</h2>

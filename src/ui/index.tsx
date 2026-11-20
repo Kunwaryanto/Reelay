@@ -318,14 +318,24 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
  * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
  * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
-export function Sheet({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+const KB_KEY = 'reelay:keyboard-height'
+const savedKb = () => { try { return Number(localStorage.getItem(KB_KEY)) || 0 } catch { return 0 } }
+
+/** `keyboard`: a field is focused as the sheet opens, so it should rise straight to where the keyboard will be. */
+export function Sheet({ open, onClose, label, keyboard, children }: { open: boolean; onClose: () => void; label: string; keyboard?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const drag = useRef<{ y: number; dy: number } | null>(null)
 
   useEffect(() => {
     const d = ref.current
     if (!d) return
-    if (open && !d.open) { delete d.dataset.closing; d.show() }
+    if (open && !d.open) {
+      delete d.dataset.closing
+      // Rise straight to where the keyboard will end up (its height from last time), instead of stopping at the
+      // bottom and then being pushed up again as the keyboard arrives.
+      d.style.setProperty('--kb', `${keyboard ? savedKb() : 0}px`)
+      d.show()
+    }
     else if (!open && d.open) {
       // Safari has no `overlay` transition yet: animate out, then close
       d.dataset.closing = 'true'
@@ -343,13 +353,18 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
     const vv = window.visualViewport
     let last = -1
     let frame = 0
+    const openedAt = Date.now()
+    const expected = keyboard ? savedKb() : 0
     const check = () => {
       const d = ref.current
       if (d) {
         // the bottom the sheet would have without any lift: the bottom of what it sits in (fixed: the viewport)
         const bottom = d.offsetParent ? d.offsetParent.getBoundingClientRect().bottom : window.innerHeight
-        const kb = Math.max(0, Math.round(bottom - (vv.offsetTop + vv.height)))
+        const measured = Math.max(0, Math.round(bottom - (vv.offsetTop + vv.height)))
+        // while the keyboard is still on its way up, keep the expected height instead of dropping back
+        const kb = Date.now() - openedAt < 900 && measured < expected ? expected : measured
         if (kb !== last) { last = kb; d.style.setProperty('--kb', `${kb}px`) }
+        if (measured > 150 && measured !== expected) { try { localStorage.setItem(KB_KEY, String(measured)) } catch { /* private mode */ } }
         // temporary: read by the screen check
         ;(window as Window & { __sheet?: string }).__sheet =
           `kb ${kb} · box bottom ${Math.round(bottom)} · vv top ${Math.round(vv.offsetTop)} h ${Math.round(vv.height)} · scrollY ${Math.round(window.scrollY)}`
@@ -358,7 +373,7 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
     }
     frame = requestAnimationFrame(check)
     return () => cancelAnimationFrame(frame)
-  }, [open])
+  }, [open, keyboard])
 
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
