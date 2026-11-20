@@ -23,8 +23,8 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Like iOS, scrolling always wins: rows keep native horizontal swipe (no touch-action or preventDefault on cards), the page keeps vertical scroll. The hold only starts a timer; moving more than 8px before 0.45 s, or the browser taking over the gesture (pointercancel), cancels it. A tap that stops a moving row doesn't open anything.
 • Hold 0.45 s without moving. The poster lifts into a larger preview, the screen and tab bar blur, a glass menu grows from under it. Tap outside: it settles back.
 • Menu = the actions from the title page, never new ones. Title as a small header, then:
-  – Default: Add to / Remove from Watchlist, Open in [service], Share.
-  – Watchlist: Remove from Watchlist (red) first, Notify me, Open in [service], Share.
+  – Default: Add to / Remove from Watchlist, Open in [service].
+  – Watchlist: Remove from Watchlist (red) first, Notify me, Open in [service].
   – Not streaming in Sweden: Notify me instead of Open in.
 • On every poster and title card: Now rows, Browse, categories, Search, Watchlist, Person, More like this. Not on the Now hero (swipe), cast, pills or settings rows.
 • Turn off Safari’s link menu on posters (-webkit-touch-callout: none, no selection). No haptics on the web. Reduce Motion: fade only.
@@ -67,7 +67,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 ## Desktop
 
-• Any screen wider than a phone (or a non-touch browser) gets this one page, whatever the URL, including shared title links. No app behind it on desktop for now.
+• Any screen wider than a phone (or a non-touch browser) gets this one page, whatever the URL. No app behind it on desktop for now.
 • Same poster wall and camera as Start, at the same size, so it reads as the same product. Every column keeps climbing.
 • Layout: wordmark small in the top-left corner; centred “Made for iPhone” (48px, 600), one line “Scan with your camera to open Reelay.”, then the QR code to reelay.se on a white squircle. No URL, no footer: nothing else to do here.
 • Wall dimmed evenly (black 62%), darker in the centre and at the top and bottom edges.
@@ -118,15 +118,9 @@ Copied from the notes beside the screens on the Current page of the design canva
 • No app badge: nothing in Reelay needs clearing.
 • Tapping opens Reelay with the title page sliding in (see Title from notification).
 
-## Shared link in Safari
+## Sharing (dropped 20 Nov)
 
-• Share sits top right on the title page, mirroring Back. It opens the iOS share sheet with the title and its link (reelay.se/the-sinner). The link preview uses the title’s art and name.
-• iPhone always opens shared links in Safari, even with Reelay installed: web apps can’t catch links, and Safari doesn’t share storage with the app.
-• So the link opens a public title page in Safari that works on its own: where it streams in Sweden, scores, description, cast. No sign-in, no save, no Notify me, no tab bar.
-• A small card above Safari’s bar: Reelay, one line, Get. Get opens the Add to Home Screen steps; under them, “Already have Reelay? Open it and search for The Sinner.”
-• Only title pages are public; the rest of Reelay still needs an account.
-• On a computer, the link shows the Made for iPhone page.
-• The share sheet is iOS’s own: navigator.share with the title and URL. Each title page sets og:title and og:image so the preview shows its art.
+• No Share button and no public title pages. iPhone opens every link in Safari, which can't hand over to the Home Screen app or its sign-in, so people who already use Reelay would land on a dead end. The archived design is on the In progress page under “Archived: sharing a title”. If Reelay becomes a native app, Universal Links make it possible.
 
 ## Platform (from modern-web-guidance, checked against Safari on iOS 26)
 

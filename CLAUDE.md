@@ -18,12 +18,12 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 - Supabase (database, auth with 6-digit email code). Everything Supabase is in `supabase/`:
   migrations in `supabase/migrations`, auth settings in `supabase/config.toml`, email template in `supabase/templates`.
   The `Supabase migrations` workflow applies new migrations when they reach `main` (`supabase db push`); `Supabase status` lists what's applied. Never change the database by hand in the dashboard; add a migration.
-  Catalogue tables are public to read (shared title pages) and written only by the sync with the service role; user tables (profiles, user_services, watchlist, push_subscriptions) are private to their owner via RLS.
+  Catalogue tables are readable by signed-in users only and written only by the sync; user tables (profiles, user_services, watchlist, push_subscriptions) are private to their owner via RLS.
 - Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`) and Vercel env vars. Never commit them.
 
 ## Browser support
 
-- **Target: Safari on iOS 26 and later**, as a Home Screen web app and in Safari (shared title pages). Any feature that Safari on iOS 26 supports may be used without a fallback, even if it isn't Baseline Widely available.
+- **Target: Safari on iOS 26 and later**, as a Home Screen web app, and in Safari for Start, sign-in and invite links. Any feature that Safari on iOS 26 supports may be used without a fallback, even if it isn't Baseline Widely available.
 - Features Safari doesn't support may only be used as progressive enhancement that falls back to the designed look (e.g. `corner-shape: squircle` falls back to ordinary rounded corners). No polyfills.
 - Exception: the "Made for iPhone" desktop page must work in current Chrome, Edge, Firefox and Safari (Baseline Widely available).
 - Front-end work uses the `modern-web-guidance` skill (`.agents/skills/modern-web-guidance`, from Google Chrome). Apply its guides with the target above; it does not apply to the sync, database or CI.
@@ -32,5 +32,6 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 
 - Dark only. One grey (#808080) for meta, faint text and every inactive icon.
 - Inter at opsz 32; Material Symbols Outlined weight 250, 24px.
-- iPhone web app limits: shared links open in Safari, Safari and the installed app don't share storage, no background sync, no haptics.
+- No sharing of titles (dropped 20 Nov: links can't open the Home Screen app). Reelay is invite only: admins create single-use invite links in Settings.
+- iPhone web app limits: links always open in Safari, Safari and the installed app don't share storage, no background sync, no haptics.
 - UI copy is English for now; Swedish copy is decided in the Supabase phase.
