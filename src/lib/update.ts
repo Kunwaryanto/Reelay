@@ -23,5 +23,20 @@ export async function reloadApp() {
     await Promise.all((regs ?? []).map((r) => r.unregister()))
     if ('caches' in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)))
   } catch { /* nothing cached: just reload */ }
-  location.reload()
+  // Start again at Now rather than reloading Settings in place: a fresh address always fetches the new page,
+  // and the app comes back in its normal first state (tab bar and all). NavProvider tidies the address.
+  location.replace(`/?v=${Date.now()}`)
+}
+
+/** Temporary, for testing: the sizes the layout depends on, to read off a screenshot when something sits wrong. */
+export function layoutReadout(): string {
+  const root = document.getElementById('root')?.getBoundingClientRect()
+  const vv = window.visualViewport
+  const bar = document.querySelector('.tabbar')?.getBoundingClientRect()
+  return [
+    `screen ${screen.height}`, `inner ${window.innerHeight}`, `doc ${document.documentElement.clientHeight}`,
+    `root ${Math.round(root?.top ?? 0)}–${Math.round(root?.bottom ?? 0)}`,
+    `vv ${Math.round(vv?.height ?? 0)}@${Math.round(vv?.offsetTop ?? 0)}`, `scroll ${Math.round(window.scrollY)}`,
+    `bar ${Math.round(bar?.top ?? 0)}–${Math.round(bar?.bottom ?? 0)}`,
+  ].join(' · ')
 }

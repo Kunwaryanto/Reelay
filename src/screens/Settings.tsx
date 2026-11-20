@@ -5,7 +5,7 @@ import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
 import { useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { clearSavedData } from '../lib/query'
-import { BUILD, newVersionOut, reloadApp } from '../lib/update'
+import { BUILD, layoutReadout, newVersionOut, reloadApp } from '../lib/update'
 import { BackButton, Icon, Spinner } from '../ui'
 
 export default function Settings() {
@@ -18,6 +18,8 @@ export default function Settings() {
   const [fresh, setFresh] = useState(false)
   const [reloading, setReloading] = useState(false)
   useEffect(() => { newVersionOut().then(setFresh) }, [])
+  const [readout, setReadout] = useState('')
+  useEffect(() => { const t = setTimeout(() => setReadout(layoutReadout()), 600); return () => clearTimeout(t) }, [])
 
   const out = async () => {
     if (!navigator.onLine) { setAsking(false); setError('Connect to sign out'); return }
@@ -56,6 +58,7 @@ export default function Settings() {
           </button></li>
         </ul>
         <p className="version">Version 0.1 · {BUILD}</p>
+        <p className="version">{readout}</p>
       </section>
 
       {asking && (
