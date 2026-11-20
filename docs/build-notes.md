@@ -45,10 +45,12 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Reduce Motion: no shake, no letter rise, wall stands still; red outlines and messages stay.
 • Code only: the email carries the 6-digit code and no link (a link would sign in Safari, not the installed app). Code length, expiry and attempt limits come from Supabase Auth. The resend countdown is 60 s.
 • Email field: autocomplete="email"; code field: autocomplete="one-time-code" for the From Mail suggestion.
-• Reelay is a web app. In Safari on iPhone, when it isn't installed yet, the start screen shows the Add to Home Screen card (iOS 26 steps: ••• → Share → Add to Home Screen → Add). Older Safari layouts have Share in the toolbar: show two steps there. Continue in Safari opens sign-in; don't show the card again each visit, remind once when someone turns on a notification (those need the installed app).
+• Reelay is a web app. In Safari on iPhone, when it isn't installed yet, the start screen shows the Add to Home Screen card (iOS 26 steps: ••• → Share → Add to Home Screen → Add). Older Safari layouts have Share in the toolbar: show two steps there. “Sign in here” opens sign-in; don't show the card again each visit, remind once when someone turns on a notification (those need the installed app).
 
 • Invite only (v287): without a link the glass button says Sign in, 120px from the bottom; “Reelay is invite only.” sits alone 40px from the bottom (12px, grey). No terms line.
-• From a valid invite link: Join Reelay and “You’re invited.” It never says who sent it.
+• From a valid invite link: Join Reelay and “You’re invited.”, and the email sheet is titled Join Reelay (otherwise “Continue with email”). It never says who sent it.
+• Start in Safari (not yet installed): the Add to Home Screen card for people with an account, quiet “Sign in here”. After joining with an invite: “You’re in. Add Reelay to your Home Screen”, the same steps, “Then open Reelay from your Home Screen and sign in once more.” (Safari and the app don’t share sign-in), quiet “Continue here”.
+• Never name Safari in buttons: we only know it’s a browser. Invite links often open in WhatsApp’s or Instagram’s own browser, where Add to Home Screen isn’t available; spot those loosely (user agent) and first say “Open this page in Safari”.
 • An email without an account gets “Reelay is invite only” in the sheet instead of a code, with Use another email. An expired or used link opens the sheet with the reason and “I already have an account”.
 • No privacy or terms line on Start or in the sheet while Reelay is invite only among friends; the privacy policy and terms live in Settings › Privacy. If Reelay opens up, bring the line back (archived Start v18).
 
