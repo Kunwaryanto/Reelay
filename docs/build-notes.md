@@ -74,7 +74,7 @@ Built 20 Nov (`src/screens/Invites.tsx`, `/settings/invites`). Beyond the spec: 
 
 ## Page slides (20 Nov)
 
-Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
+Push and pop draw the slide with transform animations (Web Animations, run off the main thread) instead of moving the strip's scroll position each frame, so a page still rendering can't make it stutter. The leaving page's slower slide and dim are part of those animations; the scroll-driven `pane-leave` only runs for the finger's swipe back. The parallax runs on `.pane-in`, never on the `.pane` snap area: Safari snaps to the transformed box, so a moving snap area left the strip stuck halfway after a swipe. Components that only navigate use `useNavActions()`, so poster rows don't re-render on every push or scroll.
 
 ## Watchlist (built 20 Nov, `src/screens/Watchlist.tsx`)
 
@@ -82,7 +82,7 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 - **No Your services yet:** `user_services` is empty until that screen is built, so every service counts as yours. The sections then read "Leaving soon", "Streaming now" and "Not streaming in Sweden", and the switch reads "Only what’s streaming". Once services are picked the designed names and the services label appear on their own.
 - Leaving soon = leaves within 30 days on one of your services.
 - Swipe a row left for Remove (opens past 44px); the bell on a not-streaming row turns Notify on and off.
-- The sort sheet is mounted on the body so it covers the tab bar.
+- The sort sheet is mounted in `#root` (not the body) so it covers the tab bar; in the body, iOS scrolled the document when the sheet took focus. A sheet without a field focuses itself, not its first button.
 - Pick wall: 49 posters (7 × 7, so the tilted wall reaches every corner when panned) from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
 - Not built yet: long press on a row, the "New season" note, the link from the services label to Your services.
 

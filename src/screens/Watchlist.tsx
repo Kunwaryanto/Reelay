@@ -125,7 +125,7 @@ export default function Watchlist() {
       ))}
       {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
-      {/* over the tab bar, so outside the page */}
+      {/* over the tab bar, so outside the page, but inside #root: its clip keeps iOS from scrolling the document */}
       {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
         <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('added'); setOnlyMine(false) }}>Reset</button></div>
         <p className="wl-sheet-label">Sort by</p>
@@ -141,7 +141,7 @@ export default function Watchlist() {
           <i aria-hidden="true" />
         </button>
         <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 title' : `${list.length} titles`}</Button></div>
-      </Sheet>, document.body)}
+      </Sheet>, document.getElementById('root') ?? document.body)}
     </main>
   )
 }

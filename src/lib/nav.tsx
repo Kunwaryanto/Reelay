@@ -151,6 +151,12 @@ const SLIDE = { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: '
 const LEAVE = 0.7 // pane-leave: translateX(70%), opacity 0.55
 const at = (x: number, dim = false) => ({ transform: `translateX(${x}px)`, opacity: dim ? 0.55 : 1 })
 
+/** Snapping and the swipe parallax back on. */
+function unlockStrip(strip: HTMLElement) {
+  strip.style.scrollSnapType = ''
+  delete strip.dataset.sliding
+}
+
 /** Run the keyframes on each pane, then call done. Returns a cancel. */
 function slidePanes(strip: HTMLElement, moves: [Element | undefined, Keyframe[]][], done: () => void): () => void {
   const list = moves.filter((m): m is [Element, Keyframe[]] => !!m[0])
@@ -161,16 +167,21 @@ function slidePanes(strip: HTMLElement, moves: [Element | undefined, Keyframe[]]
   strip.dataset.sliding = ''
   const anims = list.map(([el, frames]) => el.animate(frames, SLIDE))
   let over = false
-  const snapBack = () => { strip.style.scrollSnapType = ''; delete strip.dataset.sliding }
-  anims[0].finished.then(() => {
+  const end = () => {
     if (over) return
     over = true
+    clearTimeout(watchdog)
     anims.forEach((a) => a.cancel())
     done()
     // A frame later, once the scroll-driven timelines have caught up with the jump.
-    requestAnimationFrame(snapBack)
-  }, () => {})
-  return () => { if (over) return; over = true; anims.forEach((a) => a.cancel()); snapBack() }
+    // (The timer covers a frame that never comes, e.g. the app was sent to the background.)
+    requestAnimationFrame(() => unlockStrip(strip))
+    setTimeout(() => unlockStrip(strip), 100)
+  }
+  // Never leave the strip locked: if the animation is cancelled or its promise never settles, end anyway.
+  const watchdog = setTimeout(end, SLIDE.duration + 250)
+  anims[0].finished.then(end, end)
+  return () => { if (over) return; over = true; clearTimeout(watchdog); anims.forEach((a) => a.cancel()); unlockStrip(strip) }
 }
 
 /** One tab: its first page plus whatever has been pushed on top. Stays mounted while another tab shows. */
@@ -239,10 +250,14 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
   }
 
   return (
-    <div ref={strip} className="stack" data-active={active} inert={!active} onScroll={onScroll}>
-      <section className="pane" inert={shown.length > 0}>{root}</section>
+    <div ref={strip} className="stack" data-active={active} inert={!active} onScroll={onScroll}
+      // a finger on the strip while no slide runs: make sure it can swipe and snap
+      onTouchStart={(e) => { if (!sliding.current) unlockStrip(e.currentTarget) }}>
+      {/* The swipe parallax moves .pane-in, never the .pane itself: Safari snaps to the transformed box,
+          so a moving snap area pulls the strip to a stop halfway. */}
+      <section className="pane" inert={shown.length > 0}><div className="pane-in">{root}</div></section>
       {shown.map((p, i) => (
-        <section key={p.key} className="pane" inert={i < shown.length - 1}>{render(p.path)}</section>
+        <section key={p.key} className="pane" inert={i < shown.length - 1}><div className="pane-in">{render(p.path)}</div></section>
       ))}
     </div>
   )

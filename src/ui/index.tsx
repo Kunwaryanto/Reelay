@@ -381,6 +381,9 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
         // first time: invisible but roughly in place (field above the keyboard, so iOS doesn't scroll the page)
         if (!room) d.dataset.waiting = 'true'
       }
+      // Without a field to type in, focus the sheet itself rather than its first button
+      // (which would wear a focus ring and could be scrolled into view).
+      if (!keyboard) { d.tabIndex = -1; d.setAttribute('autofocus', '') }
       d.show()
     }
     else if (!open && d.open) {
