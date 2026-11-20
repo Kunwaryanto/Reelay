@@ -318,12 +318,19 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
  * Opened non-modally with its own scrim: a modal dialog sits in the browser's top layer, which iOS cuts off
  * above the bottom of the screen in Home Screen apps, leaving black under the sheet.
  */
+// Room the keyboard takes at the bottom of the app, measured on this phone the last time it came up (kept per
+// Home Screen app / Safari). Before the first measurement it's estimated from the screen, a little generously.
+const KB_ROOM_KEY = `reelay:kb-room:${matchMedia('(display-mode: standalone)').matches ? 'app' : 'safari'}`
+const kbRoom = () => {
+  try { const v = Number(localStorage.getItem(KB_ROOM_KEY)); if (v > 150) return v } catch { /* private mode */ }
+  return Math.round(screen.height * 0.45)
+}
+
 /**
- * `tall`: for sheets with a text field. The sheet opens almost to the top with its content at the top, so the
- * keyboard only ever covers its empty lower part and the sheet never has to move with the keyboard (a web page
- * can't follow the keyboard smoothly on iOS).
+ * `keyboard`: for sheets with a text field. The sheet is made just tall enough that its content clears the
+ * keyboard, and stays put: it never moves with the keyboard (a web page can't follow the keyboard smoothly on iOS).
  */
-export function Sheet({ open, onClose, label, tall, children }: { open: boolean; onClose: () => void; label: string; tall?: boolean; children: ReactNode }) {
+export function Sheet({ open, onClose, label, keyboard, children }: { open: boolean; onClose: () => void; label: string; keyboard?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const drag = useRef<{ y: number; dy: number } | null>(null)
 
@@ -332,6 +339,7 @@ export function Sheet({ open, onClose, label, tall, children }: { open: boolean;
     if (!d) return
     if (open && !d.open) {
       delete d.dataset.closing
+      if (keyboard) d.style.setProperty('--kb-room', `${kbRoom()}px`); else d.style.removeProperty('--kb-room')
       d.show()
     }
     else if (!open && d.open) {
@@ -344,6 +352,25 @@ export function Sheet({ open, onClose, label, tall, children }: { open: boolean;
   }, [open])
 
 
+  // While a field is focused, note how much room the keyboard really takes, for next time (the sheet doesn't move).
+  useEffect(() => {
+    if (!open || !keyboard || !window.visualViewport) return
+    const vv = window.visualViewport
+    let t = 0
+    const note = () => {
+      clearTimeout(t)
+      t = window.setTimeout(() => {
+        const d = ref.current, box = d?.offsetParent
+        const a = document.activeElement
+        if (!d || !box || !(a instanceof HTMLInputElement) || !d.contains(a)) return
+        const room = Math.round(box.getBoundingClientRect().bottom - (vv.offsetTop + vv.height))
+        if (room > 150) try { localStorage.setItem(KB_ROOM_KEY, String(room + 8)) } catch { /* private mode */ }
+      }, 400)
+    }
+    vv.addEventListener('resize', note)
+    return () => { clearTimeout(t); vv.removeEventListener('resize', note) }
+  }, [open, keyboard])
+
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
     if (!open) return
@@ -355,9 +382,15 @@ export function Sheet({ open, onClose, label, tall, children }: { open: boolean;
   return (
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
-    <dialog ref={ref} className="sheet" data-tall={tall || undefined} aria-label={label} aria-modal="true"
+    <dialog ref={ref} className="sheet" data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
-      onPointerDown={(e) => { if ((e.target as HTMLElement).closest('.sheet-grab')) drag.current = { y: e.clientY, dy: 0 } }}
+      // drag down from anywhere on the sheet (not from a field or button) to close it
+      onPointerDown={(e) => {
+        const t = e.target as HTMLElement
+        if (!t.closest('.sheet-body') || t.closest('input, textarea, button, a')) return
+        drag.current = { y: e.clientY, dy: 0 }
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }}
       onPointerMove={(e) => {
         if (!drag.current || !ref.current) return
         drag.current.dy = Math.max(0, e.clientY - drag.current.y)
@@ -368,7 +401,8 @@ export function Sheet({ open, onClose, label, tall, children }: { open: boolean;
         drag.current = null
         ref.current?.style.removeProperty('--drag')
         if (d && d.dy > 80) onClose()
-      }}>
+      }}
+      onPointerCancel={() => { drag.current = null; ref.current?.style.removeProperty('--drag') }}>
       <div className="sheet-body">
         <div className="sheet-grab" aria-hidden="true"><span /></div>
         {children}
