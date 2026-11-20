@@ -50,14 +50,13 @@ button { font: inherit; color: inherit; }
 /* ---- Wordmark ---- */
 .wordmark { display: inline-block; }
 .wordmark svg { display: block; height: 100%; width: auto; overflow: visible; }
-.wordmark[data-rise='true'] { overflow: clip; padding-bottom: 8px; margin-bottom: -8px; }
-.wordmark[data-rise='true'] .l { transform: translateY(110%); opacity: 0; transform-box: view-box; animation: letter-rise 700ms var(--ease-out) forwards, letter-fade 560ms var(--ease-out) forwards; }
-.wordmark .l:nth-child(1) { animation-delay: 150ms; } .wordmark .l:nth-child(2) { animation-delay: 195ms; }
-.wordmark .l:nth-child(3) { animation-delay: 240ms; } .wordmark .l:nth-child(4) { animation-delay: 285ms; }
-.wordmark .l:nth-child(5) { animation-delay: 330ms; } .wordmark .l:nth-child(6) { animation-delay: 375ms; }
+.wordmark[data-rise='true'] .l { transform: translateY(45%); opacity: 0; transform-box: view-box; animation: letter-rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards, letter-fade 520ms cubic-bezier(0.3, 0, 0.3, 1) forwards; }
+/* like Savee: no mask; each letter starts half a letter low and faint, and rises into place as it turns white */
+.wordmark .l:nth-child(1) { animation-delay: 150ms; } .wordmark .l:nth-child(2) { animation-delay: 190ms; }
+.wordmark .l:nth-child(3) { animation-delay: 230ms; } .wordmark .l:nth-child(4) { animation-delay: 270ms; }
+.wordmark .l:nth-child(5) { animation-delay: 310ms; } .wordmark .l:nth-child(6) { animation-delay: 350ms; }
 @keyframes letter-rise { to { transform: none; } }
-/* each letter fades in as it rises, starting a little after it begins to move */
-@keyframes letter-fade { from { opacity: 0; } 15% { opacity: 0; } to { opacity: 1; } }
+@keyframes letter-fade { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .wordmark[data-rise='true'] .l { animation: none; transform: none; opacity: 1; } }
 
 /* ---- Buttons ---- */

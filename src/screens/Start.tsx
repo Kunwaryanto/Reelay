@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useQuery } from '../lib/query'
 import { Button, GlassButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
 
+const LAST_EMAIL = 'reelay:last-email'
+
 type Invite = 'none' | 'checking' | 'valid' | 'expired' | 'used'
 type Step = 'email' | 'code' | 'noinv' | 'gone'
 type SendErr = '' | 'invalid' | 'net' | 'offline' | 'rate'
@@ -45,7 +47,8 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const [invite, setInvite] = useState<Invite>(token ? 'checking' : 'none')
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('email')
-  const [email, setEmail] = useState('')
+  // The email you last signed in with on this phone, filled in for you (kept on the phone only).
+  const [email, setEmail] = useState(() => { try { return localStorage.getItem(LAST_EMAIL) ?? '' } catch { return '' } })
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState<SendErr>('')
   const [code, setCode] = useState('')
@@ -131,7 +134,10 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     setResent(false)
     const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: value, type: 'email' })
     setChecking(false)
-    if (!error) { setOk(true); setCodeErr(''); setTimeout(onSignedIn, 700); return }
+    if (!error) {
+      try { localStorage.setItem(LAST_EMAIL, email.trim()) } catch { /* private mode */ }
+      setOk(true); setCodeErr(''); setTimeout(onSignedIn, 700); return
+    }
     tries.current++
     const kind: CodeErr = error.status === 429 || tries.current >= 5 ? 'locked'
       : Date.now() - sentAt.current > 60 * 60 * 1000 ? 'expired' : 'wrong'
