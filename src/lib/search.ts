@@ -186,7 +186,8 @@ async function people(text: string): Promise<PersonHit[]> {
   return rows.sort((a, b) => rank(a) - rank(b) || (a.profile_path ? 0 : 1) - (b.profile_path ? 0 : 1)).slice(0, 8)
 }
 
-export type Found = { hits: Hit[]; tokens: Token[]; people: PersonHit[] }
+/** `kind`: the words asked for films or series. That picks the type pill; it isn't a filter chip. */
+export type Found = { hits: Hit[]; tokens: Token[]; people: PersonHit[]; kind?: Hit['kind'] }
 
 /**
  * Search for what was typed. Words that name a service, type, decade, genre or language become filters,
@@ -206,11 +207,16 @@ export async function search(typed: string, removed: string[]): Promise<Found> {
   const whole = fold(text)
   if (phrase.some((h) => fold(h.title).includes(whole))) return { hits: phrase, tokens: [], people: [] }
 
-  const tokens = parsed.tokens.filter((t) => !removed.includes(t.key))
+  const kind = parsed.tokens.find((t) => t.key === 'kind')?.filter.kind
+  const tokens = parsed.tokens.filter((t) => t.key !== 'kind' && !removed.includes(t.key))
   const f = merge(tokens)
-  if (parsed.rest.length >= 2) return { hits: (await byName(parsed.rest, 100)).filter((h) => passes(h, f)), tokens, people: [] }
-  if (!tokens.length) return { hits: [], tokens, people: [] }
-  return { hits: await byFilters(f), tokens, people: [] }
+  if (parsed.rest.length >= 2) return { hits: (await byName(parsed.rest, 100)).filter((h) => passes(h, f)), tokens, people: [], kind }
+  if (!tokens.length && !kind) return { hits: [], tokens, people: [] }
+  if (!kind) return { hits: await byFilters(f), tokens, people: [] }
+  // enough of the kind that was asked for, plus the mixed list so the other pills have something too
+  const [asked, mixed] = await Promise.all([byFilters({ ...f, kind }), byFilters(f)])
+  const seen = new Set(asked.map((h) => h.id))
+  return { hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))], tokens, people: [], kind }
 }
 
 /** For "Popular right now" under an empty result. */

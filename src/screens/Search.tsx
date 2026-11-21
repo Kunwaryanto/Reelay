@@ -120,14 +120,15 @@ export default function Search() {
 
   const { found, error, waiting, retry } = useSearch(q, removed)
   const hasQ = q.trim().length > 0
+  // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
+  useEffect(() => { if (found?.kind) setKind(found.kind) }, [found])
   const tokens = found?.tokens ?? []
 
   const all = found?.hits ?? []
   const mine = all.filter((h) => !onlyMine || (hasPicked ? h.services.some((s) => picked.includes(s)) : h.services.length > 0))
   const folks = found?.people ?? []
   const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
-  const typed = tokens.find((t) => t.key === 'kind') // the words already chose films or series
-  const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || typed || h.kind === kind)
+  const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || h.kind === kind)
   const shownPeople = kind === 'people' ? folks : kind === 'all' ? folks.slice(0, 2) : []
   const list = sort === 'best' ? shown : [...shown].sort((a, b) => (sort === 'rated' ? (b.rating ?? 0) - (a.rating ?? 0) : (b.year ?? 0) - (a.year ?? 0)))
 
@@ -152,7 +153,7 @@ export default function Search() {
         : `${all.length === 1 ? '1 match isn’t' : `${all.length} matches aren’t`} on a service in Sweden right now.`,
       action: hasPicked ? 'Show all services' : 'Show them', run: () => setOnlyMine(false), popular: false,
     }
-      : (kind === 'film' || kind === 'series') && !typed && mine.length ? {
+      : (kind === 'film' || kind === 'series') && mine.length ? {
         title: kind === 'film' ? 'No films match' : 'No series match', body: '',
         action: `Show ${other === 'film' ? 'films' : 'series'} (${counts[other]})`, run: () => setKind(other), popular: false,
       }
@@ -222,7 +223,7 @@ export default function Search() {
             <>
               <div className="wl-filters">
                 <div role="group" aria-label="Type">
-                  {!typed && ([['all', 'All'], ['series', 'Series'], ['film', 'Films'], ...(folks.length ? [['people', 'People']] : [])] as [Kind, string][]).map(([k, label]) => (
+                  {([['all', 'All'], ['series', 'Series'], ['film', 'Films'], ...(folks.length ? [['people', 'People']] : [])] as [Kind, string][]).map(([k, label]) => (
                     <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={`${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
                       <span>{label}<sup aria-hidden="true">{counts[k]}</sup></span>
                     </button>
