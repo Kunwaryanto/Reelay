@@ -374,9 +374,9 @@ export default function Search() {
                     </button>
                   ))}
                 </div>
-                <button type="button" className="wl-tune s-tune" aria-haspopup="dialog" aria-label={filtersOn ? `Sort and filter, ${filtersOn} on` : 'Sort and filter'} onClick={() => { input.current?.blur(); setSheet(true) }}>
+                {/* no count on it: what's on shows as chips right under it; the label says it for screen readers */}
+                <button type="button" className="wl-tune" aria-haspopup="dialog" aria-label={filtersOn ? `Sort and filter, ${filtersOn} on` : 'Sort and filter'} onClick={() => { input.current?.blur(); setSheet(true) }}>
                   <Icon name="tune" size={22} />
-                  {filtersOn > 0 && <b aria-hidden="true">{filtersOn}</b>}
                 </button>
               </div>
               {tokens.length + xchips.length + (sort !== 'best' ? 1 : 0) > 0 && (
