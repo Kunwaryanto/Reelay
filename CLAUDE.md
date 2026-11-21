@@ -21,7 +21,7 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
   The `Supabase migrations` workflow applies new migrations when they reach `main` (`supabase db push`); `Supabase status` lists what's applied. Never change the database by hand in the dashboard; add a migration.
   Invite only: open sign-ups are off; `supabase/functions/redeem-invite` creates the account from an invite link (`invites` table, `create_invite`/`cancel_invite`/`restore_invite` RPCs for admins, `profiles.is_admin`). The `Make admin` workflow makes someone an admin. Edge Functions deploy with the `Supabase functions` workflow.
   Catalogue tables are readable by signed-in users only and written only by the sync; user tables (profiles, user_services, watchlist, push_subscriptions, invites) are private to their owner via RLS.
-- Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`) and Vercel env vars. Never commit them.
+- Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`, and for notifications `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) and Vercel env vars (`VITE_VAPID_PUBLIC_KEY` is the same public key). Never commit them.
 
 ## Browser support
 

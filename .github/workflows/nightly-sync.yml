@@ -26,6 +26,9 @@ jobs:
       TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
       MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
       STREAMING_AVAILABILITY_KEY: ${{ secrets.STREAMING_AVAILABILITY_KEY }}
+      # for notifications; without them the sync skips that step
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       SYNC_LIMIT: ${{ inputs.limit || '0' }}
       SYNC_REFRESH: ${{ inputs.refresh }}
     steps:

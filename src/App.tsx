@@ -7,6 +7,7 @@ import Dev from './screens/Dev'
 import Browse, { browsePage } from './screens/Browse'
 import Desktop, { isDesktop } from './screens/Desktop'
 import { useProfile } from './lib/profile'
+import { noteOpenedFrom, registerDevice } from './lib/push'
 import Invites from './screens/Invites'
 import Now from './screens/Now'
 import Onboarding from './screens/Onboarding'
@@ -49,8 +50,22 @@ function FirstRun() {
   return <Onboarding onDone={() => setDone(true)} />
 }
 
+const TAB_OF: Record<string, Tab> = { '/': 'now', '/browse': 'browse', '/watchlist': 'watchlist', '/search': 'search' }
+
 function Shell() {
-  const { path } = useNav()
+  const { path, push, setTab } = useNav()
+  // keep this device's notification address fresh, and open what a tapped notification points at
+  useEffect(() => {
+    registerDevice()
+    const onMessage = (e: MessageEvent) => {
+      const url = (e.data as { open?: string } | null)?.open
+      if (!url) return
+      const to = noteOpenedFrom(url)
+      if (TAB_OF[to]) setTab(TAB_OF[to]); else push(to)
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
+  }, [push, setTab])
   // Safari: run the app behind the status bar and address bar while signed in (Start stays as it is)
   useEffect(() => { setRunway(true); return () => setRunway(false) }, [])
   return (

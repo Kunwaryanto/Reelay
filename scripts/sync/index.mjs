@@ -14,6 +14,7 @@
 // SYNC_LIMIT > 0 runs a test on that many titles (no deletions, no events).
 
 import pg from 'pg';
+import { sendNotifications } from './notify.mjs';
 import { createGunzip } from 'node:zlib';
 import { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
@@ -514,6 +515,8 @@ async function main() {
   await syncImdbRatings();
   await syncMdblist();
   if (FULL) await reconcile(runStart);
+  // after reconcile, so today's arrivals are in the events; a failure here never fails the sync
+  if (FULL) await sendNotifications(db, log).catch((e) => log('notifications failed:', e.message));
   const counts = (await db.query(
     `select (select count(*) from public.titles) titles, (select count(*) from public.people) people,
             (select count(*) from public.availability) availability,

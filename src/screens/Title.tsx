@@ -4,6 +4,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
+import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
 import { BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
 
@@ -14,6 +15,8 @@ const names = (t: TitleDetail, role: string) => t.credits.filter((c) => c.role =
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
   const { push } = useNavActions()
+  // opened from a notification: where it streams lights up once, then settles
+  const [flash] = useState(() => takeOpenedFrom(`/title/${t.id}`))
   const [open, setOpen] = useState(false)
   const film = t.kind === 'film'
   const first = t.availability[0]
@@ -71,7 +74,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </div>
       )}
 
-      <section className="block">
+      <section className="block" data-flash={flash ? '' : undefined}>
         <ul className="rows">
           {t.availability.map((a) => {
             const note = stale ? null : leavingNote(a.leaves_on)

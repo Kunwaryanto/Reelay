@@ -86,6 +86,13 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 - Language is left out until there is Swedish copy to switch to.
 - A temporary Testing section stays at the bottom (Reload, Show onboarding again, build and layout numbers).
 
+## Offline and notifications (built 21 Nov)
+
+- **Service worker** (`public/sw.js`, registered from `src/lib/push.ts`): pages come from the network when there is one, so a new version shows at once; the last copy is used only when the network fails or takes over 3 s. The app's own files are kept after first use. The database and TMDB pictures are left alone: what shows offline comes from the answers the app saves itself (`useQuery`) and the browser's own picture cache. Not done from the offline note: keeping the last 300 posters ourselves, and searching saved titles offline.
+- **Notifications:** the app registers the device's address in `push_subscriptions` once notifications are allowed (Settings switches, Notify me, onboarding), refreshes it on launch and removes it on sign-out. It needs `VITE_VAPID_PUBLIC_KEY` in Vercel.
+- **Sending** (`scripts/sync/notify.mjs`, end of the nightly sync): leaving tomorrow, arrived (Notify me titles) and new season, per the profile switches, never twice (`notifications_sent`); three or more of a kind become one that opens the Watchlist. Copy from the lock screen board (v269). Needs `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` as GitHub Actions secrets; without them the step is skipped.
+- **Opened from a notification** (v232): the address carries `?n=<kind>`; the title page's first where-to-watch row lights up once.
+
 ## Launch (built 21 Nov, in `src/screens/Now.tsx`)
 
 Built to the Launch and loading note above: ready = data in and the first hero picture decoded (2.5 s at most for the picture). Ready within 300 ms: hero art fades in from 104%, title and meta at 160 ms, dots and settings at 240 ms, rows from 300 ms, 60 ms apart. Otherwise the wordmark rises and holds until 1.2 s; still waiting at 3.3 s shows grey placeholders. The staged rise plays once per launch, not when coming back to the tab.

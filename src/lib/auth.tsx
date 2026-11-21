@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { forgetDevice } from './push'
 import { supabase } from './supabase'
 
 type Auth = {
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: session?.user.email ?? null,
     isAdmin,
     signOut: async () => {
+      await forgetDevice() // this phone stops getting the account's notifications
       const { error } = await supabase.auth.signOut()
       if (error) throw error
     },
