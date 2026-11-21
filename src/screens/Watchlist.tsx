@@ -10,7 +10,8 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, GearIcon, Icon, IconButton, LoadFailed, Sheet, useLongPress } from '../ui'
+import { Button, GearIcon, Icon, IconButton, LoadFailed, useLongPress } from '../ui'
+import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'film' | 'series'
@@ -34,8 +35,9 @@ export default function Watchlist() {
   const q = useQuery<SavedTitle[]>(uid ? `watchlist-titles:${uid}` : null, loadWatchlistTitles)
   const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
   const [kind, setKind] = useState<Kind>('all')
-  const [sort, setSort] = useState<Sort>('added')
-  const [onlyMine, setOnlyMine] = useState(false)
+  // sort and filters, set in the Sort and filter drawer
+  const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: 'added' })
+  const sort = f.sort as Sort
   const [sheet, setSheet] = useState(false)
   const [open, setOpen] = useState<number | null>(null) // the row swiped open
   const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
@@ -59,7 +61,15 @@ export default function Watchlist() {
     return { t: { ...t, notify: saved.isNotifying(t.id) }, service: a?.service_id ?? null, mine: !!own, leaves: own?.leaves_on ?? null }
   }), [q.data, saved, hasPicked, picked])
 
-  const shown = all.filter((r) => !onlyMine || r.mine)
+  const facets = (r: Row): Facets => ({ year: r.t.year, genres: r.t.genres, rating: r.t.rating, runtime: r.t.runtime_min, lang: r.t.original_language, services: [] })
+  // "mine" is checked against the row (which knows about the services someone has picked), the rest on the title
+  const fits = (r: Row, d: Draft) => (!d.mine || r.mine) && passesDraft(facets(r), { ...d, mine: false }, picked)
+  const shown = all.filter((r) => fits(r, f))
+  const chips = draftChips(f, setF, SORTS, 'added')
+  const countOf = (d: Draft): Count => ({
+    key: `${JSON.stringify(d)}|${kind}|${all.length}`,
+    run: async () => all.filter((r) => fits(r, d) && (kind === 'all' || r.t.kind === kind)).length,
+  })
   const counts = { all: shown.length, film: shown.filter((r) => r.t.kind === 'film').length, series: shown.filter((r) => r.t.kind === 'series').length }
   const list = shown.filter((r) => kind === 'all' || r.t.kind === kind).sort((a, b) =>
     sort === 'added' ? b.t.added_at.localeCompare(a.t.added_at)
@@ -105,11 +115,16 @@ export default function Watchlist() {
             </button>
           ))}
         </div>
-        <button type="button" className="wl-tune" aria-label="Sort and filter" onClick={() => setSheet(true)}>
+        {/* no count on it: what's on shows as chips right under it */}
+        <button type="button" className="wl-tune" aria-haspopup="dialog" aria-label={chips.length ? `Sort and filter, ${chips.length} on` : 'Sort and filter'} onClick={() => setSheet(true)}>
           <Icon name="tune" size={22} />
-          {(sort !== 'added' || onlyMine) && <i aria-hidden="true" />}
         </button>
       </div>
+      {chips.length > 0 && (
+        <div className="s-chips">
+          {chips.map((c) => <button key={c.key} type="button" aria-label={`Remove ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>)}
+        </div>
+      )}
 
       {sections.map((s) => (
         <section key={s.id} className="wl-section">
@@ -133,22 +148,9 @@ export default function Watchlist() {
 
       {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over the tab bar, so outside the page, but inside #root: its clip keeps iOS from scrolling the document */}
-      {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
-        <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('added'); setOnlyMine(false) }}>Reset</button></div>
-        <p className="wl-sheet-label">Sort by</p>
-        <div role="radiogroup" aria-label="Sort by">
-          {SORTS.map(([k, label]) => (
-            <button key={k} type="button" role="radio" aria-checked={sort === k} className="wl-option" onClick={() => setSort(k)}>
-              {label}<Icon name="check" size={20} style={{ opacity: sort === k ? 1 : 0 }} />
-            </button>
-          ))}
-        </div>
-        <button type="button" role="switch" aria-checked={onlyMine} className="wl-switch" onClick={() => setOnlyMine((v) => !v)}>
-          <span><b>{hasPicked ? 'Only on my services' : 'Only what’s streaming'}</b>{hasPicked && <small>{servicesLabel(picked.map(nameOf))}</small>}</span>
-          <i aria-hidden="true" />
-        </button>
-        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 title' : `${list.length} titles`}</Button></div>
-      </Sheet>, document.getElementById('root') ?? document.body)}
+      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
+        noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />,
+      document.getElementById('root') ?? document.body)}
     </main>
   )
 }

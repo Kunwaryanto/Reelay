@@ -238,7 +238,7 @@ export default function Search() {
     return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
   }
   const apply = (d: Draft) => {
-    setSort(d.sort)
+    setSort(d.sort as Sort)
     setOnlyMine(d.mine)
     setExtra((x) => {
       const next: Extra = { ...x, rating: d.rating || undefined, length: d.length ?? undefined }

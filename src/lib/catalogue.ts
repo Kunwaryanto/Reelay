@@ -179,12 +179,15 @@ export type SavedTitle = {
   rating: number | null
   notify: boolean
   added_at: string
+  genres?: string[]
+  original_language?: string | null
+  runtime_min?: number | null
 }
 
 export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
   type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'notify' | 'added_at'> & { scores: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null }) | null }
   const rows = unwrap(await supabase.from('watchlist')
-    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,availability(service_id,leaves_on),scores(imdb_rating))')
+    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,availability(service_id,leaves_on),scores(imdb_rating))')
     .order('added_at', { ascending: false }) as never) as Raw[]
   return rows.filter((r) => r.title).map((r) => {
     const { scores, ...t } = r.title!

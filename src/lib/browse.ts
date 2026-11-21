@@ -117,14 +117,16 @@ const today = () => inDays(0)
 const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
 const ART = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 
-type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean }
+type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean }
 
 /** Streaming titles in a category. `row` narrows it the way that row on the category page does. */
-export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art }: Opts = {}): Promise<Card[]> {
+export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets }: Opts = {}): Promise<Card[]> {
   const r = cat.rule
   const k = kind ?? cat.only
   const scored = sort === 'rated' || r.rating !== undefined || r.votes !== undefined
-  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? ',scores!inner(imdb_rating,imdb_votes)' : ''}`)
+  // facets: what the filter drawer checks on the phone (genre, language, length, rating)
+  const extra = facets ? `,genres,original_language,runtime_min${scored ? '' : ',scores(imdb_rating)'}` : ''
+  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? ',scores!inner(imdb_rating,imdb_votes)' : ''}${extra}`)
   if (k) q = q.eq('kind', k)
   if (r.genres) q = q.overlaps('genres', r.genres)
   if (r.from !== undefined) q = q.gte('year', r.from)

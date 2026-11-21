@@ -9,8 +9,9 @@ import {
 import { SERVICE_NAME, leavingNote, loadMyServices, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
+import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { useQuery } from '../lib/query'
-import { BackButton, Button, Icon, LoadFailed, PosterRow, SectionHeader, Sheet, TitleCard } from '../ui'
+import { BackButton, Icon, LoadFailed, PosterRow, SectionHeader, TitleCard } from '../ui'
 import { Hero, HoldMenu } from './Now'
 
 type Pick = 'all' | Kind
@@ -232,9 +233,9 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   }, [cat, row, kind])
   const typed = !!def?.kind // one kind only: no type pills, and the year alone under each poster
   const start: Sort = def?.sort ?? 'popular'
-  const [sort, setSort] = useState<Sort>(start)
+  const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: start })
+  const sort = f.sort as Sort
   const [pick, setPick] = useState<Pick>('all')
-  const [onlyMine, setOnlyMine] = useState(false)
   const [sheet, setSheet] = useState(false)
   const [small, setSmall] = useState(false)
   const [held, setHeld] = useState<Held | null>(null)
@@ -245,17 +246,31 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const rowId = row === 'list' ? undefined : def?.id
   const q = useQuery<Card[]>(cat && def ? `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}` : null,
-    () => titlesIn(cat!, { kind: def!.kind, sort, row: rowId, limit: 90 }), { maxAge: 30 * 60 * 1000, persist: false })
+    () => titlesIn(cat!, { kind: def!.kind, sort, row: rowId, limit: 90, facets: true }), { maxAge: 30 * 60 * 1000, persist: false })
 
   if (!cat || !def) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This list isn’t here any more.</p></main></>
 
-  const all = (q.data ?? []).filter((c) => !onlyMine || c.availability.some((a) => picked.includes(a.service_id)))
+  // the drawer's filters are checked here, on the list as loaded (the list's own rule is the category's)
+  const facets = (c: Card): Facets => {
+    const x = c as Card & { original_language?: string | null; runtime_min?: number | null; scores?: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null }
+    const sc = Array.isArray(x.scores) ? x.scores[0] : x.scores
+    return { year: c.year, genres: c.genres, rating: sc?.imdb_rating ?? null, runtime: x.runtime_min ?? null, lang: x.original_language ?? null, services: c.availability.map((a) => a.service_id) }
+  }
+  const all = (q.data ?? []).filter((c) => passesDraft(facets(c), f, picked))
+  const r = cat.rule
+  // a list that already is one genre, decade or length doesn't offer that filter
+  const rows = ALL_ROWS.filter((k) => !(k === 'genres' && r.genres) && !(k === 'decade' && (r.from !== undefined || r.to !== undefined)) && !(k === 'length' && r.under))
+  const chips = draftChips(f, setF, SORTS, start)
+  const countOf = (d: Draft): Count => ({
+    key: `${JSON.stringify(d)}|${pick}|${q.data?.length ?? 0}`,
+    // a different sort loads a different list: the count for it is known once it's shown
+    run: async () => (d.sort !== sort ? null : (q.data ?? []).filter((c) => passesDraft(facets(c), d, picked) && (typed || pick === 'all' || c.kind === pick)).length),
+  })
   const counts = { all: all.length, film: all.filter((c) => c.kind === 'film').length, series: all.filter((c) => c.kind === 'series').length }
   const list = typed || pick === 'all' ? all : all.filter((c) => c.kind === pick)
   const tune = (
-    <button type="button" className="wl-tune" aria-label="Sort and filter" onClick={() => setSheet(true)}>
+    <button type="button" className="wl-tune" aria-haspopup="dialog" aria-label={chips.length ? `Sort and filter, ${chips.length} on` : 'Sort and filter'} onClick={() => setSheet(true)}>
       <Icon name="tune" size={22} />
-      {(sort !== start || onlyMine) && <i aria-hidden="true" />}
     </button>
   )
 
@@ -274,6 +289,11 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
           {typed && tune}
         </div>
         {!typed && <div className="wl-filters"><TypePills pick={pick} setPick={setPick} counts={counts} />{tune}</div>}
+        {chips.length > 0 && (
+          <div className="s-chips">
+            {chips.map((c) => <button key={c.key} type="button" aria-label={`Remove ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>)}
+          </div>
+        )}
         {q.error && <div className="br-failed"><LoadFailed what={def.title} retry={q.retry} retrying={q.retrying} compact /></div>}
         <ul className="grid" data-typed={typed}>
           {list.map((card) => {
@@ -282,28 +302,12 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
             return <li key={card.id}><TitleCard card={card} note={note} onHold={(c, cover) => setHeld({ card: c, cover })} /></li>
           })}
         </ul>
-        {q.data && list.length === 0 && <p className="br-none">{onlyMine ? 'None of these are on your services.' : 'Nothing streaming here right now.'}</p>}
+        {q.data && list.length === 0 && <p className="br-none">{chips.length ? 'Nothing here with these filters.' : 'Nothing streaming here right now.'}</p>}
       </main>
       {holdMenu(held, () => setHeld(null))}
-      {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
-        <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort(start); setOnlyMine(false) }}>Reset</button></div>
-        <p className="wl-sheet-label">Sort by</p>
-        <div role="radiogroup" aria-label="Sort by">
-          {SORTS.map(([k, label]) => (
-            <button key={k} type="button" role="radio" aria-checked={sort === k} className="wl-option" onClick={() => setSort(k)}>
-              {label}<Icon name="check" size={20} style={{ opacity: sort === k ? 1 : 0 }} />
-            </button>
-          ))}
-        </div>
-        {/* everything in Browse is streaming, so this only means something once services are picked */}
-        {picked.length > 0 && (
-          <button type="button" role="switch" aria-checked={onlyMine} className="wl-switch" onClick={() => setOnlyMine((v) => !v)}>
-            <span><b>Only on my services</b><small>{picked.map((s) => SERVICE_NAME[s] ?? s).slice(0, 3).join(', ')}</small></span>
-            <i aria-hidden="true" />
-          </button>
-        )}
-        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 result' : `${list.length} results`}</Button></div>
-      </Sheet>, document.getElementById('root') ?? document.body)}
+      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map((s) => SERVICE_NAME[s] ?? s)}
+        noun={typed ? (def.kind === 'film' ? ['film', 'films'] : ['series', 'series']) : ['title', 'titles']} sorts={SORTS} firstSort={start} rows={rows}
+        countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />, document.getElementById('root') ?? document.body)}
     </>
   )
 }

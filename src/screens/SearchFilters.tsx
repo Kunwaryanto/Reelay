@@ -1,7 +1,7 @@
-// Search's "Sort and filter" drawer: one list (Sort by, Only on my services, then a row per filter with its value);
+// The "Sort and filter" drawer (Search, Browse lists, Watchlist): one list (Sort by, Only on my services, then a row per filter with its value);
 // a row slides in to its options. Changes are a draft until "Show n" is tapped; closing any other way drops them.
 import { useEffect, useRef, useState } from 'react'
-import { GENRE_OPTIONS, LANG_OPTIONS, type Filters } from '../lib/search'
+import { GENRE_OPTIONS, LANG_OPTIONS, genreNames, type Filters } from '../lib/search'
 import { Button, Icon, Sheet } from '../ui'
 
 export type Sort = 'best' | 'rated' | 'newest'
@@ -18,7 +18,7 @@ export const langName = (code: string) => LANG_OPTIONS.find((x) => x[0] === code
 export const sortName = (s: Sort) => SORTS.find((x) => x[0] === s)![1]
 
 /** Everything the drawer can set. Empty values mean "any". */
-export type Draft = { sort: Sort; mine: boolean; genres: string[]; decade: number | null; rating: number; length: Len | null; lang: string | null }
+export type Draft = { sort: string; mine: boolean; genres: string[]; decade: number | null; rating: number; length: Len | null; lang: string | null }
 export const NO_FILTERS: Draft = { sort: 'best', mine: false, genres: [], decade: null, rating: 0, length: null, lang: null }
 
 /** A count to fetch: `key` names it (the same key is never fetched twice), `run` gets it. */
@@ -55,15 +55,22 @@ function Option({ label, checked, role, pick, count }: { label: string; checked:
 }
 
 type Sub = 'sort' | 'genres' | 'decade' | 'rating' | 'length' | 'lang'
+export type FilterRow = Exclude<Sub, 'sort'>
+export const ALL_ROWS: FilterRow[] = ['genres', 'decade', 'rating', 'length', 'lang']
 const TITLES: Record<Sub, string> = { sort: 'Sort by', genres: 'Genre', decade: 'Released', rating: 'IMDb rating', length: 'Length', lang: 'Original language' }
 
-export function FilterDrawer({ open, onClose, init, yearsNote, services, noun, countOf, apply }: {
+export function FilterDrawer({ open, onClose, init, yearsNote = '', services, noun, countOf, apply, sorts = SORTS, firstSort = 'best', rows: shownRows = ALL_ROWS }: {
   open: boolean
   onClose: () => void
   /** how things stand when the drawer opens */
   init: Draft
   /** a year from the words that isn't one of the decades ("1994"), shown on the Released row */
-  yearsNote: string
+  yearsNote?: string
+  /** the sort orders on offer, and the one Clear all goes back to */
+  sorts?: [string, string][]
+  firstSort?: string
+  /** which filters are offered (a list that already is one genre doesn't offer Genre) */
+  rows?: FilterRow[]
   /** the person's services, by name; empty hides "Only on my services" */
   services: string[]
   noun: [string, string]
@@ -89,17 +96,17 @@ export function FilterDrawer({ open, onClose, init, yearsNote, services, noun, c
     genres: d.genres.join(', '), decade: d.decade !== null ? decadeName(d.decade) : yearsNote,
     rating: d.rating ? `${d.rating}+` : '', length: d.length ? lengthName(d.length) : '', lang: d.lang ? langName(d.lang) : '',
   }
-  const set_ = { genres: d.genres.length > 0, decade: d.decade !== null, rating: d.rating > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== 'best' }
+  const set_ = { genres: d.genres.length > 0, decade: d.decade !== null, rating: d.rating > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
   const any = Object.values(set_).some(Boolean) || d.mine
   const clear: Record<Sub, () => void> = {
-    sort: () => set({ sort: 'best' }), genres: () => set({ genres: [] }), decade: () => set({ decade: null }),
+    sort: () => set({ sort: firstSort }), genres: () => set({ genres: [] }), decade: () => set({ decade: null }),
     rating: () => set({ rating: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }),
   }
   const shown = sub ?? last
 
   const options = () => {
     switch (shown) {
-      case 'sort': return SORTS.map(([k, label]) => <Option key={k} label={label} role="radio" checked={d.sort === k} pick={() => set({ sort: k })} count={null} />)
+      case 'sort': return sorts.map(([k, label]) => <Option key={k} label={label} role="radio" checked={d.sort === k} pick={() => set({ sort: k })} count={null} />)
       case 'genres': return GENRE_OPTIONS.map((g) => (
         <Option key={g} label={g} role="checkbox" checked={d.genres.includes(g)} count={count({ genres: [g] })}
           pick={() => set({ genres: d.genres.includes(g) ? d.genres.filter((x) => x !== g) : [...d.genres, g] })} />
@@ -134,11 +141,11 @@ export function FilterDrawer({ open, onClose, init, yearsNote, services, noun, c
           <section className="fd-pane" inert={sub !== null} aria-label="Sort and filter">
             <div className="fd-head">
               <h2>Sort and filter</h2>
-              <button type="button" disabled={!any} onClick={() => setD(NO_FILTERS)}>Clear all</button>
+              <button type="button" disabled={!any} onClick={() => setD({ ...NO_FILTERS, sort: firstSort })}>Clear all</button>
             </div>
             <div className="fd-list noscroll" ref={rows}>
               <button type="button" className="fd-row" data-row="sort" onClick={() => go('sort')}>
-                <span>Sort by</span><small data-set>{sortName(d.sort)}</small><Icon name="chevron_right" size={16} />
+                <span>Sort by</span><small data-set>{sorts.find((x) => x[0] === d.sort)?.[1] ?? ''}</small><Icon name="chevron_right" size={16} />
               </button>
               {services.length > 0 && (
                 <button type="button" role="switch" aria-checked={d.mine} className="wl-switch fd-switch" onClick={() => set({ mine: !d.mine })}>
@@ -147,7 +154,7 @@ export function FilterDrawer({ open, onClose, init, yearsNote, services, noun, c
                 </button>
               )}
               <h3>Filter</h3>
-              {(['genres', 'decade', 'rating', 'length', 'lang'] as const).map((k) => (
+              {shownRows.map((k) => (
                 <button key={k} type="button" className="fd-row" data-row={k} onClick={() => go(k)}>
                   <span>{TITLES[k]}</span><small data-set={notes[k] ? '' : undefined}>{notes[k] || 'Any'}</small><Icon name="chevron_right" size={16} />
                 </button>
@@ -170,4 +177,37 @@ export function FilterDrawer({ open, onClose, init, yearsNote, services, noun, c
       <div className="sheet-action fd-action"><Button disabled={none} onClick={() => { if (!none) apply(d) }}>{show}</Button></div>
     </Sheet>
   )
+}
+
+/** What a title needs for the drawer's filters to be checked on the phone (Browse lists, Watchlist). */
+export type Facets = { year: number | null; genres?: string[] | null; rating?: number | null; runtime?: number | null; lang?: string | null; services: string[] }
+
+/** Does a title pass the draft? `mine`: the person's services. */
+export function passesDraft(t: Facets, d: Draft, mine: string[]): boolean {
+  if (d.mine && mine.length && !t.services.some((s) => mine.includes(s))) return false
+  if (d.genres.length) { const want = d.genres.flatMap(genreNames); if (!t.genres?.some((g) => want.includes(g))) return false }
+  if (d.decade !== null) {
+    const y = t.year
+    if (y === null || (d.decade === 0 ? y >= 1980 : y < d.decade || y > d.decade + 9)) return false
+  }
+  if (d.rating && !((t.rating ?? 0) >= d.rating)) return false
+  if (d.length) {
+    const m = t.runtime ?? null
+    if (m === null || (d.length === 'short' ? m >= 90 : d.length === 'mid' ? m > 120 : m <= 120)) return false
+  }
+  if (d.lang && t.lang !== d.lang) return false
+  return true
+}
+
+/** The chips for what a draft has on (sort isn't a filter; it gets a chip only when not the first sort). */
+export function draftChips(d: Draft, set: (d: Draft) => void, sorts: [string, string][], firstSort: string): { key: string; label: string; drop: () => void }[] {
+  return [
+    ...(d.decade !== null ? [{ key: 'decade', label: decadeName(d.decade), drop: () => set({ ...d, decade: null }) }] : []),
+    ...d.genres.map((g) => ({ key: `g:${g}`, label: g, drop: () => set({ ...d, genres: d.genres.filter((x) => x !== g) }) })),
+    ...(d.rating ? [{ key: 'rating', label: `IMDb ${d.rating}+`, drop: () => set({ ...d, rating: 0 }) }] : []),
+    ...(d.length ? [{ key: 'length', label: lengthName(d.length), drop: () => set({ ...d, length: null }) }] : []),
+    ...(d.lang ? [{ key: 'lang', label: langName(d.lang), drop: () => set({ ...d, lang: null }) }] : []),
+    ...(d.mine ? [{ key: 'mine', label: 'My services', drop: () => set({ ...d, mine: false }) }] : []),
+    ...(d.sort !== firstSort ? [{ key: 'sort', label: sorts.find((x) => x[0] === d.sort)?.[1] ?? '', drop: () => set({ ...d, sort: firstSort }) }] : []),
+  ]
 }

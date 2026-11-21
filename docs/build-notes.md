@@ -314,3 +314,10 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Scrolling up: the frame leaves at the page's speed and the picture inside drifts back 170 px over 540 px (about two thirds of the page's speed). Both run on the page's scroll timeline.
 - The shade, title and dots stay in the page and move with it. The picture no longer grows on a pull; it stays still and the page slides down over it.
 - Keyboard closing on Search: the field sinks over 340 ms with cubic-bezier(0.4, 0, 0.2, 1), a soft start and landing, instead of matching the keyboard's abrupt 180 ms fall.
+
+## Sort and filter drawer in Browse lists and the Watchlist (21 Nov)
+
+- The same drawer as Search, behind each tune button, with what's on as removable chips under the type pills (no count or dot on the button).
+- Browse lists: sorts Highest rated / Newest / Most popular (the list's own first); a list that already is a genre, decade or length doesn't offer that filter. Filters apply to the list as loaded (up to 90 titles); changing the sort loads the list again, so its count shows after.
+- Watchlist: sorts Recently added / Leaving soonest / Highest rated / A–Z; all filters.
+- "Only on my services" is hidden while no services are picked, as in Search.
