@@ -13,7 +13,7 @@ import {
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
 import { FilterDrawer, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
+import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
 import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
@@ -116,10 +116,12 @@ const Skeleton = () => (
 
 function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
+  const li = useRef<HTMLLIElement>(null)
+  const close = useNearScreen(li, near)
   return (
-    <li>
+    <li ref={li}>
       <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
-        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
         {h.rating !== null && <span className="s-rating"><span>IMDb</span><b>{h.rating.toFixed(1)}</b></span>}
       </a>

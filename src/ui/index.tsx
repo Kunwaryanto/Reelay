@@ -109,9 +109,36 @@ export function ServiceMark({ service }: { service: string }) {
   return <span className="mark-text">{(SERVICE_NAME[service] ?? service).toUpperCase()}</span>
 }
 
-// A poster row near the screen (about one screen ahead) loads all its posters, so they're usually ready
+// A poster row near the screen (about a screen and a half ahead) loads all its posters, so they're usually ready
 // by the time you scroll to them. Safari's own lazy loading only starts when an image is almost on screen.
 const NearContext = createContext(false)
+
+/**
+ * True once the element is within about a screen and a half of what's showing in its page: time to load its
+ * picture, ahead of the scroll. One observer per page, shared by everything in it.
+ */
+const nearObservers = new WeakMap<Element, { io: IntersectionObserver; on: WeakMap<Element, () => void> }>()
+export function useNearScreen(ref: React.RefObject<HTMLElement | null>, skip = false) {
+  const [near, setNear] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    const page = el?.closest('.page')
+    if (!el || !page || skip || near) return
+    let o = nearObservers.get(page)
+    if (!o) {
+      const on = new WeakMap<Element, () => void>()
+      // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
+      const io = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { on.get(e.target)?.(); io.unobserve(e.target) } },
+        { root: page, rootMargin: '150% 0px' })
+      nearObservers.set(page, o = { io, on })
+    }
+    const { io, on } = o
+    on.set(el, () => setNear(true))
+    io.observe(el)
+    return () => { io.unobserve(el); on.delete(el) }
+  }, [ref, skip, near])
+  return near
+}
 
 /**
  * A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the
@@ -121,7 +148,11 @@ function wasDecoded(src: string | null | undefined) { return !!src && decoded.ha
 function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
 
 export function Cover({ path, service, eager, sizes = '147px' }: { path: string | null; service?: string; eager?: boolean; sizes?: string }) {
-  const near = useContext(NearContext)
+  const inRow = useContext(NearContext)
+  const box = useRef<HTMLDivElement>(null)
+  // in a grid (no row to speak for it), each poster watches for itself
+  const close = useNearScreen(box, eager || inRow)
+  const near = inRow || close
   const src = tmdbImage(path, 'w342')
   const [ready, setReady] = useState(!path || wasDecoded(src))
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => { markDecoded(src); setReady(true) }) }
@@ -129,7 +160,7 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
   const pic = useRef<HTMLImageElement>(null)
   useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
   return (
-    <div className="cover" data-ready={ready}>
+    <div className="cover" data-ready={ready} ref={box}>
       {path && (
         <img ref={pic} src={src} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
           loading={eager || near ? undefined : 'lazy'} decoding="async" onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
@@ -228,7 +259,7 @@ export function PosterRow({ children }: { children: ReactNode }) {
     if (!el || near) return
     // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setNear(true) },
-      { root: el.closest('.page'), rootMargin: '100% 0px' })
+      { root: el.closest('.page'), rootMargin: '150% 0px' })
     io.observe(el)
     return () => io.disconnect()
   }, [near])

@@ -7,6 +7,8 @@
     <meta name="description" content="Where films and series stream in Sweden." />
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
+    <!-- Black from the very first frame: until the stylesheet arrives, a dark-scheme page is Safari's dark grey, which showed as a one-frame flash when opening the app -->
+    <style>html, body, #root { background: #000; }</style>
 
     <!-- Home Screen web app (see docs/build-notes.md, Home Screen setup) -->
     <link rel="manifest" href="/manifest.webmanifest" />
