@@ -13,6 +13,7 @@ export type Hit = {
   rating: number | null
   genres: string[]
   lang: string | null
+  runtime: number | null
 }
 
 export type Filters = {
@@ -23,6 +24,10 @@ export type Filters = {
   genres?: string[]
   lang?: string
   leaving?: boolean
+  /** from the filter drawer */
+  minRating?: number
+  length?: 'short' | 'mid' | 'long' // under 90 min, up to 2 h, over 2 h
+  services?: string[]
 }
 
 /** A word in the query that became a filter chip. */
@@ -123,11 +128,11 @@ const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
-  genres: string[] | null; original_language: string | null
+  genres: string[] | null; original_language: string | null; runtime_min: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
   scores: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null
 }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,scores(imdb_rating)'
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,scores(imdb_rating)'
 
 function toHit(r: Raw): Hit {
   const score = Array.isArray(r.scores) ? r.scores[0] : r.scores
@@ -136,7 +141,7 @@ function toHit(r: Raw): Hit {
     id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
-    rating: score?.imdb_rating ?? null, genres: r.genres ?? [], lang: r.original_language,
+    rating: score?.imdb_rating ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null,
   }
 }
 
@@ -148,6 +153,12 @@ function passes(h: Hit, f: Filters): boolean {
   if (f.genres && !f.genres.some((g) => h.genres.includes(g))) return false
   if (f.lang && h.lang !== f.lang) return false
   if (f.leaving && !(h.leaves && h.leaves <= inDays(30))) return false
+  if (f.services && !h.services.some((s) => f.services!.includes(s))) return false
+  if (f.minRating && !(h.rating !== null && h.rating >= f.minRating)) return false
+  if (f.length) {
+    const m = h.runtime
+    if (m === null || (f.length === 'short' ? m >= 90 : f.length === 'mid' ? m > 120 : m <= 120)) return false
+  }
   return true
 }
 
@@ -161,16 +172,30 @@ async function byName(text: string, max = 60): Promise<Hit[]> {
   return ids.map((id) => byId.get(id)).filter((h): h is Hit => !!h)
 }
 
-/** Streaming titles that fit the filters, most popular first. */
-export async function byFilters(f: Filters, max = 60): Promise<Hit[]> {
-  let q = supabase.from('titles').select(`${FIELDS},availability!inner(service_id,leaves_on)`)
+/** Put the filters on a query of streaming titles (its select must embed availability, and scores for a rating). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function narrow<Q>(query: Q, f: Filters): Q {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = query as any
   if (f.kind) q = q.eq('kind', f.kind)
   if (f.service) q = q.eq('availability.service_id', f.service)
+  if (f.services) q = q.in('availability.service_id', f.services)
   if (f.leaving) q = q.not('availability.leaves_on', 'is', null).lte('availability.leaves_on', inDays(30))
   if (f.from !== undefined) q = q.gte('year', f.from)
   if (f.to !== undefined) q = q.lte('year', f.to)
   if (f.genres) q = q.overlaps('genres', f.genres)
   if (f.lang) q = q.eq('original_language', f.lang)
+  if (f.minRating) q = q.gte('scores.imdb_rating', f.minRating)
+  if (f.length === 'short') q = q.lt('runtime_min', 90)
+  if (f.length === 'mid') q = q.lte('runtime_min', 120)
+  if (f.length === 'long') q = q.gt('runtime_min', 120)
+  return q as Q
+}
+
+/** Streaming titles that fit the filters, most popular first. */
+export async function byFilters(f: Filters, max = 60): Promise<Hit[]> {
+  const fields = f.minRating ? FIELDS.replace('scores(', 'scores!inner(') : FIELDS
+  const q = narrow(supabase.from('titles').select(`${fields},availability!inner(service_id,leaves_on)`), f)
   const rows = unwrap(await q.order('popularity', { ascending: false }).limit(max) as never) as Raw[]
   return rows.map(toHit)
 }
@@ -189,35 +214,87 @@ async function people(text: string): Promise<PersonHit[]> {
 /** `kind`: the words asked for films or series. That picks the type pill; it isn't a filter chip. */
 export type Found = { hits: Hit[]; tokens: Token[]; people: PersonHit[]; kind?: Hit['kind'] }
 
+// Lookups made again within a few minutes (the same words with other filters, counts in the filter drawer) are reused.
+const memo = new Map<string, Promise<unknown>>()
+function once<T>(key: string, run: () => Promise<T>): Promise<T> {
+  let p = memo.get(key) as Promise<T> | undefined
+  if (!p) {
+    p = run()
+    memo.set(key, p)
+    p.catch(() => memo.delete(key))
+    setTimeout(() => memo.delete(key), 5 * 60 * 1000)
+    if (memo.size > 120) memo.delete(memo.keys().next().value!)
+  }
+  return p
+}
+const named = (text: string, max: number) => once(`name:${max}:${text.toLowerCase()}`, () => byName(text, max))
+
+const some = (f: Filters) => Object.values(f).some((v) => v !== undefined)
+const combine = (f: Filters, extra: Filters): Filters => ({ ...f, ...extra, genres: f.genres && extra.genres ? [...f.genres, ...extra.genres] : extra.genres ?? f.genres })
+
+/** What a search is made of: titles found by name (`pool`), or none when the words are only filters. */
+type Plan = { tokens: Token[]; people: PersonHit[]; kind?: Hit['kind']; f: Filters; pool: Hit[] | null }
+
 /**
- * Search for what was typed. Words that name a service, type, decade, genre or language become filters,
+ * Words that name a service, type, decade, genre or language become filters,
  * unless the whole phrase is a title's name ("Modern Family", "American Horror Story"): then it's just a name.
  * `removed` are the chips the person took off again.
  */
-export async function search(typed: string, removed: string[]): Promise<Found> {
+async function plan(typed: string, removed: string[]): Promise<Plan> {
   const text = typed.replace(/\s+/g, ' ').trim()
-  if (text.length < 2) return { hits: [], tokens: [], people: [] }
+  if (text.length < 2) return { tokens: [], people: [], f: {}, pool: [] }
   const parsed = parseQuery(text)
   if (!parsed.tokens.length) {
-    const [hits, found] = await Promise.all([byName(text), people(text).catch(() => [])])
-    return { hits, tokens: [], people: found }
+    const [hits, found] = await Promise.all([named(text, 60), once(`people:${text.toLowerCase()}`, () => people(text)).catch(() => [])])
+    return { tokens: [], people: found, f: {}, pool: hits }
   }
 
-  const phrase = text.includes(' ') ? await byName(text, 30) : []
+  const phrase = text.includes(' ') ? await named(text, 30) : []
   const whole = fold(text)
-  if (phrase.some((h) => fold(h.title).includes(whole))) return { hits: phrase, tokens: [], people: [] }
+  if (phrase.some((h) => fold(h.title).includes(whole))) return { tokens: [], people: [], f: {}, pool: phrase }
 
   const kind = parsed.tokens.find((t) => t.key === 'kind')?.filter.kind
   const tokens = parsed.tokens.filter((t) => t.key !== 'kind' && !removed.includes(t.key))
   const f = merge(tokens)
-  if (parsed.rest.length >= 2) return { hits: (await byName(parsed.rest, 100)).filter((h) => passes(h, f)), tokens, people: [], kind }
-  if (!tokens.length && !kind) return { hits: [], tokens, people: [] }
-  if (!kind) return { hits: await byFilters(f), tokens, people: [] }
-  // enough of the kind that was asked for, plus the mixed list so the other pills have something too
-  const [asked, mixed] = await Promise.all([byFilters({ ...f, kind }), byFilters(f)])
-  const seen = new Set(asked.map((h) => h.id))
-  return { hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))], tokens, people: [], kind }
+  if (parsed.rest.length >= 2) return { tokens, people: [], kind, f, pool: await named(parsed.rest, 100) }
+  return { tokens, people: [], kind, f, pool: null }
 }
+
+/** Search for what was typed. `extra`: filters set in the filter drawer, on top of the ones in the words. */
+export async function search(typed: string, removed: string[], extra: Filters = {}): Promise<Found> {
+  const p = await plan(typed, removed)
+  const f = combine(p.f, extra)
+  const base = { tokens: p.tokens, people: p.people, kind: p.kind }
+  if (p.pool) return { ...base, hits: p.pool.filter((h) => passes(h, f)) }
+  if (!some(f) && !p.kind) return { ...base, hits: [] }
+  if (!p.kind) return { ...base, hits: await byFilters(f) }
+  // enough of the kind that was asked for, plus the mixed list so the other pills have something too
+  const [asked, mixed] = await Promise.all([byFilters({ ...f, kind: p.kind }), byFilters(f)])
+  const seen = new Set(asked.map((h) => h.id))
+  return { ...base, hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))] }
+}
+
+/**
+ * How many titles a search with these filters has (for the filter drawer). By-name searches count what was
+ * found; filter-only searches ask the database, so the number can be larger than the 60 the list shows.
+ * Null when the database gave no count.
+ */
+export async function countWith(typed: string, removed: string[], extra: Filters, kind?: Hit['kind']): Promise<number | null> {
+  const p = await plan(typed, removed)
+  const f = { ...combine(p.f, extra), ...(kind ? { kind } : {}) }
+  if (p.pool) return p.pool.filter((h) => passes(h, f)).length
+  if (!some(combine(p.f, extra)) && !p.kind) return 0
+  return once(`count:${JSON.stringify(f)}`, async () => {
+    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${f.minRating ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
+    if (res.error) throw new Error(res.error.message)
+    return res.count as number | null
+  })
+}
+
+/** The genres and languages the filter drawer offers. */
+export const GENRE_OPTIONS = GENRES.map(([, label]) => label)
+export const genreNames = (label: string) => GENRES.find((g) => g[1] === label)?.[2] ?? []
+export const LANG_OPTIONS: [string, string][] = [['en', 'English'], ['sv', 'Swedish'], ['da', 'Danish'], ['no', 'Norwegian'], ['fi', 'Finnish'], ['fr', 'French'], ['de', 'German'], ['es', 'Spanish'], ['it', 'Italian'], ['ja', 'Japanese'], ['ko', 'Korean']]
 
 /**
  * What the words alone say, before the server answers: when every word is a filter ("90s films"), the chips and

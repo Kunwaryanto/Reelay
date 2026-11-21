@@ -257,3 +257,19 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 • Pages bounce natively at both ends (overscroll-behavior-y: contain); the tab bar keeps its state during the bounce. Pull to refresh on Now and title pages works like a native iOS list (are.na is the reference): a pull that starts at the top is handled by us, not the browser bounce. The page follows the finger with rubber-band resistance; the wheel (8 thin spokes, grey) sits in the middle of the gap, fills in spoke by spoke and spins once pulled 60 px past the status bar; on release the page eases (420 ms) to rest 48 px below the status bar, waits at least 900 ms, then eases home.
 • Icons: weight = 6000 / size, clamped 250–400, so strokes look the same at every size.
 • Now mixes films and series, recent and classics, in every row, and shows a title once on the page (hero included); Leaving soon lists everything that leaves.
+
+## Update (v300)
+
+- The app asks the server whether a newer version is out when it opens and when it comes back to the front (at most every 10 minutes).
+- New version out: a 5 px white dot beside the Settings cog on Now (pops in once), and a card at the top of Settings, "A new version is ready" with an Update button (spinner, then the app reloads into the new version; sign-in and saved data stay).
+- Settings › About › Version shows the build; tap to check: "Check for update" → spinner → "Up to date" or "Update ready".
+- The Testing section keeps only "Show onboarding again", the layout readout and the last failed load.
+
+## Search: Sort and filter drawer (v300 D)
+
+- Behind the tune button, which shows a white count of the filters that are on (sort doesn't count). What's on shows as chips above the results: the ones read from the words, the drawer's, and a non-default sort.
+- One list: Sort by, Only on my services (hidden when no services are picked), then Filter: Genre, Released, IMDb rating, Length, Original language. Each row shows its value (white) or "Any" (grey). Clear all in the header.
+- A row slides in to its options (380 ms, the list behind fades to 40%); Back returns. Genre takes several (any of them); the others take one. Each option shows how many results it gives; one that gives none is dimmed and can't be picked.
+- Changes are a draft: "Show n films / series / results" applies them; closing any other way drops them. The button reads "No films match" and is off when the draft gives nothing.
+- A filter set in the drawer replaces what the words say about the same thing ("90s films", then Released: 80s).
+- Counts: by-name searches count what was found; filter-only searches ask the database, so the number can be larger than the 60 results the list shows.

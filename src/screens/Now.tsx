@@ -5,6 +5,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
+import { useNewVersion } from '../lib/update'
 import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card): string {
@@ -142,6 +143,7 @@ export default function Now() {
   const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
+  const fresh = useNewVersion()
   const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
   // Launch: ready means the data is in and the first hero picture is decoded. Ready within 300 ms: Now just rises.
   // Later than that: the wordmark rises on black and always finishes (900 ms) before handing over; still waiting
@@ -179,7 +181,7 @@ export default function Now() {
     <>
     <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
       <h1 className="sr-only">Now</h1>
-      <div className="now-settings"><IconButton label="Settings" glass onClick={() => push('/settings')}><GearIcon /></IconButton></div>
+      <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>
 
       {!show && !q.error && phase === 'mark' && <div className="launch"><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (

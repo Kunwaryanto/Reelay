@@ -6,8 +6,8 @@ import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
 import { clearSavedData, lastLoadError, useQuery } from '../lib/query'
-import { BUILD, layoutReadout, newVersionOut, reloadApp } from '../lib/update'
-import { BackButton, Button, Icon, Spinner, useToast } from '../ui'
+import { BUILD, checkVersion, layoutReadout, reloadApp, useNewVersion } from '../lib/update'
+import { BackButton, Button, Icon, SmallButton, Spinner, useToast } from '../ui'
 
 const DAY = 24 * 60 * 60 * 1000
 const chevron = <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)', marginLeft: -10 }} />
@@ -91,9 +91,15 @@ export default function Settings() {
   const waiting = (invites.data ?? []).filter((i) => inviteState(i) === 'waiting').length
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState('')
-  const [fresh, setFresh] = useState(false)
+  const fresh = useNewVersion()
   const [reloading, setReloading] = useState(false)
-  useEffect(() => { newVersionOut().then(setFresh) }, [])
+  const [check, setCheck] = useState<'idle' | 'busy' | 'none'>('idle')
+  const look = async () => {
+    if (fresh || check === 'busy') return
+    setCheck('busy')
+    const [found] = await Promise.all([checkVersion(), new Promise((r) => setTimeout(r, 600))])
+    setCheck(found ? 'idle' : 'none')
+  }
   const [readout, setReadout] = useState('')
   useEffect(() => { const t = setTimeout(() => setReadout(layoutReadout()), 600); return () => clearTimeout(t) }, [])
   const names = (services.data ?? []).filter((s) => mine.includes(s.id)).map((s) => s.name)
@@ -105,6 +111,12 @@ export default function Settings() {
 
   return (
     <Page title="Settings">
+      {fresh && (
+        <section className="update-card" aria-label="Update">
+          <span className="row-text"><b>A new version is ready</b><small>Takes a few seconds. You stay signed in.</small></span>
+          <SmallButton solid busy={reloading} disabled={reloading} onClick={() => { setReloading(true); void reloadApp() }}>{reloading ? '' : 'Update'}</SmallButton>
+        </section>
+      )}
       <section className="settings-block set-first">
         <ul className="rows">
           <Link label="Your services" note={services.data ? servicesLabel(names) : ''} to="/settings/services" />
@@ -121,25 +133,23 @@ export default function Settings() {
         </ul>
       </section>
       <section className="settings-block">
-        <h2 className="block-title">More</h2>
+        <h2 className="block-title">About</h2>
         <ul className="rows">
           <Link label="Region" note="Sweden" to="/settings/region" />
           <Link label="Credits" to="/settings/credits" />
           <Link label="Privacy" to="/settings/privacy" />
+          <li><button type="button" onClick={look} aria-live="polite">
+            <span className="row-text"><b>Version</b><small>{BUILD}</small></span>
+            <span className="row-note">{check === 'busy' ? <Spinner light label="Checking" /> : fresh ? 'Update ready' : check === 'none' ? 'Up to date' : 'Check for update'}</span>
+          </button></li>
         </ul>
-        <p className="version">Version 0.1</p>
       </section>
       {/* Temporary while testing */}
       <section className="settings-block">
         <h2 className="block-title">Testing</h2>
         <ul className="rows">
-          <li><button type="button" disabled={reloading} onClick={() => { setReloading(true); reloadApp() }}>
-            <span className="row-text"><b>Reload Reelay</b><small>Gets the latest version without adding it to the Home Screen again.</small></span>
-            {reloading ? <Spinner light /> : fresh && <span className="row-note">New version</span>}
-          </button></li>
           <li><button type="button" onClick={() => push('/onboarding')}><span className="row-text"><b>Show onboarding again</b></span></button></li>
         </ul>
-        <p className="version">Build {BUILD}</p>
         <p className="version">{readout}</p>
         {lastLoadError() && <p className="version">Last failed load: {lastLoadError()}</p>}
       </section>

@@ -9,15 +9,33 @@ import { takeKeyboard } from '../lib/keyboard'
 import { useNav, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import {
-  addRecent, guess, loadIdeas, loadPopular, readRecents, search, writeRecents,
-  type Found, type Hit, type Idea, type Recent,
+  addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
+  type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
-import { Button, Icon, LoadFailed, Sheet, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
+import { FilterDrawer, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
+import { Icon, LoadFailed, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
 import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
-type Sort = 'best' | 'rated' | 'newest'
-const SORTS: [Sort, string][] = [['best', 'Best match'], ['rated', 'Highest rated'], ['newest', 'Newest']]
+
+/**
+ * What the filter drawer has set, on top of the words. A key that is present has been decided in the drawer, even
+ * when its value is "any" (null, []): it then replaces what the words say about it ("90s" typed, Released set to 80s).
+ */
+type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; rating?: number; length?: Len }
+const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
+/** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
+const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
+function toFilters(x: Extra, services: string[] | null): Filters {
+  const f: Filters = {}
+  if (typeof x.decade === 'number') { if (x.decade === 0) f.to = 1979; else { f.from = x.decade; f.to = x.decade + 9 } }
+  if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
+  if (x.lang) f.lang = x.lang
+  if (x.rating) f.minRating = x.rating
+  if (x.length) f.length = x.length
+  if (services) f.services = services
+  return f
+}
 
 const nameOf = (id: string) => SERVICE_NAME[id] ?? id
 const metaOf = (h: Hit) => [kindWord(h.kind), h.year, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden'].filter(Boolean).join(' · ')
@@ -25,7 +43,7 @@ const metaOf = (h: Hit) => [kindWord(h.kind), h.year, h.services[0] ? nameOf(h.s
 // Answers from the last few minutes, so a search made again (or one of the three ideas, fetched ahead) shows at once.
 const KEEP = 5 * 60 * 1000
 const answers = new Map<string, { at: number; found: Found }>()
-const keyOf = (text: string, removed: string[]) => `${text.toLowerCase()}|${removed.join(',')}`
+const keyOf = (text: string, removed: string[], extra: Filters = {}) => `${text.toLowerCase()}|${removed.join(',')}|${Object.keys(extra).length ? JSON.stringify(extra) : ''}`
 const kept = (key: string) => { const a = answers.get(key); return a && Date.now() - a.at < KEEP ? a.found : null }
 const keep = (key: string, found: Found) => {
   answers.delete(key)
@@ -36,11 +54,11 @@ const keep = (key: string, found: Found) => {
 const warm = (text: string) => { const key = keyOf(text, []); if (!kept(key)) search(text, []).then((found) => keep(key, found), () => {}) }
 
 /** Run the search a moment after typing stops; keep showing the last results until the new ones arrive. */
-function useSearch(typed: string, removed: string[]) {
+function useSearch(typed: string, removed: string[], extra: Filters) {
   const [state, setState] = useState<{ key: string; found: Found | null; error: boolean }>({ key: '', found: null, error: false })
   const [again, setAgain] = useState(0)
   const text = typed.replace(/\s+/g, ' ').trim()
-  const key = text.length < 2 ? '' : keyOf(text, removed)
+  const key = text.length < 2 ? '' : keyOf(text, removed, extra)
   const ready = key ? kept(key) : null
 
   useEffect(() => {
@@ -49,13 +67,13 @@ function useSearch(typed: string, removed: string[]) {
     if (kept(key)) return
     let stale = false
     const t = setTimeout(() => {
-      search(text, removed).then(
+      search(text, removed, extra).then(
         (found) => { keep(key, found); if (!stale) setState({ key, found, error: false }) },
         () => { if (!stale) setState({ key, found: null, error: true }) },
       )
     }, 220)
     return () => { stale = true; clearTimeout(t) }
-    // `key` stands for text and removed
+    // `key` stands for text, removed and extra
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, again])
 
@@ -120,6 +138,7 @@ export default function Search() {
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('best')
   const [onlyMine, setOnlyMine] = useState(false)
+  const [extra, setExtra] = useState<Extra>({})
   const [sheet, setSheet] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [typing, setTyping] = useState(false)
@@ -134,7 +153,8 @@ export default function Search() {
   const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, { maxAge: 60 * 60 * 1000 })
   const popular = useQuery<Hit[]>('search-popular', loadPopular, { maxAge: 60 * 60 * 1000 })
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
-  const hasPicked = picked.length > 0 // until Your services is set up: "mine" means streaming anywhere
+  const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
+  const myOnly = onlyMine && hasPicked
 
   useEffect(() => {
     const set = () => setOnline(navigator.onLine)
@@ -154,12 +174,15 @@ export default function Search() {
     return () => clearTimeout(t)
   }, [tab])
 
-  const { found, error, waiting, retry } = useSearch(q, removed)
+  // chips from the words that the drawer has replaced
+  const off = useMemo(() => [...removed, ...parseQuery(q).tokens.filter((t) => { const s = slot(t.key); return s !== null && extra[s] !== undefined }).map((t) => t.key)], [q, removed, extra])
+  const xf = useMemo(() => toFilters(extra, myOnly ? picked : null), [extra, myOnly, picked])
+  const { found, error, waiting, retry } = useSearch(q, off, xf)
   const hasQ = q.trim().length > 0
   // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
   useEffect(() => { if (found?.kind) setKind(found.kind) }, [found])
   // While waiting, the words themselves already say which chips and type apply ("90s films")
-  const early = useMemo(() => (waiting ? guess(q, removed) : null), [waiting, q, removed])
+  const early = useMemo(() => (waiting ? guess(q, off) : null), [waiting, q, off])
   useEffect(() => { if (early?.kind) setKind(early.kind) }, [early?.kind])
   const tokens = early?.tokens ?? found?.tokens ?? []
   const skeleton = useLate(waiting && !found, 150)
@@ -167,7 +190,7 @@ export default function Search() {
   useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
 
   const all = found?.hits ?? []
-  const mine = all.filter((h) => !onlyMine || (hasPicked ? h.services.some((s) => picked.includes(s)) : h.services.length > 0))
+  const mine = all
   const folks = found?.people ?? []
   const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
   const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || h.kind === kind)
@@ -176,13 +199,56 @@ export default function Search() {
 
   const remember = (r: Recent) => setRecents((old) => { const next = addRecent(old, r); writeRecents(next); return next })
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
-  const change = (text: string) => { setQ(text); setRemoved([]) }
+  const change = (text: string) => { setQ(text); setRemoved([]); if (!text) setExtra({}) }
   const open = (h: Hit) => {
     remember({ t: 'title', id: h.id, text: h.title, sub: [kindWord(h.kind), h.year].filter(Boolean).join(' · '), poster_path: h.poster_path })
     input.current?.blur()
     push(`/title/${h.id}`)
   }
-  const run = (text: string) => { change(text); setKind(guess(text, [])?.kind ?? 'all'); setDrawer(false) }
+  const run = (text: string) => { change(text); setExtra({}); setKind(guess(text, [])?.kind ?? 'all'); setDrawer(false) }
+
+  // ---- Sort and filter drawer ----
+  // what is on, for the chips and the count on the button (sort isn't a filter, so it doesn't count)
+  const less = (patch: Extra) => setExtra((x) => ({ ...x, ...patch }))
+  const xchips: { key: string; label: string; drop: () => void }[] = [
+    ...(typeof extra.decade === 'number' ? [{ key: 'x-decade', label: decadeName(extra.decade), drop: () => less({ decade: null }) }] : []),
+    ...(extra.genres ?? []).map((g) => ({ key: `x-genre:${g}`, label: g, drop: () => less({ genres: (extra.genres ?? []).filter((x) => x !== g) }) })),
+    ...(extra.rating ? [{ key: 'x-rating', label: `IMDb ${extra.rating}+`, drop: () => less({ rating: undefined }) }] : []),
+    ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
+    ...(extra.lang ? [{ key: 'x-lang', label: langName(extra.lang), drop: () => less({ lang: null }) }] : []),
+    ...(myOnly ? [{ key: 'x-mine', label: 'My services', drop: () => setOnlyMine(false) }] : []),
+  ]
+  const filtersOn = tokens.filter((t) => !t.key.startsWith('genre:')).length + (tokens.some((t) => t.key.startsWith('genre:')) || extra.genres?.length ? 1 : 0)
+    + xchips.filter((c) => !c.key.startsWith('x-genre:')).length
+  // the drawer opens on how things stand: what it set itself, else what the words say
+  const yearsToken = tokens.find((t) => t.key === 'years')
+  const init: Draft = {
+    sort, mine: myOnly, rating: extra.rating ?? 0, length: extra.length ?? null,
+    genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
+    decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
+    lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
+  }
+  const yearsNote = extra.decade === undefined && yearsToken && decadeOf(yearsToken) === null ? yearsToken.label : ''
+  /** How many results a draft would give: the draft stands in for what the words say about genre, years and language. */
+  const countOf = (d: Draft): Count => {
+    const keepYears = d.decade === null && yearsNote !== ''
+    const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
+    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null)
+    const k = kind === 'film' || kind === 'series' ? kind : undefined
+    return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
+  }
+  const apply = (d: Draft) => {
+    setSort(d.sort)
+    setOnlyMine(d.mine)
+    setExtra((x) => {
+      const next: Extra = { ...x, rating: d.rating || undefined, length: d.length ?? undefined }
+      if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres
+      if (d.decade !== init.decade) next.decade = d.decade
+      if (d.lang !== init.lang) next.lang = d.lang
+      return next
+    })
+    setSheet(false)
+  }
   // A search counts as made once its results have been on screen for a moment (no need to press Search).
   const settled = found && !waiting && found.hits.length + found.people.length > 0 ? q.trim() : ''
   useEffect(() => {
@@ -218,12 +284,9 @@ export default function Search() {
   const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0
   const other: 'film' | 'series' = kind === 'film' ? 'series' : 'film'
   const nothing = !empty ? null
-    : onlyMine && all.length ? {
-      title: hasPicked ? 'None on your services' : 'None streaming right now',
-      body: hasPicked
-        ? `${all.length === 1 ? '1 match streams' : `${all.length} matches stream`} on services you don’t have.`
-        : `${all.length === 1 ? '1 match isn’t' : `${all.length} matches aren’t`} on a service in Sweden right now.`,
-      action: hasPicked ? 'Show all services' : 'Show them', run: () => setOnlyMine(false), popular: false,
+    : myOnly ? {
+      title: 'None on your services', body: 'There may be matches on services you don’t have.',
+      action: 'Show all services', run: () => setOnlyMine(false), popular: false,
     }
       : (kind === 'film' || kind === 'series') && mine.length ? {
         title: kind === 'film' ? 'No films match' : 'No series match', body: '',
@@ -311,18 +374,22 @@ export default function Search() {
                     </button>
                   ))}
                 </div>
-                <button type="button" className="wl-tune" aria-label="Sort and filter" onClick={() => { input.current?.blur(); setSheet(true) }}>
+                <button type="button" className="wl-tune s-tune" aria-haspopup="dialog" aria-label={filtersOn ? `Sort and filter, ${filtersOn} on` : 'Sort and filter'} onClick={() => { input.current?.blur(); setSheet(true) }}>
                   <Icon name="tune" size={22} />
-                  {(sort !== 'best' || onlyMine) && <i aria-hidden="true" />}
+                  {filtersOn > 0 && <b aria-hidden="true">{filtersOn}</b>}
                 </button>
               </div>
-              {tokens.length > 0 && (
+              {tokens.length + xchips.length + (sort !== 'best' ? 1 : 0) > 0 && (
                 <div className="s-chips">
                   {tokens.map((t) => (
                     <button key={t.key} type="button" aria-label={`Remove filter ${t.label}`} onClick={() => setRemoved((r) => [...r, t.key])}>
                       {t.label}<Icon name="close" size={16} />
                     </button>
                   ))}
+                  {xchips.map((c) => (
+                    <button key={c.key} type="button" aria-label={`Remove filter ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>
+                  ))}
+                  {sort !== 'best' && <button type="button" aria-label="Back to best match" onClick={() => setSort('best')}>{sortName(sort)}<Icon name="close" size={16} /></button>}
                 </div>
               )}
 
@@ -387,22 +454,9 @@ export default function Search() {
 
       {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
-      {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
-        <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('best'); setOnlyMine(false) }}>Reset</button></div>
-        <p className="wl-sheet-label">Sort by</p>
-        <div role="radiogroup" aria-label="Sort by">
-          {SORTS.map(([k, label]) => (
-            <button key={k} type="button" role="radio" aria-checked={sort === k} className="wl-option" onClick={() => setSort(k)}>
-              {label}<Icon name="check" size={20} style={{ opacity: sort === k ? 1 : 0 }} />
-            </button>
-          ))}
-        </div>
-        <button type="button" role="switch" aria-checked={onlyMine} className="wl-switch" onClick={() => setOnlyMine((v) => !v)}>
-          <span><b>{hasPicked ? 'Only on my services' : 'Only what’s streaming'}</b>{hasPicked && <small>{picked.map(nameOf).slice(0, 3).join(', ')}</small>}</span>
-          <i aria-hidden="true" />
-        </button>
-        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length + shownPeople.length === 1 ? '1 result' : `${list.length + shownPeople.length} results`}</Button></div>
-      </Sheet>, document.getElementById('root') ?? document.body)}
+      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
+        services={picked.map(nameOf)} noun={kind === 'film' ? ['film', 'films'] : kind === 'series' ? ['series', 'series'] : ['result', 'results']}
+        countOf={countOf} apply={apply} />, document.getElementById('root') ?? document.body)}
     </main>
   )
 }
