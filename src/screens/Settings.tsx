@@ -149,6 +149,7 @@ export default function Settings() {
         <h2 className="block-title">Testing</h2>
         <ul className="rows">
           <li><button type="button" onClick={() => push('/onboarding')}><span className="row-text"><b>Show onboarding again</b></span></button></li>
+          <li><button type="button" onClick={() => push('/settings/app-links')}><span className="row-text"><b>App links</b></span></button></li>
         </ul>
         <p className="version">{readout}</p>
         {lastLoadError() && <p className="version">Last failed load: {lastLoadError()}</p>}
@@ -216,6 +217,40 @@ const CREDITS: [string, [string, string][]][] = [
   ['Data', [['TMDB', 'Titles, posters and cast'], ['JustWatch', 'Where to watch'], ['Streaming Availability', 'Leaving dates'], ['IMDb', 'IMDb rating'], ['MDBList', 'Rotten Tomatoes and Letterboxd scores'], ['Wikidata', 'Awards']]],
   ['Design', [['Inter', 'Typeface by Rasmus Andersson · SIL Open Font License'], ['Material Symbols', 'Icons by Google · Apache License 2.0']]],
 ]
+// Testing: which kind of link opens the service's app from the Home Screen app. Two known titles, each linked
+// several ways; tap each and note what opens.
+const APP_LINKS: [string, [string, string, boolean][]][] = [
+  ['Netflix · the title from your share link (70285785)', [
+    ['https link, new window (as Open in does today)', 'https://www.netflix.com/title/70285785', true],
+    ['https link, same window', 'https://www.netflix.com/title/70285785', false],
+    ['https link with /se/', 'https://www.netflix.com/se/title/70285785', true],
+    ['App scheme nflx://', 'nflx://www.netflix.com/title/70285785', false],
+    ['Search (today’s fallback)', 'https://www.netflix.com/search?q=Lupin', true],
+  ]],
+  ['HBO Max · The End of Oak Street', [
+    ['https link, new window (as Open in does today)', 'https://play.hbomax.com/movie/710798da-f811-40be-9ed9-3a7443e36278', true],
+    ['https link, same window', 'https://play.hbomax.com/movie/710798da-f811-40be-9ed9-3a7443e36278', false],
+    ['The share link as copied', 'https://play.hbomax.com/movie/710798da-f811-40be-9ed9-3a7443e36278?utm_medium=sharebutton&utm_id=A803F9B7-7703-479C-B9FF-978FF03A9E5E', true],
+    ['Search (today’s fallback)', 'https://play.hbomax.com/search?q=The%20End%20of%20Oak%20Street', true],
+  ]],
+]
+
+function AppLinks() {
+  return (
+    <Page title="App links">
+      <div className="set-small"><p>Tap each link and note whether it opens the app on the title, the app’s start, Safari, or nothing. Try with the app installed and signed in.</p></div>
+      {APP_LINKS.map(([title, rows]) => (
+        <section key={title} className="settings-block set-list">
+          <h2 className="block-title">{title}</h2>
+          <ul className="rows">{rows.map(([label, href, blank], i) => (
+            <li key={i}><a href={href} {...(blank ? { target: '_blank', rel: 'noreferrer' } : {})}><span className="row-text"><b>{label}</b><small>{href.replace(/^https:\/\//, '').slice(0, 60)}</small></span></a></li>
+          ))}</ul>
+        </section>
+      ))}
+    </Page>
+  )
+}
+
 function Credits() {
   return (
     <Page title="Credits">
@@ -317,6 +352,7 @@ export function settingsPage(path: string): ReactNode | null {
     case '/settings/services': return <Services />
     case '/settings/region': return <Region />
     case '/settings/credits': return <Credits />
+    case '/settings/app-links': return <AppLinks />
     case '/settings/privacy': return <Privacy />
     case '/settings/delete': return <Delete />
     default: return null
