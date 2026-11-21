@@ -229,8 +229,9 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* first opening: invisible while the keyboard comes up and is measured, then placed below the screen and slid up */
 .sheet[data-waiting] { opacity: 0; pointer-events: none; transition: none; }
 .sheet[data-entering] { transform: translateY(110%); transition: none; }
-/* the sheet is dragged, not scrolled */
+/* the sheet is dragged, not scrolled; a list inside scrolls without Safari's bounce, so at its top a pull down moves only the sheet */
 .sheet-body { touch-action: none; }
+.sheet-body :is(.fd-list, .ob-more) { overscroll-behavior: none; }
 /* Where iOS doesn't draw the page (under Safari's floating address bar, past the bottom of the viewport),
    it shows the page background. While a sheet is open, make that the sheet's grey so it never shows as black. */
 html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); }

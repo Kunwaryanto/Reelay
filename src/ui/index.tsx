@@ -527,6 +527,83 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     return () => d.removeEventListener('touchstart', onTouch)
   }, [open])
 
+  // Drag the sheet down to close it, from anywhere on it: rows and buttons included (a touch that moves is a drag,
+  // not a tap). A list inside scrolls first; the sheet takes over once the list is at its top, also in the middle
+  // of a gesture. Closes past a quarter of its height or on a quick flick down; otherwise springs back. Dragged
+  // up, it gives a little and springs back. Sideways movement is left to whatever scrolls sideways.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    const d = ref.current
+    if (!open || !d) return
+    type G = { x: number; y: number; mode: 'pending' | 'scroll' | 'drag' | 'ignore'; list: HTMLElement | null; from: number; dy: number; trail: [number, number][] }
+    let g: G | null = null
+    let dragged = 0
+    const scrollerOf = (t: HTMLElement) => {
+      for (let el: HTMLElement | null = t; el && el !== d; el = el.parentElement) {
+        if (el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY)) return el
+      }
+      return null
+    }
+    const start = (e: TouchEvent) => {
+      const t = e.target as HTMLElement
+      g = null
+      if (e.touches.length !== 1 || !t.closest('.sheet-body') || t.closest('input, textarea') || d.dataset.closing) return
+      const p = e.touches[0]
+      g = { x: p.clientX, y: p.clientY, mode: 'pending', list: scrollerOf(t), from: p.clientY, dy: 0, trail: [] }
+    }
+    const move = (e: TouchEvent) => {
+      if (!g || g.mode === 'ignore') return
+      const p = e.touches[0]
+      const dx = p.clientX - g.x, dy = p.clientY - g.y
+      if (g.mode === 'pending') {
+        if (Math.hypot(dx, dy) < 8) return
+        if (Math.abs(dx) > Math.abs(dy)) { g.mode = 'ignore'; return }
+        const l = g.list
+        const scrolls = l && (dy > 0 ? l.scrollTop > 0 : l.scrollTop + l.clientHeight < l.scrollHeight - 1)
+        g.mode = scrolls ? 'scroll' : 'drag'
+        g.from = p.clientY
+      }
+      if (g.mode === 'scroll') {
+        // the list has reached its top and the finger keeps going down: the sheet takes over from here
+        if (g.list && g.list.scrollTop <= 0 && p.clientY > g.from) g.mode = 'drag'
+        else { g.from = p.clientY; return }
+      }
+      if (e.cancelable) e.preventDefault()
+      const raw = p.clientY - g.from
+      g.dy = raw >= 0 ? raw : -12 * (1 - Math.exp(raw / 60)) // upward: resists, 12px at most
+      g.trail.push([e.timeStamp, p.clientY])
+      if (g.trail.length > 6) g.trail.shift()
+      d.style.setProperty('--drag', `${g.dy}px`)
+    }
+    const end = () => {
+      const was = g
+      g = null
+      if (!was || was.mode !== 'drag') return
+      dragged = Date.now()
+      const [t0, y0] = was.trail[0] ?? [0, 0]
+      const [t1, y1] = was.trail[was.trail.length - 1] ?? [0, 0]
+      const speed = t1 > t0 ? (y1 - y0) / (t1 - t0) : 0 // px per ms, over the last few moves
+      const close = was.dy > d.offsetHeight * 0.25 || (speed > 0.5 && was.dy > 16)
+      // closing: straight on down from where the finger let go, not back up first
+      if (close) d.dataset.closing = 'true'
+      d.style.removeProperty('--drag')
+      if (close) closeRef.current()
+    }
+    // a drag that started on a row or button must not also press it
+    const click = (e: MouseEvent) => { if (Date.now() - dragged < 400) { e.preventDefault(); e.stopPropagation() } }
+    d.addEventListener('touchstart', start, { passive: true })
+    d.addEventListener('touchmove', move, { passive: false })
+    d.addEventListener('touchend', end)
+    d.addEventListener('touchcancel', end)
+    d.addEventListener('click', click, true)
+    return () => {
+      d.removeEventListener('touchstart', start); d.removeEventListener('touchmove', move)
+      d.removeEventListener('touchend', end); d.removeEventListener('touchcancel', end); d.removeEventListener('click', click, true)
+      d.style.removeProperty('--drag')
+    }
+  }, [open])
+
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
     if (!open) return
@@ -541,10 +618,10 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     <dialog ref={ref} className="sheet"
 data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
-      // drag down from anywhere on the sheet (not from a field or button) to close it
+      // with a mouse: drag down from the sheet's own surface (not a field or button) to close it. Touch is handled above.
       onPointerDown={(e) => {
         const t = e.target as HTMLElement
-        if (!t.closest('.sheet-body') || t.closest('input, textarea, button, a')) return
+        if (e.pointerType === 'touch' || !t.closest('.sheet-body') || t.closest('input, textarea, button, a')) return
         drag.current = { y: e.clientY, dy: 0 }
         e.currentTarget.setPointerCapture(e.pointerId)
       }}
