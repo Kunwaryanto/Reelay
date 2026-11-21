@@ -109,7 +109,7 @@ function useLate(on: boolean, ms: number) {
 const Skeleton = () => (
   <ul className="s-results s-skel" aria-hidden="true">
     {Array.from({ length: 7 }, (_, i) => (
-      <li key={i}><span className="s-row"><span className="wl-poster" /><span className="wl-text"><b style={{ width: `${[52, 34, 44, 28, 48, 62, 30][i]}%` }} /><small /></span><span className="s-rating"><b /></span></span></li>
+      <li key={i}><span className="s-row"><span className="wl-poster" /><span className="wl-text"><b style={{ width: `${[52, 34, 44, 28, 48, 62, 30][i]}%` }} /><small /></span></span></li>
     ))}
   </ul>
 )
@@ -123,7 +123,6 @@ function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () =
       <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
         <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
-        {h.rating !== null && <span className="s-rating"><span>IMDb</span><b>{h.rating.toFixed(1)}</b></span>}
       </a>
     </li>
   )

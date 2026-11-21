@@ -495,9 +495,6 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-chips .ms { color: var(--text-muted); }
 .s-results { list-style: none; margin: 8px 0 0; padding: 0 0 16px; }
 .s-row { display: flex; align-items: center; gap: 14px; padding: 6px var(--margin); color: #fff; -webkit-touch-callout: none; }
-.s-rating { flex: none; display: flex; gap: 5px; font: var(--type-meta); }
-.s-rating span { color: var(--text-faint); }
-.s-rating b { color: #fff; font-weight: 500; font-variant-numeric: tabular-nums; }
 .s-note { margin: 16px var(--margin) 0; font: var(--type-body); color: var(--text-muted); }
 .s-failed { margin: 16px var(--margin) 0; }
 .s-nothing { margin: 16px var(--margin) 0; animation: rise-in var(--dur-rise) var(--ease-out) both; }
@@ -730,10 +727,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-skel { pointer-events: none; animation: s-skel-in 240ms var(--ease-out) both;
   mask-image: linear-gradient(#000 10%, transparent 92%); -webkit-mask-image: linear-gradient(#000 10%, transparent 92%); }
 .s-skel .s-row { animation: s-breathe 1.6s ease-in-out infinite; }
-.s-skel .wl-poster, .s-skel .wl-text b, .s-skel .wl-text small, .s-skel .s-rating b { background: var(--fill); }
+.s-skel .wl-poster, .s-skel .wl-text b, .s-skel .wl-text small { background: var(--fill); }
 .s-skel .wl-text b { display: block; height: 10px; border-radius: 5px; margin: 3px 0 7px; }
 .s-skel .wl-text small { display: block; width: 38%; height: 8px; border-radius: 4px; }
-.s-skel .s-rating b { display: block; width: 44px; height: 8px; border-radius: 4px; }
 @keyframes s-skel-in { from { opacity: 0; } }
 @keyframes s-breathe { 50% { opacity: 0.45; } }
 /* results arrive one after the other from the top */
