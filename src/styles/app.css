@@ -808,16 +808,17 @@ html[data-runway] .tabbar { touch-action: none; }
   @keyframes art-drift { to { translate: 0 170px; } }
 }
 
-/* ---- Search opens and closes as a cross-fade (after Cosmos) ----
-   Opening: the page you were on stays put and fades away under Search, whose content rises with the keyboard.
-   Closing: Search sinks with the keyboard and fades out over the page coming back. */
-.stack[data-tab='search'] { opacity: 0; transition: opacity 420ms ease-in-out, visibility 0s 420ms; }
-.stack[data-tab='search'][data-active='true'] { opacity: 1; transition: opacity 420ms ease-in-out, visibility 0s; }
+/* ---- Search opens and closes as a cross-fade (timings measured from Cosmos) ----
+   Opening (about 180 ms): the page you were on darkens under Search first, then Search's content fades in a beat
+   later while it rises with the keyboard. Closing is quicker (about 110 ms): the content goes first and sinks,
+   and the page comes back from the dark. */
+.stack[data-tab='search'] { opacity: 0; transition: opacity 110ms ease-in-out 30ms, visibility 0s 140ms; }
+.stack[data-tab='search'][data-active='true'] { opacity: 1; transition: opacity 180ms ease-in-out, visibility 0s; }
 /* the page under it stays visible while Search fades in (Search is the last stack, so it sits on top) */
-.stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: visibility 0s 420ms; }
-.s-stage { transition: transform var(--dur-sheet) var(--ease-sheet), translate 480ms var(--ease-sheet); }
-.stack[data-tab='search'][data-active='false'] .s-stage { translate: 0 90px; }
-@media (prefers-reduced-motion: reduce) { .stack[data-tab='search'], .stack[data-tab='search'][data-active='true'], .stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: none; } .stack[data-tab='search'][data-active='false'] .s-stage { translate: none; } }
+.stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: visibility 0s 180ms; }
+.s-stage { opacity: 1; transition: transform var(--dur-sheet) var(--ease-sheet), translate 280ms var(--ease-out), opacity 140ms ease-out 60ms; }
+.stack[data-tab='search'][data-active='false'] .s-stage { opacity: 0; translate: 0 100px; transition: transform var(--dur-sheet) var(--ease-sheet), translate 200ms ease-in, opacity 80ms ease-in; }
+@media (prefers-reduced-motion: reduce) { .stack[data-tab='search'], .stack[data-tab='search'][data-active='true'], .stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']), .s-stage, .stack[data-tab='search'][data-active='false'] .s-stage { transition: none; } .stack[data-tab='search'][data-active='false'] .s-stage { translate: none; } }
 
 /* ---- It's an app: holding a finger down never selects text or brings up Copy / Look Up ----
    (a long press on a poster would otherwise select the page behind the menu). Fields and the legal pages keep it. */

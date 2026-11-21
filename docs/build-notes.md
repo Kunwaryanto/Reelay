@@ -300,3 +300,4 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 
 - Long press: nothing behind the menu scrolls while it is open (the finger that opened it is still down), and holding never selects text or shows Copy / Look Up anywhere in the app, except in fields and on the legal pages.
 - Search cross-fade revised: 420 ms ease-in-out, content travels 90 px (480 ms). Top-picture parallax moves only `translate` inside a clipping frame, so it stays on the scrolling thread.
+- Search cross-fade, Cosmos timings (measured from a recording): open 180 ms, the page darkens first and Search's content fades in 60 ms later (140 ms) rising 100 px (280 ms); close 110 ms, the content fades (80 ms) and sinks first.
