@@ -267,7 +267,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 
 ## Search: Sort and filter drawer (v300 D)
 
-- Behind the tune button, which shows a white count of the filters that are on (sort doesn't count). What's on shows as chips above the results: the ones read from the words, the drawer's, and a non-default sort.
+- Behind the tune button, which shows the number of filters that are on as a small raised number beside the icon, like the counts on the type pills (sort doesn't count). What's on shows as chips above the results: the ones read from the words, the drawer's, and a non-default sort.
 - One list: Sort by, Only on my services (hidden when no services are picked), then Filter: Genre, Released, IMDb rating, Length, Original language. Each row shows its value (white) or "Any" (grey). Clear all in the header.
 - A row slides in to its options (380 ms, the list behind fades to 40%); Back returns. Genre takes several (any of them); the others take one. Each option shows how many results it gives; one that gives none is dimmed and can't be picked.
 - Changes are a draft: "Show n films / series / results" applies them; closing any other way drops them. The button reads "No films match" and is off when the draft gives nothing.
