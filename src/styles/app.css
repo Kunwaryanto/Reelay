@@ -832,3 +832,6 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .search[data-kb='down'] .s-field, .search[data-kb='down'] .s-idle, .search[data-kb='down'] .s-fade { transition: transform var(--dur-keyboard-down) var(--ease-keyboard-down), opacity 200ms var(--ease-out); }
 .search[data-arriving='true'] .s-field, .search[data-arriving='true'] .s-idle, .search[data-arriving='true'] .s-fade { transition: none; }
 @media (prefers-reduced-motion: reduce) { .search[data-kb='down'] .s-field, .search[data-kb='down'] .s-idle, .search[data-kb='down'] .s-fade { transition: none; } }
+
+/* Search while the app goes to the background and comes back: everything snaps to rest, no animation */
+.search[data-still] .s-field, .search[data-still] .s-idle, .search[data-still] .s-fade, .search[data-still] .s-list { transition: none !important; }

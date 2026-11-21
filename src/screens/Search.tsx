@@ -1,7 +1,7 @@
 // Search: the field sits at the bottom, above the keyboard. Before typing: a prompt and three ideas, with recents
 // in a drawer on the left. While typing: results with type pills, filter chips read from the words, and a sort sheet.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import { SERVICE_NAME, kindWord, loadMyServices, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -279,13 +279,25 @@ export default function Search() {
   }, [])
   // How far the keyboard travels (as last measured): Search rises that far with it when it opens.
   const kb = useMemo(() => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }, [drawer, typing])
-  // Leaving the app closes the keyboard without telling the page. Let go of the field then, so coming back shows
-  // Search at rest (field at the bottom) instead of floating above a keyboard that isn't there.
+  // Leaving the app closes the keyboard without telling the page. Let go of the field then, and drop it back to
+  // rest at once (no animation): iOS takes its app-switcher picture right away, and coming back starts from that
+  // picture, so it must already show Search at rest, not halfway down. Animations come back once the app is shown
+  // again (after two frames), so a keyboard iOS brings back by itself still carries the field up with it.
   useEffect(() => {
-    const away = () => { if (document.visibilityState === 'hidden') input.current?.blur() }
-    document.addEventListener('visibilitychange', away)
-    window.addEventListener('pagehide', away)
-    return () => { document.removeEventListener('visibilitychange', away); window.removeEventListener('pagehide', away) }
+    const page = () => input.current?.closest('main')
+    const seen = () => {
+      if (document.visibilityState === 'hidden') {
+        page()?.setAttribute('data-still', '')
+        flushSync(() => input.current?.blur())
+        return
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => page()?.removeAttribute('data-still')))
+    }
+    const gone = () => { page()?.setAttribute('data-still', ''); flushSync(() => input.current?.blur()) }
+    document.addEventListener('visibilitychange', seen)
+    window.addEventListener('pagehide', gone)
+    window.addEventListener('pageshow', seen)
+    return () => { document.removeEventListener('visibilitychange', seen); window.removeEventListener('pagehide', gone); window.removeEventListener('pageshow', seen) }
   }, [])
   // Recents: swipe it (or the page beside it) to the left to close
   const swipe = useRef<{ x: number; y: number } | null>(null)
