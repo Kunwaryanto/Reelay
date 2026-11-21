@@ -329,7 +329,7 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
     }
     const home = () => {
       place(0, true)
-      setTimeout(() => { if (!pulling && !busy) { el.style.transition = ''; state('idle') } }, 430)
+      setTimeout(() => { if (!pulling && !busy) { el.style.transition = ''; delete el.dataset.ptr; state('idle') } }, 430)
     }
 
     const down = (e: TouchEvent) => {
@@ -343,6 +343,7 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
         // the first movement decides: straight down from the top is a pull, anything else is the page's own
         if (!(dy > 0 && dy > Math.abs(dx) && el.scrollTop <= 0)) { start = null; return }
         pulling = true
+        el.dataset.ptr = ''
         hold = (ind.current ? parseFloat(getComputedStyle(ind.current).top) || 0 : 0) + HOLD
         trigger = hold + 12
       }
