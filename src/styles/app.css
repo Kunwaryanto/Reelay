@@ -726,3 +726,30 @@ html[data-runway] .tabbar { touch-action: none; }
 @keyframes br-in { from { opacity: 0; scale: 0.94; } }
 @keyframes br-out { to { opacity: 0; scale: 0.94; } }
 @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+
+/* Search while the answer is on its way */
+.wl-pill sup { transition: opacity 240ms var(--ease-out); }
+.wl-pill sup[data-off] { opacity: 0; transition: none; }
+.s-chips button { animation: s-chip 280ms var(--ease-out) both; }
+@keyframes s-chip { from { opacity: 0; transform: translateY(-4px); } }
+/* the results from before stay, dimmed, until the new ones are here */
+.s-results { transition: opacity 200ms var(--ease-out); }
+.s-results[data-waiting='true'] { opacity: 0.4; }
+/* first answer: rows in the shape of results, fading out down the list, breathing together */
+.s-skel { pointer-events: none; animation: s-skel-in 240ms var(--ease-out) both;
+  mask-image: linear-gradient(#000 10%, transparent 92%); -webkit-mask-image: linear-gradient(#000 10%, transparent 92%); }
+.s-skel .s-row { animation: s-breathe 1.6s ease-in-out infinite; }
+.s-skel .wl-poster, .s-skel .wl-text b, .s-skel .wl-text small, .s-skel .s-rating b { background: var(--fill); }
+.s-skel .wl-text b { display: block; height: 10px; border-radius: 5px; margin: 3px 0 7px; }
+.s-skel .wl-text small { display: block; width: 38%; height: 8px; border-radius: 4px; }
+.s-skel .s-rating b { display: block; width: 44px; height: 8px; border-radius: 4px; }
+@keyframes s-skel-in { from { opacity: 0; } }
+@keyframes s-breathe { 50% { opacity: 0.45; } }
+/* results arrive one after the other from the top */
+.s-results:not(.s-skel) > li { animation: s-in 300ms var(--ease-out) both; }
+.s-results > li:nth-child(2) { animation-delay: 25ms; } .s-results > li:nth-child(3) { animation-delay: 50ms; }
+.s-results > li:nth-child(4) { animation-delay: 75ms; } .s-results > li:nth-child(5) { animation-delay: 100ms; }
+.s-results > li:nth-child(6) { animation-delay: 125ms; } .s-results > li:nth-child(7) { animation-delay: 150ms; }
+.s-results > li:nth-child(8) { animation-delay: 175ms; } .s-results > li:nth-child(n+9) { animation-delay: 200ms; }
+@keyframes s-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .s-skel .s-row, .s-results > li, .s-chips button { animation: none !important; } }

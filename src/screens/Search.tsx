@@ -9,7 +9,7 @@ import { takeKeyboard } from '../lib/keyboard'
 import { useNav, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import {
-  addRecent, loadIdeas, loadPopular, readRecents, search, writeRecents,
+  addRecent, guess, loadIdeas, loadPopular, readRecents, search, writeRecents,
   type Found, type Hit, type Idea, type Recent,
 } from '../lib/search'
 import { Button, Icon, LoadFailed, Sheet, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
@@ -22,19 +22,35 @@ const SORTS: [Sort, string][] = [['best', 'Best match'], ['rated', 'Highest rate
 const nameOf = (id: string) => SERVICE_NAME[id] ?? id
 const metaOf = (h: Hit) => [kindWord(h.kind), h.year, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden'].filter(Boolean).join(' · ')
 
+// Answers from the last few minutes, so a search made again (or one of the three ideas, fetched ahead) shows at once.
+const KEEP = 5 * 60 * 1000
+const answers = new Map<string, { at: number; found: Found }>()
+const keyOf = (text: string, removed: string[]) => `${text.toLowerCase()}|${removed.join(',')}`
+const kept = (key: string) => { const a = answers.get(key); return a && Date.now() - a.at < KEEP ? a.found : null }
+const keep = (key: string, found: Found) => {
+  answers.delete(key)
+  answers.set(key, { at: Date.now(), found })
+  if (answers.size > 30) answers.delete(answers.keys().next().value!)
+}
+/** Fetch a search ahead of time (the ideas on the first page). */
+const warm = (text: string) => { const key = keyOf(text, []); if (!kept(key)) search(text, []).then((found) => keep(key, found), () => {}) }
+
 /** Run the search a moment after typing stops; keep showing the last results until the new ones arrive. */
 function useSearch(typed: string, removed: string[]) {
   const [state, setState] = useState<{ key: string; found: Found | null; error: boolean }>({ key: '', found: null, error: false })
   const [again, setAgain] = useState(0)
   const text = typed.replace(/\s+/g, ' ').trim()
-  const key = text.length < 2 ? '' : `${text.toLowerCase()}|${removed.join(',')}`
+  const key = text.length < 2 ? '' : keyOf(text, removed)
+  const ready = key ? kept(key) : null
 
   useEffect(() => {
-    if (!key) return
+    // back to the empty field: the next search starts clean instead of dimming the old one
+    if (!key) { setState((s) => (s.found || s.error ? { key: '', found: null, error: false } : s)); return }
+    if (kept(key)) return
     let stale = false
     const t = setTimeout(() => {
       search(text, removed).then(
-        (found) => { if (!stale) setState({ key, found, error: false }) },
+        (found) => { keep(key, found); if (!stale) setState({ key, found, error: false }) },
         () => { if (!stale) setState({ key, found: null, error: true }) },
       )
     }, 220)
@@ -51,14 +67,34 @@ function useSearch(typed: string, removed: string[]) {
   }, [])
 
   return {
-    found: key ? state.found : null,
-    error: !!key && state.key === key && state.error,
-    waiting: !!key && state.key !== key,
+    found: ready ?? (key ? state.found : null),
+    error: !ready && !!key && state.key === key && state.error,
+    waiting: !ready && !!key && state.key !== key,
     retry: () => setAgain((n) => n + 1),
   }
 }
 
 const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
+
+/** True once `on` has lasted `ms`: a quick answer never flashes a loading state. */
+function useLate(on: boolean, ms: number) {
+  const [late, setLate] = useState(false)
+  useEffect(() => {
+    if (!on) { setLate(false); return }
+    const t = setTimeout(() => setLate(true), ms)
+    return () => clearTimeout(t)
+  }, [on, ms])
+  return on && late
+}
+
+/** Rows in the shape of results while the first answer is on its way; they fade out down the list. */
+const Skeleton = () => (
+  <ul className="s-results s-skel" aria-hidden="true">
+    {Array.from({ length: 7 }, (_, i) => (
+      <li key={i}><span className="s-row"><span className="wl-poster" /><span className="wl-text"><b style={{ width: `${[52, 34, 44, 28, 48, 62, 30][i]}%` }} /><small /></span><span className="s-rating"><b /></span></span></li>
+    ))}
+  </ul>
+)
 
 function Row({ h, onOpen, onHold }: { h: Hit; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
@@ -122,7 +158,13 @@ export default function Search() {
   const hasQ = q.trim().length > 0
   // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
   useEffect(() => { if (found?.kind) setKind(found.kind) }, [found])
-  const tokens = found?.tokens ?? []
+  // While waiting, the words themselves already say which chips and type apply ("90s films")
+  const early = useMemo(() => (waiting ? guess(q, removed) : null), [waiting, q, removed])
+  useEffect(() => { if (early?.kind) setKind(early.kind) }, [early?.kind])
+  const tokens = early?.tokens ?? found?.tokens ?? []
+  const skeleton = useLate(waiting && !found, 150)
+  // the three ideas are fetched ahead, so tapping one has nothing to wait for
+  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
 
   const all = found?.hits ?? []
   const mine = all.filter((h) => !onlyMine || (hasPicked ? h.services.some((s) => picked.includes(s)) : h.services.length > 0))
@@ -140,7 +182,7 @@ export default function Search() {
     input.current?.blur()
     push(`/title/${h.id}`)
   }
-  const run = (text: string) => { change(text); setKind('all'); setDrawer(false) }
+  const run = (text: string) => { change(text); setKind(guess(text, [])?.kind ?? 'all'); setDrawer(false) }
   // A search counts as made once its results have been on screen for a moment (no need to press Search).
   const settled = found && !waiting && found.hits.length + found.people.length > 0 ? q.trim() : ''
   useEffect(() => {
@@ -242,8 +284,8 @@ export default function Search() {
               <div className="wl-filters">
                 <div role="group" aria-label="Type">
                   {([['all', 'All'], ['series', 'Series'], ['film', 'Films'], ...(folks.length ? [['people', 'People']] : [])] as [Kind, string][]).map(([k, label]) => (
-                    <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={`${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
-                      <span>{label}<sup aria-hidden="true">{counts[k]}</sup></span>
+                    <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={waiting ? label : `${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
+                      <span>{label}<sup aria-hidden="true" data-off={waiting || undefined}>{waiting && !found ? '' : counts[k]}</sup></span>
                     </button>
                   ))}
                 </div>
@@ -277,6 +319,8 @@ export default function Search() {
                   ))}
                 </ul>
               )}
+              <p className="sr-only" role="status">{waiting ? 'Searching' : ''}</p>
+              {skeleton && <Skeleton />}
               <ul className="s-results" data-waiting={waiting}>
                 {list.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}
               </ul>

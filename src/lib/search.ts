@@ -219,6 +219,18 @@ export async function search(typed: string, removed: string[]): Promise<Found> {
   return { hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))], tokens, people: [], kind }
 }
 
+/**
+ * What the words alone say, before the server answers: when every word is a filter ("90s films"), the chips and
+ * the type are known at once. With other words in it the phrase may be a title's name, so nothing is guessed.
+ */
+export function guess(typed: string, removed: string[]): { tokens: Token[]; kind?: Hit['kind'] } | null {
+  const text = typed.replace(/\s+/g, ' ').trim()
+  if (text.length < 2) return null
+  const parsed = parseQuery(text)
+  if (!parsed.tokens.length || parsed.rest.length > 0) return null
+  return { tokens: parsed.tokens.filter((t) => t.key !== 'kind' && !removed.includes(t.key)), kind: parsed.tokens.find((t) => t.key === 'kind')?.filter.kind }
+}
+
 /** For "Popular right now" under an empty result. */
 export const loadPopular = () => byFilters({}, 3)
 
