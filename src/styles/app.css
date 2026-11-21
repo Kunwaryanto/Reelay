@@ -120,8 +120,8 @@ button { font: inherit; color: inherit; }
 .now-settings { position: absolute; z-index: 4; top: calc(var(--safe-top) + 15px); right: 12px; }
 .hero { position: relative; height: 540px; margin-bottom: var(--row-gap); }
 .hero-gap { height: calc(var(--safe-top) + 70px); }
-.hero-stage { position: relative; height: 100%; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
-.hero-slide { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; z-index: 0; -webkit-touch-callout: none; }
+.hero-stage { position: relative; height: 100%; clip-path: inset(calc(var(--pull) * -1) 0 0 0); touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
+.hero-slide { position: absolute; inset: calc(var(--pull) * -1) 0 0 0; display: block; overflow: hidden; pointer-events: none; z-index: 0; -webkit-touch-callout: none; }
 .hero-slide[data-on='true'] { pointer-events: auto; z-index: 2; }
 .hero-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; opacity: 0; transform: translateX(var(--from, 8%)); transition: opacity 350ms var(--ease-out), transform 450ms var(--ease-out); }
 .hero-slide[data-on='true'] .hero-art { opacity: 1; transform: none; }
@@ -792,3 +792,18 @@ html[data-runway] .tabbar { touch-action: none; }
 .card-title, .card-meta { transition: opacity var(--dur-image-in) var(--ease-out); }
 .card:has(.cover[data-ready='false']) .card-title, .card:has(.cover[data-ready='false']) .card-meta { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .launch[data-leaving] { animation-duration: 1ms; } .card-title, .card-meta { transition: none; } }
+
+/* ---- The picture at the top of Now and title pages (like Apple TV) ----
+   Pulling down: it stays at the top of the screen and grows to fill the gap, instead of sliding down with the page.
+   --pull is how far the page is pulled; it is a registered length so it can ease back with the page. */
+@property --pull { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.title-art, .title-top .hero-shade { top: calc(var(--pull) * -1); height: calc(540px + var(--pull)); }
+/* Scrolling up: the picture moves at about two thirds of the page's speed, so the page slides over it. */
+@supports (animation-timeline: scroll()) {
+  .page { scroll-timeline: --page block; }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-slide[data-on='true'] .hero-art, .title-art { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
+  }
+  /* the part that would hang below its frame is cut off as it goes */
+  @keyframes art-drift { to { translate: 0 170px; clip-path: inset(0 0 170px 0); } }
+}

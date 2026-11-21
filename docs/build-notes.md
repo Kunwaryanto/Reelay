@@ -286,3 +286,8 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Revised: fade only, no scaling. The page fades in over 900 ms while the wordmark fades out (500 ms). The tab bar is separate and works as when coming back from Search: its blur is there at once and the icons rise in (380 ms).
 
 - Tab bar dimming: switching tab or opening a page always shows the bar at full strength; a page left while still gliding can't dim it again.
+
+## Top picture: parallax and pull (21 Nov, after Apple TV)
+
+- Scrolling up on Now and title pages: the picture moves at about two thirds of the page's speed (170 px over the first 540 px), so the page slides over it. Off with reduced motion.
+- Pulling down: the picture stays at the top of the screen and grows to fill the gap (it scales by cover); the refresh wheel sits over it. On release it eases back with the page (420 ms).
