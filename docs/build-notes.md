@@ -297,3 +297,5 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 
 - Opening: the page you were on stays and Search fades in over it (300 ms) while its content rises 36 px with the keyboard (380 ms).
 - Closing: Search sinks 36 px with the keyboard and fades out (300 ms) over the page coming back; the tab bar icons rise as usual.
+
+- Long press: nothing behind the menu scrolls while it is open (the finger that opened it is still down), and holding never selects text or shows Copy / Look Up anywhere in the app, except in fields and on the legal pages.

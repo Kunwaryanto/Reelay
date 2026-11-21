@@ -816,3 +816,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-stage { transition: transform var(--dur-sheet) var(--ease-sheet), translate var(--dur-sheet) var(--ease-sheet); }
 .stack[data-tab='search'][data-active='false'] .s-stage { translate: 0 36px; }
 @media (prefers-reduced-motion: reduce) { .stack[data-tab='search'], .stack[data-tab='search'][data-active='true'], .stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: none; } .stack[data-tab='search'][data-active='false'] .s-stage { translate: none; } }
+
+/* ---- It's an app: holding a finger down never selects text or brings up Copy / Look Up ----
+   (a long press on a poster would otherwise select the page behind the menu). Fields and the legal pages keep it. */
+#root, .hold { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text; }
+.hold { touch-action: none; }

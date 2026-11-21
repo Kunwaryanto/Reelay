@@ -98,6 +98,14 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
     return () => { cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
   }, [held.cover])
   const close = () => { setOpen(false); setTimeout(onClose, 280) }
+  // The finger that opened the menu is still down, and still belongs to the page: without this, moving it would
+  // scroll the page or the row behind the menu, and the poster would land back in the wrong place.
+  useEffect(() => {
+    const stop = (e: Event) => { if (e.cancelable) e.preventDefault() }
+    document.addEventListener('touchmove', stop, { passive: false })
+    document.addEventListener('wheel', stop, { passive: false })
+    return () => { document.removeEventListener('touchmove', stop); document.removeEventListener('wheel', stop) }
+  }, [])
 
   const { card } = held
   const vw = window.innerWidth, vh = window.innerHeight
