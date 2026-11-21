@@ -98,8 +98,15 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
     return () => { cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
   }, [held.cover])
   // closing lands on the poster at its normal size (the pressed, slightly smaller size is only where it starts from)
-  const [closing, setClosing] = useState(false)
-  const close = () => { setClosing(true); setOpen(false); setTimeout(onClose, 280) }
+  // It is measured again at that moment: the first measurement was taken mid-press (the card shrinks around its
+  // own centre, not the poster's), so it can be a pixel or two off, which showed as a small jump at the end.
+  const [closing, setClosing] = useState<{ x: number; y: number; k: number; radius: string } | null>(null)
+  const close = () => {
+    const now = held.cover.getBoundingClientRect()
+    setClosing({ x: now.left - rect.left, y: now.top - rect.top, k: now.width / rect.width, radius: getComputedStyle(held.cover).borderRadius })
+    setOpen(false)
+    setTimeout(onClose, 300)
+  }
   // The finger that opened the menu is still down, and still belongs to the page: without this, moving it would
   // scroll the page or the row behind the menu, and the poster would land back in the wrong place.
   useEffect(() => {
@@ -126,9 +133,11 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
       <div className="hold-back" onClick={close} />
       <div ref={lift} className="hold-poster" aria-hidden="true" style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
-        borderRadius: 20 / scale, // 16px once lifted, whatever the starting size
+        // 16px once lifted, whatever the starting size; back to the poster's own corners (and no shadow) on the way down
+        borderRadius: closing ? `calc(${closing.radius} / ${closing.k})` : 20 / scale,
+        boxShadow: closing ? '0 18px 50px rgba(0, 0, 0, 0)' : undefined,
         transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
-          : closing ? 'none'
+          : closing ? `translate(${closing.x}px, ${closing.y}px) scale(${closing.k})`
             : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
       }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
