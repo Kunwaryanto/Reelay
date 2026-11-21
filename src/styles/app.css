@@ -472,7 +472,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-list { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 21px); bottom: 0; padding-bottom: calc(96px + var(--edge-b)); overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; }
 /* First time on this phone: held back until the keyboard is measured, then they rise into place. */
 /* The field and the prompt lift above the keyboard together (--lift is set on .search), at the keyboard's own pace. */
-.s-field, .s-idle, .s-fade { transform: translateY(calc(var(--lift, 0px) * -1)); transition: transform 380ms var(--ease-sheet), opacity 200ms var(--ease-out); }
+.s-field, .s-idle, .s-fade { transform: translateY(calc(var(--lift, 0px) * -1)); transition: transform var(--dur-keyboard) var(--ease-keyboard), opacity 200ms var(--ease-out); }
 .s-list { transition: opacity 200ms var(--ease-out); }
 .s-list[data-idle='true'] { overflow: visible; }
 .s-field[data-pending='true'], .s-list[data-pending='true'], .s-fade[data-pending='true'] { opacity: 0; transition: none; }
@@ -816,8 +816,10 @@ html[data-runway] .tabbar { touch-action: none; }
 .stack[data-tab='search'][data-active='true'] { opacity: 1; transition: opacity 180ms ease-in-out, visibility 0s; }
 /* the page under it stays visible while Search fades in (Search is the last stack, so it sits on top) */
 .stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: visibility 0s 180ms; }
-.s-stage { opacity: 1; transition: transform var(--dur-sheet) var(--ease-sheet), translate 280ms var(--ease-out), opacity 140ms ease-out 60ms; }
-.stack[data-tab='search'][data-active='false'] .s-stage { opacity: 0; translate: 0 100px; transition: transform var(--dur-sheet) var(--ease-sheet), translate 200ms ease-in, opacity 80ms ease-in; }
+.s-stage { opacity: 1; transition: transform var(--dur-sheet) var(--ease-sheet), translate var(--dur-keyboard) var(--ease-keyboard), opacity 140ms ease-out 60ms; }
+/* Closed, Search waits a keyboard's height lower, so opening it rides the keyboard up. Closing needs no extra
+   move: the field already sinks with the keyboard (--lift), so the wait position is taken once it has faded. */
+.stack[data-tab='search'][data-active='false'] .s-stage { opacity: 0; translate: 0 var(--kb, 300px); transition: transform var(--dur-sheet) var(--ease-sheet), translate 0s 160ms, opacity 80ms ease-in; }
 @media (prefers-reduced-motion: reduce) { .stack[data-tab='search'], .stack[data-tab='search'][data-active='true'], .stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']), .s-stage, .stack[data-tab='search'][data-active='false'] .s-stage { transition: none; } .stack[data-tab='search'][data-active='false'] .s-stage { translate: none; } }
 
 /* ---- It's an app: holding a finger down never selects text or brings up Copy / Look Up ----

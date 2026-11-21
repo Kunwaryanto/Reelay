@@ -85,6 +85,7 @@
   /* ---------- Motion ---------- */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);        /* entering, fades, presses */
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);    /* things moving on screen */
+  --dur-keyboard: 500ms; --ease-keyboard: cubic-bezier(0.38, 0.7, 0.125, 1);  /* the iOS keyboard's own rise and fall */
   --dur-launch: 900ms; --ease-launch: cubic-bezier(0.22, 1, 0.36, 1);  /* Now arriving at launch: page, cog and tab bar together */
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);      /* iOS drawer and context menu */
   --ease-camera: cubic-bezier(0.16, 1, 0.3, 1);      /* onboarding step camera */

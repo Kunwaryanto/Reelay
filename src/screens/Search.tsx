@@ -277,6 +277,16 @@ export default function Search() {
     el.addEventListener('touchstart', down, { passive: false })
     return () => el.removeEventListener('touchstart', down)
   }, [])
+  // How far the keyboard travels (as last measured): Search rises that far with it when it opens.
+  const kb = useMemo(() => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }, [drawer, typing])
+  // Leaving the app closes the keyboard without telling the page. Let go of the field then, so coming back shows
+  // Search at rest (field at the bottom) instead of floating above a keyboard that isn't there.
+  useEffect(() => {
+    const away = () => { if (document.visibilityState === 'hidden') input.current?.blur() }
+    document.addEventListener('visibilitychange', away)
+    window.addEventListener('pagehide', away)
+    return () => { document.removeEventListener('visibilitychange', away); window.removeEventListener('pagehide', away) }
+  }, [])
   // Recents: swipe it (or the page beside it) to the left to close
   const swipe = useRef<{ x: number; y: number } | null>(null)
 
@@ -304,7 +314,7 @@ export default function Search() {
   const up = typing && room > 0
 
   return (
-    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift } as React.CSSProperties}
+    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
       onTouchStart={(e) => { swipe.current = drawer ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
       onTouchMove={(e) => {
         const s = swipe.current
