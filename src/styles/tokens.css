@@ -96,8 +96,9 @@
   --ease-camera: cubic-bezier(0.16, 1, 0.3, 1);      /* onboarding step camera */
 
   --dur-press: 160ms;          /* scale(0.97) */
-  --dur-nav-hide: 220ms;
-  --dur-nav-show: 160ms;
+  --dur-nav-hide: 320ms;  /* tab bar and top bar going faint while scrolling down */
+  --dur-nav-show: 260ms;  /* and coming back */
+  --ease-nav: cubic-bezier(0.33, 0, 0.3, 1);  /* an even fade (measured against Are.na's bars): the change is spread over the whole time, not spent in the first frames */
   --dur-sheet: 380ms;
   --dur-menu-open: 420ms;      /* long press */
   --dur-menu-close: 280ms;

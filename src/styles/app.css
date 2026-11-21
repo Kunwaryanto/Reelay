@@ -286,11 +286,11 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 .tabbar { position: absolute; z-index: 10; left: 0; right: 0; bottom: 0; height: calc(var(--tab-bar) + var(--edge-b)); pointer-events: none; color: #fff; }
 /* Hidden on pages without it. Coming back, the fade is simply there; only the icons travel into place. */
 .tabbar[data-hidden='true'] .tabbar-fade { opacity: 0; }
-.tabbar-fade i { position: absolute; inset: 0; transition: opacity var(--dur-nav-show) var(--ease-out); }
+.tabbar-fade i { position: absolute; inset: 0; transition: opacity var(--dur-nav-show) var(--ease-nav); }
 .tabbar-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(transparent 0, #000 calc(var(--tab-bar) * 0.5)); mask-image: linear-gradient(transparent 0, #000 calc(var(--tab-bar) * 0.5)); }
 .tabbar-fade i:nth-child(2) { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); -webkit-mask-image: linear-gradient(transparent calc(var(--tab-bar) * 0.4), #000 calc(var(--tab-bar) * 0.9)); mask-image: linear-gradient(transparent calc(var(--tab-bar) * 0.4), #000 calc(var(--tab-bar) * 0.9)); }
 .tabbar-fade i:nth-child(3) { background: linear-gradient(rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.35) calc(var(--tab-bar) * 0.45), var(--wash) var(--tab-bar)); }
-.tabbar-row { position: absolute; left: 8px; right: 8px; bottom: calc(17px + var(--edge-b)); height: 52px; display: flex; align-items: center; pointer-events: auto; transition: opacity var(--dur-nav-show) var(--ease-out), transform var(--dur-sheet) var(--ease-sheet); }
+.tabbar-row { position: absolute; left: 8px; right: 8px; bottom: calc(17px + var(--edge-b)); height: 52px; display: flex; align-items: center; pointer-events: auto; transition: opacity var(--dur-nav-show) var(--ease-nav), transform var(--dur-sheet) var(--ease-sheet); }
 .tabbar-row button { flex: 1; height: 52px; padding: 0; border: 0; background: none; color: var(--text-faint); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .tabbar-row button[aria-current='page'] { color: #fff; }
 .tabbar[data-hidden='true'] .tabbar-row { opacity: 0; transform: translateY(100%); }
@@ -543,11 +543,11 @@ html[data-runway] .tabbar { touch-action: none; }
 /* A bar over a pushed page: back, and the page's name. It fades away with the tab bar as the page scrolls down. */
 .top-bar { position: absolute; z-index: 4; top: 0; left: 0; right: 0; padding: calc(var(--safe-top) + 15px) 0 10px; pointer-events: none; }
 .top-fade { position: absolute; inset: 0 0 -16px; }
-.top-fade i { position: absolute; inset: 0; transition: opacity var(--dur-nav-show) var(--ease-out); }
+.top-fade i { position: absolute; inset: 0; transition: opacity var(--dur-nav-show) var(--ease-nav); }
 .top-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 50%); mask-image: linear-gradient(0deg, transparent 0%, #000 50%); }
 .top-fade i:nth-child(2) { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); -webkit-mask-image: linear-gradient(0deg, transparent 40%, #000 90%); mask-image: linear-gradient(0deg, transparent 40%, #000 90%); }
 .top-fade i:nth-child(3) { background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.35) 45%, var(--wash) 100%); }
-.top-row { position: relative; height: var(--hit); display: flex; align-items: center; justify-content: center; transition: opacity var(--dur-nav-show) var(--ease-out); }
+.top-row { position: relative; height: var(--hit); display: flex; align-items: center; justify-content: center; transition: opacity var(--dur-nav-show) var(--ease-nav); }
 .top-back { position: absolute; left: 6px; top: 0; pointer-events: auto; }
 .top-title { max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 600 17px/22px var(--font); letter-spacing: -0.01em; transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out); }
 .top-title[data-shown='false'] { opacity: 0; transform: translateY(4px); }
