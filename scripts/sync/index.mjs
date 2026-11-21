@@ -332,7 +332,8 @@ async function saveAvailability(found, keys) {
 // ---------------------------------------------------------------------------
 // Links into the services' apps (Streaming Availability)
 // ---------------------------------------------------------------------------
-// A title's link on a service doesn't change, so each is fetched once and kept in availability.link. A title that
+// A title's link on a service doesn't change, so each is fetched once and kept (availability.link_path, after
+// services.link_base). A title that
 // leaves a service loses its row (and link); when it comes back, it's in the "new" list and gets a fresh one.
 //  1. Filling: each service's catalogue is read page by page (20 titles a page), most popular first, over as many
 //     nights as it takes; where it stopped is kept in sync_state. A finished service is read again only after 30
@@ -355,15 +356,25 @@ function harvestLinks(show, svcBySa) {
   for (const [svc, o] of Object.entries(best)) saLinks.set(`${k === 'movie' ? 'film' : 'series'}|${id}|${svc}`, o.link);
 }
 
+// A link is stored as the part after its service's base (services.link_base); one that doesn't start with it, whole.
+// Tracking and options after "?" are dropped, except where the title's ID is in them (Prime Video's gti=…).
+let linkBases = null;
+const linkPath = (svc, link) => {
+  const base = linkBases[svc];
+  const clean = base?.includes('?') ? link : link.split('?')[0];
+  return base && clean.startsWith(base) ? clean.slice(base.length) : clean;
+};
+
 async function saveLinks() {
   if (!saLinks.size) return 0;
-  const rows = [...saLinks].map(([k, link]) => [...k.split('|'), link]);
+  linkBases ??= Object.fromEntries((await db.query('select id, link_base from public.services')).rows.map((r) => [r.id, r.link_base]));
+  const rows = [...saLinks].map(([k, link]) => { const [kind, id, svc] = k.split('|'); return [kind, id, svc, linkPath(svc, link)] });
   const cols = [0, 1, 2, 3].map((j) => rows.map((r) => r[j]));
   const r = await db.query(
-    `update public.availability a set link = x.link
-     from unnest($1::text[], $2::int[], $3::text[], $4::text[]) as x(kind, tmdb_id, svc, link)
+    `update public.availability a set link_path = x.path
+     from unnest($1::text[], $2::int[], $3::text[], $4::text[]) as x(kind, tmdb_id, svc, path)
      join public.titles t on t.tmdb_id = x.tmdb_id and t.kind = x.kind
-     where a.title_id = t.id and a.service_id = x.svc and a.link is distinct from x.link`,
+     where a.title_id = t.id and a.service_id = x.svc and a.link_path is distinct from x.path`,
     cols,
   );
   saLinks.clear();
@@ -417,7 +428,7 @@ async function syncLinks() {
     const st = fill[svc] ?? { cursor: '', done: null };
     if (st.done) {
       const age = (Date.now() - Date.parse(st.done)) / 86400000;
-      const missing = (await db.query('select count(*)::int n from public.availability where service_id = $1 and link is null', [svc])).rows[0].n;
+      const missing = (await db.query('select count(*)::int n from public.availability where service_id = $1 and link_path is null', [svc])).rows[0].n;
       if (age < 30 || missing === 0) continue;
       st.done = null; st.cursor = '';
     }
@@ -437,7 +448,7 @@ async function syncLinks() {
     if (left <= 0 || stopped) break;
   }
   await setState('links:fill', fill);
-  const missing = (await db.query('select count(*)::int n from public.availability where link is null')).rows[0].n;
+  const missing = (await db.query('select count(*)::int n from public.availability where link_path is null')).rows[0].n;
   log(`links: ${added} from new arrivals (${pages} pages), ${filled} from catalogues; ${SA_LINK_REQUESTS - left} requests; ${missing} offers still without a link`);
 }
 

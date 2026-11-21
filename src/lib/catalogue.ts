@@ -1,7 +1,7 @@
 // Reads the catalogue (titles, where they stream, scores, cast) and the user's watchlist.
 import { supabase } from './supabase'
 
-export type Avail = { service_id: string; leaves_on: string | null; type?: string; link?: string | null }
+export type Avail = { service_id: string; leaves_on: string | null; type?: string; link_path?: string | null; service?: { link_base?: string | null } | null }
 export type Card = {
   id: number
   kind: 'film' | 'series'
@@ -144,7 +144,7 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
 export async function loadTitle(id: number): Promise<TitleDetail | null> {
   const title = unwrap(await supabase.from('titles').select(
     'id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
-    'availability(service_id,type,leaves_on,link,service:services(name,kind)),' +
+    'availability(service_id,type,leaves_on,link_path,service:services(name,kind,link_base)),' +
     'scores(imdb_rating,rt_critics,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +
     'awards(id,award,year,short_category,won,person_name,rank)',
@@ -264,7 +264,10 @@ const SERVICE_SEARCH: Record<string, string> = {
 }
 
 export function openLink(a: Avail, title: string): string {
-  return a.link || (SERVICE_SEARCH[a.service_id] ?? 'https://www.google.com/search?q=') + encodeURIComponent(title)
+  // the title's own part after the service's base; a whole link is kept as it is
+  const p = a.link_path
+  if (p) return p.startsWith('https://') ? p : (a.service?.link_base ?? '') + p
+  return (SERVICE_SEARCH[a.service_id] ?? 'https://www.google.com/search?q=') + encodeURIComponent(title)
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

@@ -36,5 +36,5 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 - Dark only. One grey (#808080) for meta, faint text and every inactive icon.
 - Inter at opsz 32; Material Symbols Outlined weight 250, 24px.
 - No sharing of titles (dropped 20 Nov: links can't open the Home Screen app). Reelay is invite only: admins create single-use invite links in Settings.
-- iPhone web app limits: links always open in Safari, Safari and the installed app don't share storage, no background sync, no haptics.
+- iPhone web app limits: links always open in Safari (or the service's own app, for its https links when it's installed), Safari and the installed app don't share storage, no background sync, no haptics.
 - UI copy is English for now; Swedish copy is decided in the Supabase phase.
