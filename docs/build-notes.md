@@ -123,7 +123,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Boards: Browse, Category, Grid · mixed list, Grid · typed list (all v121).
 - A category is a set of filters over streaming titles, defined in code (`CATEGORIES`); nothing is stored in the database. Genres, decades and countries open a category page (top three as the hero, then rows); lists open straight as a grid.
 - Routes: `/browse/all/<section>` (every card in a section), `/browse/c/<category>[/film|series]`, `/browse/g/<category>/<row|list>[/film|series]`. The Films/Series pill on Browse carries into the page it opens.
-- Switching All / Films / Series runs in a view transition: each card and section has a `view-transition-name`, so cards that stay glide to their new places and the ones that come or go fade (380 ms).
+- Switching All / Films / Series: cards and section headings that stay glide from where they were (380 ms, measured before and after); new ones fade in (320 ms); ones that leave just go. Done in the page, not as a view transition, which would lift the cards above the tab bar and its blur.
 - Card pictures: the artwork of the category's most popular title, a different title per card, looked up once a day. They load like posters, as one piece: picture, colour wash and name stay hidden on the plain card until the picture is decoded, then fade in together (300 ms). Every card picture is fetched 1.5 s after Browse shows, so the View all pages open with them ready. w300 or w780 by screen density.
 - Category rows: New in … (this year and last, most popular first; decades get "Popular from the …"), Leaving soon (30 days), Top … series, Top … films (by IMDb rating with enough votes). A row needs three titles to show.
 - Grid: type pills with counts on mixed rows, the year alone on typed ones; Sort by Highest rated / Newest / Most popular, re-fetched in that order (90 titles at most). "Only on my services" appears once Your services exists. The big title fades into the bar as the page scrolls.
@@ -284,3 +284,5 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Pieces arrive whole: the cog's glass circle fades with its icon and dot; a card's title and meta fade in with its picture.
 - One movement (replaces the staged order above): the whole page fades in and settles from scale 1.04 over 900 ms (cubic-bezier(0.22, 1, 0.36, 1)); the wordmark dissolves into it (500 ms, growing to 1.12); the cog fades and the tab bar fades and rises on the same curve, all starting together.
 - Revised: fade only, no scaling. The page fades in over 900 ms while the wordmark fades out (500 ms). The tab bar is separate and works as when coming back from Search: its blur is there at once and the icons rise in (380 ms).
+
+- Tab bar dimming: switching tab or opening a page always shows the bar at full strength; a page left while still gliding can't dim it again.

@@ -277,6 +277,9 @@ export function useDimOnScroll() {
   return useCallback((e: UIEvent<HTMLElement>) => {
     const el = e.currentTarget
     const y = el.scrollTop
+    // A page that was left while still gliding (another tab, a page pushed over it) keeps scrolling for a moment:
+    // that must not dim the tab bar of the page now showing.
+    if (el.closest('[inert]')) { last.current = y; return }
     // Ignore the bounce past either end, so the tab bar keeps its state while the page springs back.
     if (y < 0 || y > el.scrollHeight - el.clientHeight) return
     const d = y - last.current

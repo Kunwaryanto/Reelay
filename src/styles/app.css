@@ -715,18 +715,6 @@ html[data-runway] .tabbar { touch-action: none; }
 @keyframes pill-in { from { opacity: 0; transform: translateY(-14px) scale(0.94); } }
 @media (prefers-reduced-motion: reduce) { .offline-pill, .offline-pill > span { animation: none; transition: none; } }
 
-/* Browse, switching All / Films / Series: cards move to their new places; new ones fade in, old ones fade out. */
-.br-card { view-transition-class: br-card; }
-.br-section { view-transition-class: br-sec; }
-::view-transition-group(.br-card), ::view-transition-group(.br-sec) { animation-duration: 380ms; animation-timing-function: var(--ease-sheet); }
-::view-transition-new(.br-card):only-child { animation: br-in 320ms var(--ease-out) both; }
-::view-transition-old(.br-card):only-child { animation: br-out 200ms ease-in both; }
-/* a section that keeps its cards is the same picture before and after: show the new one, no cross-fade ghost */
-::view-transition-old(.br-sec) { animation: none; opacity: 0; }
-::view-transition-new(.br-sec) { animation: none; }
-@keyframes br-in { from { opacity: 0; scale: 0.94; } }
-@keyframes br-out { to { opacity: 0; scale: 0.94; } }
-@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
 
 /* Search while the answer is on its way */
 .wl-pill sup { transition: opacity 240ms var(--ease-out); }

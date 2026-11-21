@@ -1,5 +1,5 @@
 // Browse: categories as cards (genres, lists, decades, countries), a category's page of rows, and the grid behind "View all".
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
@@ -53,7 +53,7 @@ function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: strin
   return (
     <a className="br-card press" href={href} data-ready={ready}
       // on the Browse tab each card has a name, so switching type moves it to its new place (see setPick there)
-      style={named ? ({ viewTransitionName: `br-${cat.id}` } as CSSProperties) : undefined} onClick={(e) => { e.preventDefault(); push(href) }}>
+      data-flip={named ? cat.id : undefined} onClick={(e) => { e.preventDefault(); push(href) }}>
       {cover && <img {...coverSrc(cover)} alt="" decoding="async" draggable={false}
         ref={(el) => { if (el?.complete && el.naturalWidth && !ready) show(el) }}
         onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
@@ -83,22 +83,37 @@ export default function Browse() {
   const { push } = useNavActions()
   const onDim = useDimOnScroll()
   const [pick, setPickNow] = useState<Pick>('all')
+  const page = useRef<HTMLElement>(null)
   // All / Films / Series: cards that stay glide to their new places, the ones that come and go fade.
   const setPick = (p: Pick) => {
-    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { setPickNow(p); return }
-    document.startViewTransition(() => flushSync(() => setPickNow(p)))
+    const root = page.current
+    if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) { setPickNow(p); return }
+    // Measure, change, then animate each piece from where it was (in the page itself: a view transition would lift
+    // the cards above the tab bar and its blur for as long as it runs).
+    const marks = () => [...root.querySelectorAll<HTMLElement>('[data-flip]')]
+    const was = new Map(marks().map((el) => [el.dataset.flip!, el.getBoundingClientRect()]))
+    flushSync(() => setPickNow(p))
+    const h = window.innerHeight, w = window.innerWidth
+    const seen = (r: DOMRect) => r.bottom > 0 && r.top < h && r.right > 0 && r.left < w
+    for (const el of marks()) {
+      const to = el.getBoundingClientRect()
+      const from = was.get(el.dataset.flip!)
+      if (!from) { if (seen(to)) el.animate([{ opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1 }], { duration: 320, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' }); continue }
+      const dx = from.left - to.left, dy = from.top - to.top
+      if ((dx || dy) && (seen(from) || seen(to))) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' })
+    }
   }
   const covers = useQuery('browse-covers', loadCovers, { maxAge: DAY })
   useWarmCovers(covers.data)
   return (
-    <main className="page noscroll" onScroll={onDim}>
+    <main className="page noscroll" onScroll={onDim} ref={page}>
       <div className="tab-head br-head"><h1>Browse</h1></div>
       <div className="wl-filters"><TypePills pick={pick} setPick={setPick} /></div>
       {SECTIONS.map((sec, i) => {
         const cats = CATEGORIES.filter((c) => c.section === sec.id && fits(c, pick))
         return (
-          <section key={sec.id} className="br-section" data-first={i === 0} style={{ viewTransitionName: `br-sec-${sec.id}` } as CSSProperties}>
-            <div className="br-section-head">
+          <section key={sec.id} className="br-section" data-first={i === 0}>
+            <div className="br-section-head" data-flip={`head-${sec.id}`}>
               <h2>{sec.title}</h2>
               {cats.length > sec.shown && (
                 <button type="button" className="view-all" aria-label={`View all ${sec.title.toLowerCase()}`} onClick={() => push(`/browse/all/${sec.id}${kindPath(pick)}`)}>View all</button>
