@@ -719,7 +719,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .br-section { view-transition-class: br-sec; }
 ::view-transition-group(.br-card), ::view-transition-group(.br-sec) { animation-duration: 380ms; animation-timing-function: var(--ease-sheet); }
 ::view-transition-new(.br-card):only-child { animation: br-in 320ms var(--ease-out) both; }
-::view-transition-old(.br-card):only-child { animation: br-out 200ms var(--ease-out) both; }
+::view-transition-old(.br-card):only-child { animation: br-out 200ms ease-in both; }
 /* a section that keeps its cards is the same picture before and after: show the new one, no cross-fade ghost */
 ::view-transition-old(.br-sec) { animation: none; opacity: 0; }
 ::view-transition-new(.br-sec) { animation: none; }
