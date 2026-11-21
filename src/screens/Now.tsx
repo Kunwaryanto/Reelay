@@ -5,6 +5,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
+import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
 import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
@@ -162,7 +163,9 @@ export default function Now() {
     const t = setTimeout(done, 2500) // a slow picture doesn't hold the page back for ever
     return () => { live = false; clearTimeout(t) }
   }, [q.data, firstArt])
-  const ready = !!q.data && artFor === (firstArt ?? '')
+  const [icons, setIcons] = useState(false)
+  useEffect(() => { let live = true; void iconsReady.then(() => { if (live) setIcons(true) }); return () => { live = false } }, [])
+  const ready = !!q.data && artFor === (firstArt ?? '') && icons
   const readyRef = useRef(ready)
   readyRef.current = ready
   const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>('wait')
@@ -173,6 +176,15 @@ export default function Now() {
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
   }, [])
   const show = ready && phase !== 'mark'
+  // The tab bar comes last, after the content has started to arrive (straight away when there is only an
+  // error or placeholders to show).
+  const failed = !!q.error
+  useEffect(() => {
+    if (failed || phase === 'late') { markLaunched(); return }
+    if (!show) return
+    const t = setTimeout(markLaunched, 450)
+    return () => clearTimeout(t)
+  }, [show, failed, phase])
   // the staged rise plays once, at launch
   const [launching, setLaunching] = useState(true)
   useEffect(() => { if (!show) return; const t = setTimeout(() => setLaunching(false), 1600); return () => clearTimeout(t) }, [show])
@@ -181,7 +193,8 @@ export default function Now() {
     <>
     <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
       <h1 className="sr-only">Now</h1>
-      <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>
+      {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
+      {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
       {!show && !q.error && phase === 'mark' && <div className="launch"><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (

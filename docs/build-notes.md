@@ -273,3 +273,9 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Changes are a draft: "Show n films / series / results" applies them; closing any other way drops them. The button reads "No films match" and is off when the draft gives nothing.
 - A filter set in the drawer replaces what the words say about the same thing ("90s films", then Released: 80s).
 - Counts: by-name searches count what was found; filter-only searches ask the database, so the number can be larger than the 60 results the list shows.
+
+## Launch order (21 Nov)
+
+- Nothing of the app shows before Now is ready: data in, first hero picture decoded, icon font loaded. Until then the screen is black; after 300 ms the wordmark rises alone (no tab bar, no cog).
+- Then: picture, title (160 ms), cog and dots (240 ms), rows (from 300 ms), and last the tab bar (450 ms): its fade eases in over 500 ms and the icons rise.
+- An error or the placeholders bring the tab bar and cog at once. Opening on another page (a notification) has no launch: everything is there from the start.

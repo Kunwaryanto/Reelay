@@ -18,6 +18,7 @@ import Settings, { settingsPage } from './screens/Settings'
 import Start from './screens/Start'
 import Title from './screens/Title'
 import Watchlist from './screens/Watchlist'
+import { useLaunched } from './lib/launch'
 import { OfflinePill, TabBar, ToastProvider } from './ui'
 
 function renderPage(path: string) {
@@ -54,6 +55,10 @@ const TAB_OF: Record<string, Tab> = { '/': 'now', '/browse': 'browse', '/watchli
 
 function Shell() {
   const { path, push, setTab } = useNav()
+  // at launch the tab bar waits for Now, then arrives last: its fade eases in and the icons rise
+  const launched = useLaunched()
+  const [arriving, setArriving] = useState(!launched)
+  useEffect(() => { if (!launched) return; const t = setTimeout(() => setArriving(false), 900); return () => clearTimeout(t) }, [launched])
   // keep this device's notification address fresh, and open what a tapped notification points at
   useEffect(() => {
     registerDevice()
@@ -74,7 +79,7 @@ function Shell() {
       <FirstRun />
       <OfflinePill />
       {/* Search has its own bar at the bottom: the field and a close button */}
-      <TabBar hidden={path.startsWith('/settings') || path === '/search' || path === '/privacy' || path === '/terms' || path === '/onboarding'} />
+      <TabBar arriving={arriving} hidden={!launched || path.startsWith('/settings') || path === '/search' || path === '/privacy' || path === '/terms' || path === '/onboarding'} />
     </SavedProvider>
   )
 }

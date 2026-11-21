@@ -793,3 +793,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .fd-action .btn:disabled { background: var(--fill); color: var(--text-faint); }
 @media (prefers-reduced-motion: reduce) { .fd-track, .fd-pane { transition: none; } }
 @keyframes fade-in { from { opacity: 0; } }
+
+/* Launch: the tab bar arrives last; its fade eases in (elsewhere the fade is simply there) */
+.tabbar[data-arriving] .tabbar-fade { transition: opacity 500ms var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .tabbar[data-arriving] .tabbar-fade { transition: none; } }
