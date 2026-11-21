@@ -1,5 +1,5 @@
 // Browse: categories as cards (genres, lists, decades, countries), a category's page of rows, and the grid behind "View all".
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
@@ -131,9 +131,22 @@ export default function Browse() {
 
 /** A bar across the top of a pushed page: back, and the page's name in the middle. */
 function TopBar({ title, glass, shown = true }: { title: string; glass?: boolean; shown?: boolean }) {
-  const { dimmed } = useNav()
+  const { dimmed, path } = useNav()
+  const { setDimmed } = useNavActions()
+  // The bar belongs to its page: it follows the shared "dimmed" state only while its page is the one showing.
+  // Left behind (a page opened over it) or leaving (going back), it keeps the look it had, and coming back to
+  // it puts that look back, so nothing brightens or fades during the slide.
+  const [mine] = useState(path)
+  const [dim, setDim] = useState(dimmed)
+  const away = useRef(false)
+  useLayoutEffect(() => {
+    if (path !== mine) { away.current = true; return }
+    if (away.current) { away.current = false; if (dimmed !== dim) { setDimmed(dim); return } }
+    setDim(dimmed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimmed, path])
   return (
-    <header className="top-bar" data-dim={dimmed}>
+    <header className="top-bar" data-dim={dim}>
       <div className="top-fade" aria-hidden="true"><i /><i /><i /></div>
       <div className="top-row">
         <div className="top-back"><BackButton glass={glass} /></div>

@@ -291,3 +291,4 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 
 - Scrolling up on Now and title pages: the picture moves at about two thirds of the page's speed (170 px over the first 540 px), so the page slides over it. Off with reduced motion.
 - Pulling down: the picture stays at the top of the screen and grows to fill the gap (it scales by cover); the refresh wheel sits over it. On release it eases back with the page (420 ms).
+- A page's top bar keeps its own faded or full state: it doesn't change while another page is over it or while it slides away, and coming back restores it (the tab bar follows).
