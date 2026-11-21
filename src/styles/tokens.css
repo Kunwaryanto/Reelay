@@ -87,7 +87,9 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);    /* things moving on screen */
   /* the iOS keyboard, measured from a screen recording (iOS 26): up fast then a short settle; down a slow start then quick */
   --dur-keyboard: 300ms; --ease-keyboard: cubic-bezier(0.15, 0.85, 0.25, 1);
-  --dur-keyboard-down: 180ms; --ease-keyboard-down: cubic-bezier(0.6, 0.04, 0.7, 0.9);
+  /* down: the keyboard itself falls in about 180 ms and stops dead; following that exactly looked abrupt, so the
+     field starts with it and lands softly a little after */
+  --dur-keyboard-down: 340ms; --ease-keyboard-down: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-launch: 900ms; --ease-launch: cubic-bezier(0.22, 1, 0.36, 1);  /* Now arriving at launch: page, cog and tab bar together */
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);      /* iOS drawer and context menu */
   --ease-camera: cubic-bezier(0.16, 1, 0.3, 1);      /* onboarding step camera */
