@@ -123,6 +123,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Boards: Browse, Category, Grid · mixed list, Grid · typed list (all v121).
 - A category is a set of filters over streaming titles, defined in code (`CATEGORIES`); nothing is stored in the database. Genres, decades and countries open a category page (top three as the hero, then rows); lists open straight as a grid.
 - Routes: `/browse/all/<section>` (every card in a section), `/browse/c/<category>[/film|series]`, `/browse/g/<category>/<row|list>[/film|series]`. The Films/Series pill on Browse carries into the page it opens.
+- Switching All / Films / Series runs in a view transition: each card and section has a `view-transition-name`, so cards that stay glide to their new places and the ones that come or go fade (380 ms).
 - Card pictures: the artwork of the category's most popular title, a different title per card, looked up once a day. They load like posters, as one piece: picture, colour wash and name stay hidden on the plain card until the picture is decoded, then fade in together (300 ms). Every card picture is fetched 1.5 s after Browse shows, so the View all pages open with them ready. w300 or w780 by screen density.
 - Category rows: New in … (this year and last, most popular first; decades get "Popular from the …"), Leaving soon (30 days), Top … series, Top … films (by IMDb rating with enough votes). A row needs three titles to show.
 - Grid: type pills with counts on mixed rows, the year alone on typed ones; Sort by Highest rated / Newest / Most popular, re-fetched in that order (90 titles at most). "Only on my services" appears once Your services exists. The big title fades into the bar as the page scrolls.
@@ -141,7 +142,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Names are matched by the database's `search_titles` (handles typos, streaming titles first); filters alone list the most popular streaming titles that fit.
 - Results show titles not streaming in Sweden too, marked so. "Only on my services" reads "Only what’s streaming" until Your services exists.
 - Ideas before typing: Leaving soon, Swedish series, 90s films (each runs that search). The designed ones link to Browse and to award lists, which aren't built.
-- Recents (drawer on the left): searches submitted with the Search key and titles opened from results, 12 at most, kept on the phone and cleared on sign-out.
+- Recents (drawer on the left, in the sheet colour, no edge line; swipe left or tap beside it to close): a search is kept once its results have been on screen for 1.5 s (or the Search key is pressed), replacing the shorter ones typed on the way; plus titles opened from results. 12 at most, kept on the phone and cleared on sign-out.
 - Offline: "Search needs a connection for this. We’ll search again when you’re back." and it does. Searching what's saved on the phone needs the service worker, which isn't built.
 - Not built yet: People (needs the Person page), award filters and the award line (need the awards sync), the "Results for …" typo line, titles outside the catalogue with Notify me (needs a server-side TMDB lookup), long press on a row.
 

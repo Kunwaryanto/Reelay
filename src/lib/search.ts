@@ -246,4 +246,6 @@ export function writeRecents(list: Recent[]) {
   try { localStorage.setItem(RECENTS, JSON.stringify(list)) } catch { /* private mode: recents last for this visit only */ }
 }
 const same = (a: Recent, b: Recent) => (a.t === 'q' && b.t === 'q' ? a.text.toLowerCase() === b.text.toLowerCase() : a.t === 'title' && b.t === 'title' && a.id === b.id)
-export const addRecent = (list: Recent[], r: Recent): Recent[] => [r, ...list.filter((x) => !same(x, r))].slice(0, 12)
+/** Newest first, 12 at most. A search replaces the shorter ones typed on the way to it ("sha" then "shaw"). */
+export const addRecent = (list: Recent[], r: Recent): Recent[] => [r, ...list.filter((x) =>
+  !same(x, r) && !(r.t === 'q' && x.t === 'q' && r.text.toLowerCase().startsWith(x.text.toLowerCase())))].slice(0, 12)

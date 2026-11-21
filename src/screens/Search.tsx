@@ -141,6 +141,16 @@ export default function Search() {
     push(`/title/${h.id}`)
   }
   const run = (text: string) => { change(text); setKind('all'); setDrawer(false) }
+  // A search counts as made once its results have been on screen for a moment (no need to press Search).
+  const settled = found && !waiting && found.hits.length + found.people.length > 0 ? q.trim() : ''
+  useEffect(() => {
+    if (settled.length < 2) return
+    const t = setTimeout(() => remember({ t: 'q', text: settled }), 1500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settled])
+  // Recents: swipe it (or the page beside it) to the left to close
+  const swipe = useRef<{ x: number; y: number } | null>(null)
 
   // why there is nothing, and the one step that gets something back
   const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0
@@ -169,7 +179,15 @@ export default function Search() {
   const up = typing && room > 0
 
   return (
-    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift } as React.CSSProperties}>
+    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift } as React.CSSProperties}
+      onTouchStart={(e) => { swipe.current = drawer ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
+      onTouchMove={(e) => {
+        const s = swipe.current
+        if (!s) return
+        const dx = e.touches[0].clientX - s.x, dy = e.touches[0].clientY - s.y
+        if (dx < -40 && Math.abs(dx) > Math.abs(dy) * 1.5) { swipe.current = null; setDrawer(false) }
+      }}
+      onTouchEnd={() => { swipe.current = null }}>
       <nav className="s-recents" aria-label="Recent searches" inert={!drawer}>
         <div className="s-recents-head">
           <h2>Recents</h2>
@@ -290,6 +308,12 @@ export default function Search() {
               const el = input.current
               if (!el || el === document.activeElement || (e.target as HTMLElement).closest('button')) return
               e.preventDefault()
+              el.focus({ preventScroll: true })
+            }}
+            // iOS sometimes ignores a focus made at touch-down (seen right after the recents drawer): ask again on lift
+            onTouchEnd={(e) => {
+              const el = input.current
+              if (!el || el === document.activeElement || (e.target as HTMLElement).closest('button')) return
               el.focus({ preventScroll: true })
             }}>
             <Icon name="search" size={20} />

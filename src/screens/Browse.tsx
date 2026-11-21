@@ -1,6 +1,6 @@
 // Browse: categories as cards (genres, lists, decades, countries), a category's page of rows, and the grid behind "View all".
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
   CATEGORIES, SECTIONS, categoryOf, loadCategory, loadCovers, rowsOf, titlesIn,
@@ -41,7 +41,7 @@ function useWarmCovers(covers: Record<string, string | null> | undefined) {
   }, [covers])
 }
 
-function CategoryCard({ cat, cover, pick }: { cat: Category; cover: string | null | undefined; pick: Pick }) {
+function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: string | null | undefined; pick: Pick; named?: boolean }) {
   const { push } = useNavActions()
   const href = hrefOf(cat, pick)
   // Picture, colour wash and name are one: all three fade in together once the picture is decoded (or there is
@@ -51,7 +51,9 @@ function CategoryCard({ cat, cover, pick }: { cat: Category; cover: string | nul
   const setReady = setLoaded
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
   return (
-    <a className="br-card press" href={href} data-ready={ready} onClick={(e) => { e.preventDefault(); push(href) }}>
+    <a className="br-card press" href={href} data-ready={ready}
+      // on the Browse tab each card has a name, so switching type moves it to its new place (see setPick there)
+      style={named ? ({ viewTransitionName: `br-${cat.id}` } as CSSProperties) : undefined} onClick={(e) => { e.preventDefault(); push(href) }}>
       {cover && <img {...coverSrc(cover)} alt="" decoding="async" draggable={false}
         ref={(el) => { if (el?.complete && el.naturalWidth && !ready) show(el) }}
         onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
@@ -80,7 +82,12 @@ function TypePills({ pick, setPick, counts }: { pick: Pick; setPick: (p: Pick) =
 export default function Browse() {
   const { push } = useNavActions()
   const onDim = useDimOnScroll()
-  const [pick, setPick] = useState<Pick>('all')
+  const [pick, setPickNow] = useState<Pick>('all')
+  // All / Films / Series: cards that stay glide to their new places, the ones that come and go fade.
+  const setPick = (p: Pick) => {
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { setPickNow(p); return }
+    document.startViewTransition(() => flushSync(() => setPickNow(p)))
+  }
   const covers = useQuery('browse-covers', loadCovers, { maxAge: DAY })
   useWarmCovers(covers.data)
   return (
@@ -90,7 +97,7 @@ export default function Browse() {
       {SECTIONS.map((sec, i) => {
         const cats = CATEGORIES.filter((c) => c.section === sec.id && fits(c, pick))
         return (
-          <section key={sec.id} className="br-section" data-first={i === 0}>
+          <section key={sec.id} className="br-section" data-first={i === 0} style={{ viewTransitionName: `br-sec-${sec.id}` } as CSSProperties}>
             <div className="br-section-head">
               <h2>{sec.title}</h2>
               {cats.length > sec.shown && (
@@ -98,7 +105,7 @@ export default function Browse() {
               )}
             </div>
             <div className="br-grid">
-              {cats.slice(0, sec.shown).map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data?.[c.id]} pick={pick} />)}
+              {cats.slice(0, sec.shown).map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data?.[c.id]} pick={pick} named />)}
             </div>
           </section>
         )

@@ -446,7 +446,7 @@ html[data-runway] .tabbar { touch-action: none; }
 
 /* ---- Search ---- */
 .search { position: absolute; inset: 0; overflow: clip; background: var(--bg); }
-.s-recents { position: absolute; top: 0; bottom: 0; left: 0; width: 290px; padding-top: calc(var(--safe-top) + 21px); overflow-y: auto; opacity: 0; transform: translateX(-60px); transition: transform var(--dur-sheet) var(--ease-sheet), opacity var(--dur-sheet) var(--ease-sheet); }
+.s-recents { position: absolute; top: 0; bottom: 0; left: 0; width: 290px; background: var(--sheet); padding-top: calc(var(--safe-top) + 21px); overflow-y: auto; opacity: 0; transform: translateX(-60px); transition: transform var(--dur-sheet) var(--ease-sheet), opacity var(--dur-sheet) var(--ease-sheet); }
 .search[data-drawer='true'] .s-recents { opacity: 1; transform: none; }
 .s-recents-head { margin: 0 var(--margin); height: var(--hit); display: flex; align-items: center; justify-content: space-between; }
 .s-recents-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
@@ -463,7 +463,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-recent-text { min-width: 0; display: flex; flex-direction: column; }
 .s-recent-text b { font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .s-recent-text small { margin-top: 1px; font: var(--type-meta); color: var(--text-faint); }
-.s-stage { position: absolute; inset: 0; background: var(--bg); box-shadow: -0.5px 0 0 rgba(255, 255, 255, 0.2); transition: transform var(--dur-sheet) var(--ease-sheet); }
+.s-stage { position: absolute; inset: 0; background: var(--bg); transition: transform var(--dur-sheet) var(--ease-sheet); }
 .search[data-drawer='true'] .s-stage { transform: translateX(290px); }
 .s-stage-scrim { position: absolute; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.35); }
 .s-recents-btn { position: absolute; z-index: 2; top: calc(var(--safe-top) + 19px); left: 14px; }
@@ -712,3 +712,16 @@ html[data-runway] .tabbar { touch-action: none; }
 .offline-pill > span { display: block; animation: launch-fade 300ms var(--ease-out) both; }
 @keyframes pill-in { from { opacity: 0; transform: translateY(-14px) scale(0.94); } }
 @media (prefers-reduced-motion: reduce) { .offline-pill, .offline-pill > span { animation: none; transition: none; } }
+
+/* Browse, switching All / Films / Series: cards move to their new places; new ones fade in, old ones fade out. */
+.br-card { view-transition-class: br-card; }
+.br-section { view-transition-class: br-sec; }
+::view-transition-group(.br-card), ::view-transition-group(.br-sec) { animation-duration: 380ms; animation-timing-function: var(--ease-sheet); }
+::view-transition-new(.br-card):only-child { animation: br-in 320ms var(--ease-out) both; }
+::view-transition-old(.br-card):only-child { animation: br-out 200ms var(--ease-out) both; }
+/* a section that keeps its cards is the same picture before and after: show the new one, no cross-fade ghost */
+::view-transition-old(.br-sec) { animation: none; opacity: 0; }
+::view-transition-new(.br-sec) { animation: none; }
+@keyframes br-in { from { opacity: 0; scale: 0.94; } }
+@keyframes br-out { to { opacity: 0; scale: 0.94; } }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
