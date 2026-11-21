@@ -50,6 +50,9 @@ export function warmBrowse(path: string) {
 const coverSrc = (path: string) => ({ src: tmdbImage(path, 'w780'), srcSet: `${tmdbImage(path, 'w300')} 300w, ${tmdbImage(path, 'w780')} 780w`, sizes: '50vw' })
 
 /** Load every card picture ahead (a couple of seconds after Browse shows), so View all opens with them ready. */
+// The saved card pictures are per set of categories: a new category makes the app look them up again, not wait a day.
+const COVERS_KEY = `browse-covers:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`
+
 function useWarmCovers(covers: Record<string, string | null> | undefined) {
   useEffect(() => {
     if (!covers) return
@@ -128,7 +131,7 @@ export default function Browse() {
       if ((dx || dy) && (seen(from) || seen(to))) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' })
     }
   }
-  const covers = useQuery('browse-covers', loadCovers, { maxAge: DAY })
+  const covers = useQuery(COVERS_KEY, loadCovers, { maxAge: DAY })
   useWarmCovers(covers.data)
   // the first cards' pages load ahead, a moment after Browse has settled
   useEffect(() => {
@@ -153,7 +156,7 @@ export default function Browse() {
               )}
             </div>
             <div className="br-grid">
-              {cats.slice(0, sec.shown).map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data?.[c.id]} pick={pick} named />)}
+              {cats.slice(0, sec.shown).map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data ? covers.data[c.id] ?? null : undefined} pick={pick} named />)}
             </div>
           </section>
         )
@@ -193,7 +196,7 @@ function TopBar({ title, glass, shown = true }: { title: string; glass?: boolean
 export function BrowseSection({ section, kind }: { section: SectionId; kind?: Kind }) {
   const onDim = useDimOnScroll()
   const pick: Pick = kind ?? 'all'
-  const covers = useQuery('browse-covers', loadCovers, { maxAge: DAY })
+  const covers = useQuery(COVERS_KEY, loadCovers, { maxAge: DAY })
   const sec = SECTIONS.find((s) => s.id === section)
   const cats = CATEGORIES.filter((c) => c.section === section && fits(c, pick))
   return (
@@ -202,7 +205,7 @@ export function BrowseSection({ section, kind }: { section: SectionId; kind?: Ki
       <main className="page noscroll" onScroll={onDim}>
         <h1 className="sr-only">{sec?.title}</h1>
         <div className="br-grid br-grid-page">
-          {cats.map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data?.[c.id]} pick={pick} />)}
+          {cats.map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data ? covers.data[c.id] ?? null : undefined} pick={pick} />)}
         </div>
       </main>
     </>
