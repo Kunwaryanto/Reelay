@@ -279,3 +279,5 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Nothing of the app shows before Now is ready: data in, first hero picture decoded, icon font loaded. Until then the screen is black; after 300 ms the wordmark rises alone (no tab bar, no cog).
 - Then: picture, title (160 ms), cog and dots (240 ms), rows (from 300 ms), and last the tab bar (450 ms): its fade eases in over 500 ms and the icons rise.
 - An error or the placeholders bring the tab bar and cog at once. Opening on another page (a notification) has no launch: everything is there from the start.
+- Ready also means everything above the fold is decoded: the hero picture, its title logo and the first three posters of the first row (2.5 s cap). The wordmark fades out (350 ms, scaling to 1.03) while the page fades in under it.
+- Pieces arrive whole: the cog's glass circle fades with its icon and dot; a card's title and meta fade in with its picture.

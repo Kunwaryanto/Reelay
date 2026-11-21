@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, type Card } from '../lib/catalogue'
-import { tmdbImage } from '../lib/images'
+import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
@@ -146,26 +146,39 @@ export default function Now() {
   const { bind, indicator } = usePullToRefresh(q.retry)
   const fresh = useNewVersion()
   const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
-  // Launch: ready means the data is in and the first hero picture is decoded. Ready within 300 ms: Now just rises.
-  // Later than that: the wordmark rises on black and always finishes (900 ms) before handing over; still waiting
-  // at 3.3 s, grey placeholders stand in and the content rises over them.
+  // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its
+  // title logo, and the first posters of the first row. Ready within 300 ms: Now just rises.
+  // Later than that: the wordmark rises on black and always finishes (900 ms) before fading into the page; still
+  // waiting at 3.3 s, grey placeholders stand in and the content rises over them.
   const first = q.data?.hero[0]
   const firstArt = first ? tmdbImage(first.backdrop_path, 'w1280') ?? tmdbImage(first.poster_path, 'w780') : undefined
+  const foldKey = q.data ? `${firstArt ?? ''}|${q.data.rows[0]?.id ?? ''}` : null
   const [artFor, setArtFor] = useState<string | null>(null)
   useEffect(() => {
-    if (!q.data) return
-    if (!firstArt) { setArtFor(''); return }
+    if (!q.data || foldKey === null) return
     let live = true
-    const done = () => { if (live) setArtFor(firstArt) }
-    const img = new Image()
-    img.src = firstArt
-    img.decode().then(done, done)
-    const t = setTimeout(done, 2500) // a slow picture doesn't hold the page back for ever
+    const done = () => { if (live) setArtFor(foldKey) }
+    const decode = (src: string | null | undefined, srcset?: string) => {
+      if (!src) return Promise.resolve()
+      const img = new Image()
+      // the same candidates as the card, so this is the file the card will show
+      if (srcset) { img.sizes = '147px'; img.srcset = srcset }
+      img.src = src
+      return img.decode().catch(() => {})
+    }
+    const posters = (q.data.rows[0]?.items ?? []).slice(0, 3)
+    void Promise.all([
+      decode(firstArt), decode(tmdbImage(first?.logo_path, 'w500')),
+      ...posters.map((c) => decode(tmdbImage(c.poster_path, 'w342'), posterSrcSet(c.poster_path))),
+    ]).then(done)
+    const t = setTimeout(done, 2500) // slow pictures don't hold the page back for ever
     return () => { live = false; clearTimeout(t) }
-  }, [q.data, firstArt])
+    // `foldKey` stands for the data
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foldKey])
   const [icons, setIcons] = useState(false)
   useEffect(() => { let live = true; void iconsReady.then(() => { if (live) setIcons(true) }); return () => { live = false } }, [])
-  const ready = !!q.data && artFor === (firstArt ?? '') && icons
+  const ready = !!q.data && artFor === foldKey && icons
   const readyRef = useRef(ready)
   readyRef.current = ready
   const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>('wait')
@@ -176,6 +189,16 @@ export default function Now() {
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
   }, [])
   const show = ready && phase !== 'mark'
+  // the wordmark fades out as the page fades in, instead of being cut off
+  const [markOut, setMarkOut] = useState(false)
+  const hadMark = useRef(false)
+  if (phase === 'mark') hadMark.current = true
+  useEffect(() => {
+    if (!show || !hadMark.current) return
+    setMarkOut(true)
+    const t = setTimeout(() => setMarkOut(false), 450)
+    return () => clearTimeout(t)
+  }, [show])
   // The tab bar comes last, after the content has started to arrive (straight away when there is only an
   // error or placeholders to show).
   const failed = !!q.error
@@ -196,7 +219,7 @@ export default function Now() {
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
       {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
-      {!show && !q.error && phase === 'mark' && <div className="launch"><Wordmark height={32} rise /></div>}
+      {((!show && !q.error && phase === 'mark') || markOut) && <div className="launch" data-leaving={markOut || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
         <div className="now-holders" aria-hidden="true">
           <div />
