@@ -6,7 +6,7 @@ import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
-import { BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
+import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -44,8 +44,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   return (
     <>
       <section className="title-top" aria-labelledby="t-title">
-        {art && <div className="title-art-box"><img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" /></div>}
-        <div className="hero-shade" aria-hidden="true" />
+        {art && <PinnedArt><img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" /></PinnedArt>}
         <div className="title-head">
           <h1 id="t-title">{t.title}</h1>
           <div className="title-actions">

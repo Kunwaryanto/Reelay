@@ -7,7 +7,7 @@ import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
-import { GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card): string {
   const service = c.availability[0]?.service_id
@@ -51,13 +51,10 @@ export function Hero({ items }: { items: Card[] }) {
         onPointerCancel={() => { x0.current = null; setPaused(false) }}>
         {items.map((h, i) => {
           const on = i === index
-          const art = tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')
           return (
             <a key={h.id} className="hero-slide" data-on={on} href={`/title/${h.id}`} aria-label={`${h.title}, ${heroMeta(h)}`}
               aria-hidden={!on} tabIndex={on ? 0 : -1} style={{ '--from': `${8 * dir}%` } as CSSProperties}
               onClick={(e) => { e.preventDefault(); if (!swiped.current) push(`/title/${h.id}`) }}>
-              {art && <img className="hero-art" src={art} alt="" draggable={false} fetchPriority={i === 0 ? 'high' : undefined} loading={i === 0 ? undefined : 'lazy'} />}
-              <div className="hero-shade" aria-hidden="true" />
               <div className="hero-text">
                 {h.logo_path ? <img className="hero-logo" src={tmdbImage(h.logo_path, 'w500')} alt="" draggable={false} /> : <span className="hero-name">{h.title}</span>}
                 <span className="hero-meta">{heroMeta(h)}</span>
@@ -66,6 +63,14 @@ export function Hero({ items }: { items: Card[] }) {
           )
         })}
       </div>
+      {/* the pictures sit behind the page, pinned to the top of the screen */}
+      <PinnedArt>
+        {items.map((h, i) => {
+          const art = tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')
+          return art && <img key={h.id} className="hero-art" data-on={i === index} src={art} alt="" draggable={false}
+            style={{ '--from': `${8 * dir}%` } as CSSProperties} fetchPriority={i === 0 ? 'high' : undefined} loading={i === 0 ? undefined : 'lazy'} />
+        })}
+      </PinnedArt>
       {n > 1 && (
         <div className="hero-dots" aria-hidden="true">
           {items.map((h, i) => <span key={h.id} data-on={i === index}>{i === index && <i key={index} style={{ animationPlayState: paused ? 'paused' : 'running' }} />}</span>)}

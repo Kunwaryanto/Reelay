@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom'
 // Building blocks from the Components page of the design canvas. Styles are in src/styles/app.css.
-import {
+import { useLayoutEffect,
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react'
@@ -757,4 +758,42 @@ export function PosterWall({ posters, still, dim = 0.55, onReady }: { posters: s
       <div className="wall-fade" />
     </div>
   )
+}
+
+// ---- The picture at the top of a page ----------------------------------------
+
+/**
+ * Puts the top picture behind the scrolling page instead of inside it, pinned to the top of the screen. When iOS
+ * bounces the page down, or it is pulled to refresh, the picture then simply doesn't move, so nothing has to be
+ * corrected frame by frame (which is what made it judder). Scrolling up, the picture's frame leaves with the page
+ * and the picture inside it lags a little (see .art-layer in app.css).
+ * Render it anywhere inside the page; `children` are the pictures.
+ */
+export function PinnedArt({ children }: { children: ReactNode }) {
+  const mark = useRef<HTMLSpanElement>(null)
+  const [frame, setFrame] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    const page = mark.current?.closest<HTMLElement>('main.page')
+    if (!page?.parentElement) return
+    const layer = document.createElement('div')
+    layer.className = 'art-layer'
+    layer.setAttribute('aria-hidden', 'true')
+    const drift = document.createElement('div')
+    drift.className = 'art-drift'
+    // the dark fade over the picture belongs to it (it stays put with it); the title over it moves with the page
+    const shade = document.createElement('div')
+    shade.className = 'hero-shade'
+    layer.append(drift, shade)
+    page.before(layer)
+    setFrame(drift)
+    // browsers without scroll-driven animations: move it by hand
+    let stop = () => {}
+    if (!CSS.supports('animation-timeline', 'scroll()')) {
+      const move = () => { const y = Math.max(0, Math.min(540, page.scrollTop)); layer.style.translate = `0 ${-y}px`; drift.style.translate = `0 ${y * 0.315}px` }
+      page.addEventListener('scroll', move, { passive: true })
+      stop = () => page.removeEventListener('scroll', move)
+    }
+    return () => { stop(); layer.remove() }
+  }, [])
+  return <><span ref={mark} hidden />{frame && createPortal(children, frame)}</>
 }

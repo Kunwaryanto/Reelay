@@ -120,11 +120,11 @@ button { font: inherit; color: inherit; }
 .now-settings { position: absolute; z-index: 4; top: calc(var(--safe-top) + 15px); right: 12px; }
 .hero { position: relative; height: 540px; margin-bottom: var(--row-gap); }
 .hero-gap { height: calc(var(--safe-top) + 70px); }
-.hero-stage { position: relative; height: 100%; clip-path: inset(calc(var(--pull) * -1 - var(--art-over)) 0 0 0); touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
-.hero-slide { position: absolute; inset: calc(var(--pull) * -1 - var(--art-over)) 0 0 0; display: block; overflow: hidden; pointer-events: none; z-index: 0; -webkit-touch-callout: none; }
+.hero-stage { position: relative; height: 100%; touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
+.hero-slide { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; z-index: 0; -webkit-touch-callout: none; }
 .hero-slide[data-on='true'] { pointer-events: auto; z-index: 2; }
 .hero-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; opacity: 0; transform: translateX(var(--from, 8%)); transition: opacity 350ms var(--ease-out), transform 450ms var(--ease-out); }
-.hero-slide[data-on='true'] .hero-art { opacity: 1; transform: none; }
+.hero-art[data-on='true'] { opacity: 1; transform: none; }
 .hero-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0) 16%, rgba(0, 0, 0, 0) 46%, rgba(0, 0, 0, 0.45) 70%, #000 100%); }
 .hero-text { position: absolute; inset: 0; opacity: 0; transition: opacity 450ms var(--ease-out); }
 .hero-slide[data-on='true'] .hero-text { opacity: 1; }
@@ -154,10 +154,8 @@ button { font: inherit; color: inherit; }
 
 /* ---- Title page ---- */
 .title-top { position: relative; padding: 508px 0 6px; }
-.title-art-box { position: absolute; top: calc(var(--pull) * -1 - var(--art-over)); left: 0; width: 100%; height: calc(540px + var(--pull) + var(--art-over)); overflow: hidden; }
 .title-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 .title-art[data-poster='true'] { object-position: center top; }
-.title-top .hero-shade { bottom: auto; height: 540px; }
 .title-head { position: relative; margin: 0 var(--margin); display: flex; align-items: flex-start; gap: 12px; }
 .title-head h1 { flex: 1; min-width: 0; margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); letter-spacing: var(--track-title); }
 .title-actions { flex: none; display: flex; align-items: center; gap: 6px; height: 26px; }
@@ -792,22 +790,26 @@ html[data-runway] .tabbar { touch-action: none; }
 .card:has(.cover[data-ready='false']) .card-title, .card:has(.cover[data-ready='false']) .card-meta { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .launch[data-leaving] { animation-duration: 1ms; } .card-title, .card-meta { transition: none; } }
 
-/* ---- The picture at the top of Now and title pages (like Apple TV) ----
-   Pulling down: it stays at the top of the screen and grows to fill the gap, instead of sliding down with the page.
-   --pull is how far the page is pulled; it is a registered length so it can ease back with the page. */
+/* ---- The picture at the top of Now, title and category pages (like Apple TV) ----
+   It is not inside the scrolling page: it sits behind it (PinnedArt), in a frame pinned to the top of the screen.
+   - iOS bouncing the page down, or a pull to refresh: the picture doesn't move at all; the page slides over it.
+   - Scrolling up: the frame leaves at the page's speed (so the picture never shows behind the rows below) while
+     the picture inside it drifts back, which makes it move at about two thirds of the page's speed.
+   Both run on the page's scroll timeline, off the main thread. --pull is how far the page is pulled to refresh. */
 @property --pull { syntax: '<length>'; inherits: true; initial-value: 0px; }
-.title-top .hero-shade { top: calc(var(--pull) * -1 - var(--art-over)); height: calc(540px + var(--pull) + var(--art-over)); }
-:root { --art-over: 0px; }
-/* Pull to refresh: everything on the page moves down by --pull (the picture then puts itself back at the top) */
 .page[data-ptr] > * { translate: 0 var(--pull); }
-/* Scrolling up: the picture moves at about two thirds of the page's speed, so the page slides over it. */
+.pane-in { timeline-scope: --page; }
+.page { scroll-timeline: --page block; }
+.art-layer { position: absolute; top: 0; left: 0; right: 0; height: 540px; overflow: hidden; pointer-events: none; }
+.art-drift { position: absolute; inset: 0; }
+.art-layer:has(+ .page[data-launch]) { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
 @supports (animation-timeline: scroll()) {
-  .page { scroll-timeline: --page block; }
+  .art-layer { animation: art-leave linear both; animation-timeline: --page; animation-range: 0 540px; }
+  .art-layer:has(+ .page[data-launch]) { animation: art-leave linear both, launch-fade var(--dur-launch) var(--ease-launch) both; animation-timeline: --page, auto; animation-range: 0 540px, normal; }
   @media (prefers-reduced-motion: no-preference) {
-    .hero-art, .title-art { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
+    .art-drift { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
   }
-  /* Only `translate` moves (its frame cuts off what hangs below): anything else here, a clip-path for one, takes the
-     animation off the scrolling thread in Safari and the picture then judders behind the page. */
+  @keyframes art-leave { to { translate: 0 -540px; } }
   @keyframes art-drift { to { translate: 0 170px; } }
 }
 

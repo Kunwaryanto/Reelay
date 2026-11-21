@@ -307,3 +307,9 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - The same holds when iOS bounces the page down after a flick to the top (not only for a pull that starts there): the picture stays at the top and grows. It also reaches 60 px above the screen at all times, so a fast bounce shows more picture, never black.
 - Pull to refresh moves the page's content down (not the page's own box, which cut the picture off above its top edge on the phone). The picture keeps its normal framing: no extra reach above the screen.
 - Bounce smoothness: the distance is set on the picture's own block (not the page, which restyled everything each frame), and on the way down the picture is sent one frame's movement further than reported, because scroll positions arrive a frame late.
+
+## Top picture, rebuilt (21 Nov): pinned behind the page
+
+- The picture is no longer inside the scrolling page. It sits behind it in a frame pinned to the top of the screen (`PinnedArt`), so when iOS bounces the page down or it is pulled to refresh, the picture doesn't move and nothing is corrected per frame.
+- Scrolling up: the frame leaves at the page's speed and the picture inside drifts back 170 px over 540 px (about two thirds of the page's speed). Both run on the page's scroll timeline.
+- The shade, title and dots stay in the page and move with it. The picture no longer grows on a pull; it stays still and the page slides down over it.
