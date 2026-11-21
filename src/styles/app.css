@@ -763,9 +763,8 @@ html[data-runway] .tabbar { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .now-settings > i, .update-card { animation: none; } }
 
 /* ---- Search: Sort and filter drawer ---- */
-.s-tune { width: auto; padding: 0 10px; gap: 0; }
-/* the count of filters on, set like the counts on the type pills */
-.s-tune b { align-self: flex-start; margin: 11px 0 0 -3px; font: var(--type-count); color: #fff; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.s-tune { width: auto; padding: 0 10px; gap: 4px; }
+.s-tune b { min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #fff; color: #000; font: 600 10px/16px var(--font); text-align: center; font-variant-numeric: tabular-nums; }
 .fd { position: relative; height: min(500px, calc(100lvh - 260px)); margin: -12px calc(var(--margin) * -1) 0; overflow: hidden; }
 .fd-track { position: absolute; top: 0; bottom: 0; left: 0; width: 200%; display: flex; transition: transform var(--dur-sheet) var(--ease-sheet); }
 .fd-track[data-sub='true'] { transform: translateX(-50%); }
