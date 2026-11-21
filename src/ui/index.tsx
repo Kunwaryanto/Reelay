@@ -291,7 +291,7 @@ function Activity() {
 }
 
 const HOLD = 48 // px below the status bar where the page waits while loading
-const SETTLE = 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1), --pull 420ms cubic-bezier(0.22, 1, 0.36, 1)'
+const SETTLE = '--pull 420ms cubic-bezier(0.22, 1, 0.36, 1)'
 
 /**
  * Pull down from the top to refresh, like a native iOS list. A pull that starts at the top of the page is ours
@@ -318,8 +318,8 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
     const place = (d: number, animate: boolean) => {
       dist = d
       el.style.transition = animate ? SETTLE : 'none'
-      el.style.transform = d ? `translateY(${d}px)` : ''
-      // the picture at the top of the page stays at the top of the screen and grows into the gap (see --pull in app.css)
+      // --pull moves what is on the page down (not the page's own box, which would cut off anything above its top
+      // edge), and the picture at the top uses it to stay at the top of the screen and grow (see app.css)
       el.style.setProperty('--pull', `${d}px`)
       const i = ind.current
       if (!i) return

@@ -797,9 +797,9 @@ html[data-runway] .tabbar { touch-action: none; }
    --pull is how far the page is pulled; it is a registered length so it can ease back with the page. */
 @property --pull { syntax: '<length>'; inherits: true; initial-value: 0px; }
 .title-top .hero-shade { top: calc(var(--pull) * -1 - var(--art-over)); height: calc(540px + var(--pull) + var(--art-over)); }
-/* The picture always reaches a little above the top of the screen, so if it is a frame behind a fast bounce
-   there is more picture there, never a strip of black. */
-:root { --art-over: 60px; }
+:root { --art-over: 0px; }
+/* Pull to refresh: everything on the page moves down by --pull (the picture then puts itself back at the top) */
+.page[data-ptr] > * { translate: 0 var(--pull); }
 /* Scrolling up: the picture moves at about two thirds of the page's speed, so the page slides over it. */
 @supports (animation-timeline: scroll()) {
   .page { scroll-timeline: --page block; }

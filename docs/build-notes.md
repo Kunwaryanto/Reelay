@@ -305,3 +305,4 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Keyboard timing measured from a recording (replaces the 500 ms guess): up 300 ms cubic-bezier(0.15, 0.85, 0.25, 1); down 180 ms cubic-bezier(0.6, 0.04, 0.7, 0.9).
 - Leaving the app on Search drops the field to rest at once (no animation), so the app-switcher picture and the reopening start from Search at rest; animations come back two frames after the app shows again.
 - The same holds when iOS bounces the page down after a flick to the top (not only for a pull that starts there): the picture stays at the top and grows. It also reaches 60 px above the screen at all times, so a fast bounce shows more picture, never black.
+- Pull to refresh moves the page's content down (not the page's own box, which cut the picture off above its top edge on the phone). The picture keeps its normal framing: no extra reach above the screen.
