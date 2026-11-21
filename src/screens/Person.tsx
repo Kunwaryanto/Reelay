@@ -7,7 +7,7 @@ import { useDimOnScroll } from '../lib/nav'
 import { servicesLabel, useMyServices } from '../lib/profile'
 import { useQuery } from '../lib/query'
 import { supabase } from '../lib/supabase'
-import { BackButton, Button, Icon, LoadFailed, Sheet, TitleCard } from '../ui'
+import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, TitleCard } from '../ui'
 import { HoldMenu } from './Now'
 import { Gone } from './Title'
 
@@ -78,7 +78,7 @@ export default function Person({ id }: { id: number }) {
               <div role="group" aria-label="Credits" className="noscroll">
                 {depts.length > 1 ? depts.map((r) => (
                   <button key={r} type="button" className="wl-pill" aria-pressed={current === r} onClick={() => setDept(r)}>
-                    <span>{DEPT[r]}<sup aria-hidden="true">{p.credits.filter((c) => c.role === r && pass(c)).length}</sup></span>
+                    <span>{DEPT[r]}<PillCount n={p.credits.filter((c) => c.role === r && pass(c)).length} /></span>
                   </button>
                 )) : <span className="person-count">{list.length === 1 ? '1 title' : `${list.length} titles`}</span>}
               </div>

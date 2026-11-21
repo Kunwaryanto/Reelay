@@ -11,7 +11,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { useQuery } from '../lib/query'
-import { BackButton, Icon, LoadFailed, PosterRow, SectionHeader, TitleCard } from '../ui'
+import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, TitleCard } from '../ui'
 import { Hero, HoldMenu } from './Now'
 
 type Pick = 'all' | Kind
@@ -67,12 +67,12 @@ function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: strin
 
 const fits = (cat: Category, pick: Pick) => pick === 'all' || !cat.only || cat.only === pick
 
-function TypePills({ pick, setPick, counts }: { pick: Pick; setPick: (p: Pick) => void; counts?: Record<Pick, number> }) {
+function TypePills({ pick, setPick, counts }: { pick: Pick; setPick: (p: Pick) => void; counts?: Partial<Record<Pick, number>> }) {
   return (
     <div role="group" aria-label="Type">
       {PICKS.map(([k, label]) => (
         <button key={k} type="button" className="wl-pill" aria-pressed={pick === k} onClick={() => setPick(k)}>
-          <span>{label}{counts && <sup aria-hidden="true">{counts[k]}</sup>}</span>
+          <span>{label}{counts && <PillCount n={counts[k]} />}</span>
         </button>
       ))}
     </div>
@@ -288,7 +288,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
           <h1 ref={big}>{def.title}</h1>
           {typed && tune}
         </div>
-        {!typed && <div className="wl-filters"><TypePills pick={pick} setPick={setPick} counts={counts} />{tune}</div>}
+        {!typed && <div className="wl-filters"><TypePills pick={pick} setPick={setPick} counts={q.data ? counts : {}} />{tune}</div>}
         {chips.length > 0 && (
           <div className="s-chips">
             {chips.map((c) => <button key={c.key} type="button" aria-label={`Remove ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>)}

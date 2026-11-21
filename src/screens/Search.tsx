@@ -13,7 +13,7 @@ import {
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
 import { FilterDrawer, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, LoadFailed, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
+import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress } from '../ui'
 import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
@@ -392,7 +392,7 @@ export default function Search() {
                 <div role="group" aria-label="Type">
                   {([['all', 'All'], ['series', 'Series'], ['film', 'Films'], ...(folks.length ? [['people', 'People']] : [])] as [Kind, string][]).map(([k, label]) => (
                     <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={waiting ? label : `${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
-                      <span>{label}<sup aria-hidden="true" data-off={waiting || undefined}>{waiting && !found ? '' : counts[k]}</sup></span>
+                      <span>{label}<PillCount n={waiting && !found ? undefined : counts[k]} off={waiting} /></span>
                     </button>
                   ))}
                 </div>

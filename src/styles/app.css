@@ -384,7 +384,12 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-pill { height: var(--hit); padding: 0; border: 0; background: none; cursor: pointer; }
 .wl-pill > span { height: 28px; padding: 0 14px; border-radius: var(--radius-pill-28); background: var(--fill); color: #fff; font: var(--type-text); font-weight: 500; display: flex; align-items: center; }
 .wl-pill[aria-pressed='true'] > span { background: #fff; color: #000; }
-.wl-pill sup { align-self: flex-start; margin: 5px 0 0 2px; font-size: 9px; line-height: 10px; font-weight: 500; opacity: 0.6; font-variant-numeric: tabular-nums; }
+/* the count: no room until there is a number, then the pill eases wider while the number fades in (a 0fr to 1fr column, which Safari animates) */
+.wl-pill sup { align-self: flex-start; margin: 5px 0 0; font-size: 9px; line-height: 10px; font-weight: 500; opacity: 0; font-variant-numeric: tabular-nums;
+  display: grid; grid-template-columns: 0fr; transition: grid-template-columns 220ms var(--ease-out), opacity 240ms var(--ease-out); }
+.wl-pill sup > i { min-width: 0; overflow: hidden; padding-left: 2px; font-style: normal; }
+.wl-pill sup[data-on] { grid-template-columns: 1fr; opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) { .wl-pill sup { transition: none; } }
 .wl-tune { position: relative; flex: none; width: var(--hit); height: var(--hit); margin-right: -8px; padding: 0; border: 0; background: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .wl-tune i { position: absolute; top: 10px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px #000; }
 .wl-section { margin-top: 32px; }
@@ -714,7 +719,6 @@ html[data-runway] .tabbar { touch-action: none; }
 
 
 /* Search while the answer is on its way */
-.wl-pill sup { transition: opacity 240ms var(--ease-out); }
 .wl-pill sup[data-off] { opacity: 0; transition: none; }
 .s-chips button { animation: s-chip 280ms var(--ease-out) both; }
 @keyframes s-chip { from { opacity: 0; transform: translateY(-4px); } }

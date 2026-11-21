@@ -797,3 +797,8 @@ export function PinnedArt({ children }: { children: ReactNode }) {
   }, [])
   return <><span ref={mark} hidden />{frame && createPortal(children, frame)}</>
 }
+
+/** The small count on a type pill. Without a number yet it takes no room; when the number lands the pill eases wider as it fades in. */
+export function PillCount({ n, off }: { n?: number; off?: boolean }) {
+  return <sup aria-hidden="true" data-on={n !== undefined || undefined} data-off={off || undefined}><i>{n}</i></sup>
+}

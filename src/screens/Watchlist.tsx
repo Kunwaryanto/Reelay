@@ -10,7 +10,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, GearIcon, Icon, IconButton, LoadFailed, useLongPress } from '../ui'
+import { Button, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress } from '../ui'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { HoldMenu } from './Now'
 
@@ -111,7 +111,7 @@ export default function Watchlist() {
         <div role="group" aria-label="Type">
           {([['all', 'All'], ['film', 'Films'], ['series', 'Series']] as [Kind, string][]).map(([k, label]) => (
             <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} onClick={() => setKind(k)}>
-              <span>{label}<sup aria-hidden="true">{counts[k]}</sup></span>
+              <span>{label}<PillCount n={q.data ? counts[k] : undefined} /></span>
             </button>
           ))}
         </div>
