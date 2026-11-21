@@ -18,6 +18,7 @@ import Settings, { settingsPage } from './screens/Settings'
 import Start from './screens/Start'
 import Title from './screens/Title'
 import Watchlist from './screens/Watchlist'
+import { watchForStaleResume } from './lib/update'
 import { useLaunched } from './lib/launch'
 import { OfflinePill, TabBar, ToastProvider } from './ui'
 
@@ -71,6 +72,8 @@ function Shell() {
     navigator.serviceWorker?.addEventListener('message', onMessage)
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
   }, [push, setTab])
+  // back after an hour or more with a newer version out: open it
+  useEffect(() => watchForStaleResume(), [])
   // Safari: run the app behind the status bar and address bar while signed in (Start stays as it is)
   useEffect(() => { setRunway(true); return () => setRunway(false) }, [])
   return (

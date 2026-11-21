@@ -40,6 +40,25 @@ export function useNewVersion(): boolean {
   return useSyncExternalStore((w) => { watchers.add(w); return () => watchers.delete(w) }, () => fresh)
 }
 
+/**
+ * Coming back after a long time away: if a newer version is out, open it straight away. A cold launch always gets
+ * the newest version, but iOS can keep the app frozen in memory for hours and resume the old one. After an hour
+ * the app is expected to start fresh at Now anyway; shorter breaks keep their place and get the dot instead.
+ */
+const LONG_AWAY = 60 * 60 * 1000
+export function watchForStaleResume(): () => void {
+  let hiddenAt = 0
+  const seen = async () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return }
+    const away = hiddenAt ? Date.now() - hiddenAt : 0
+    hiddenAt = 0
+    if (away < LONG_AWAY || !navigator.onLine) return
+    if (await checkVersion()) void reloadApp()
+  }
+  document.addEventListener('visibilitychange', seen)
+  return () => document.removeEventListener('visibilitychange', seen)
+}
+
 /** Fetch everything again. Sign-in and the saved watchlist stay on the phone. */
 export async function reloadApp() {
   try {

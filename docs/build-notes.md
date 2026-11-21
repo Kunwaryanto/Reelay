@@ -261,6 +261,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 ## Update (v300)
 
 - The app asks the server whether a newer version is out when it opens and when it comes back to the front (at most every 10 minutes).
+- Back in the app after an hour or more in the background with a new version out (and online): it reloads into the new version by itself and starts at Now. Shorter breaks keep their place.
 - New version out: a 5 px white dot beside the Settings cog on Now (pops in once), and a card at the top of Settings, "A new version is ready" with an Update button (spinner, then the app reloads into the new version; sign-in and saved data stay).
 - Settings › About › Version shows the build; tap to check: "Check for update" → spinner → "Up to date" or "Update ready".
 - The Testing section keeps only "Show onboarding again", the layout readout and the last failed load.
