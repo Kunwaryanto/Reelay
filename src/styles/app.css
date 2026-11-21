@@ -847,3 +847,40 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 
 /* focus moved by the app after a touch: no ring (it stays for keyboards) */
 [data-quiet]:focus, [data-quiet]:focus-visible { outline: none; }
+
+
+/* ---- A page arriving (category, View all, title) ----
+   Placeholders show the moment the page opens. When the answer and the pictures above the fold are ready,
+   everything fades in as one piece (no movement) while the placeholders fade out under it. The top picture
+   sits in its own layer behind the page and fades on the same curve. A page whose answer was already saved
+   shows at once with none of this. */
+.arrive { animation: launch-fade var(--dur-arrive) var(--ease-launch) both; }
+.art-layer:has(+ .page[data-arrive]) { animation: launch-fade var(--dur-arrive) var(--ease-launch) both; }
+@supports (animation-timeline: scroll()) {
+  .art-layer:has(+ .page[data-arrive]) { animation: art-leave linear both, launch-fade var(--dur-arrive) var(--ease-launch) both; animation-timeline: --page, auto; animation-range: 0 540px, normal; }
+}
+.skel { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; animation: launch-fade 200ms var(--ease-out) both; }
+.skel[data-leaving] { animation: skel-out 240ms var(--ease-out) both; }
+@keyframes skel-out { to { opacity: 0; } }
+.skel i, .skel b, .skel span { display: block; background: var(--surface); animation: s-breathe 1.6s ease-in-out infinite; }
+.skel[data-leaving] :is(i, b, span) { animation: none; }
+/* rows: under the (dark) top picture, a heading and the first posters */
+.skel[data-kind='rows'] { padding-top: calc(540px + var(--row-gap)); }
+.skel[data-kind='rows'] section { margin-left: var(--margin); }
+.skel[data-kind='rows'] i { width: 150px; height: 12px; margin: 4px 0; border-radius: 6px; }
+.skel[data-kind='rows'] section > div { margin-top: 12px; display: flex; gap: 16px; overflow: hidden; }
+.skel[data-kind='rows'] span { flex: none; width: 147px; aspect-ratio: 147 / 220; border-radius: var(--radius-media); corner-shape: squircle; }
+/* grid: three across, fading out down the page */
+.grid-wrap { position: relative; }
+.skel[data-kind='grid'] { margin: 20px var(--margin) 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 62px;
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 95%); mask-image: linear-gradient(180deg, #000 30%, transparent 95%); }
+.skel[data-kind='grid'] span { aspect-ratio: 147 / 220; border-radius: 10px; corner-shape: squircle; }
+/* title: where the name and the first lines will be, under the (dark) top picture */
+.skel[data-kind='title'] { padding: 514px var(--margin) 0; }
+.skel[data-kind='title'] i { height: 22px; border-radius: 8px; width: 62%; }
+.skel[data-kind='title'] i + i { height: 10px; border-radius: 5px; width: 45%; margin-top: 14px; }
+.skel[data-kind='title'] i + i + i { width: 30%; margin-top: 8px; }
+.skel[data-kind='title'] b { height: 10px; border-radius: 5px; margin-top: 12px; }
+.skel[data-kind='title'] b:first-of-type { margin-top: 34px; }
+.skel[data-kind='title'] b:last-of-type { width: 55%; }
+@media (prefers-reduced-motion: reduce) { .skel :is(i, b, span) { animation: none; } .arrive, .skel[data-leaving], .art-layer:has(+ .page[data-arrive]) { animation-duration: 200ms; } }

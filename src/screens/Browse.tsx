@@ -10,8 +10,8 @@ import { SERVICE_NAME, leavingNote, loadMyServices, type Card } from '../lib/cat
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
-import { useQuery } from '../lib/query'
-import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, TitleCard } from '../ui'
+import { prefetch, useQuery } from '../lib/query'
+import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, useArrival, usePressWarm } from '../ui'
 import { Hero, HoldMenu } from './Now'
 
 type Pick = 'all' | Kind
@@ -22,6 +22,25 @@ const tintOf = (h: string) => `linear-gradient(25deg, ${h} 0%, ${h}E6 32%, ${h}6
 
 /** Where a category's card goes: lists open as a grid, everything else has a page of rows. */
 const hrefOf = (cat: Category, k: Pick) => (cat.list ? `/browse/g/${cat.id}/list${kindPath(k)}` : `/browse/c/${cat.id}${kindPath(k)}`)
+
+const HALF_HOUR = 30 * 60 * 1000
+/** What a grid page shows: a category's own list, or one of its rows. */
+const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
+  row === 'list' ? { id: 'popular', title: cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only } : rowsOf(cat, kind).find((r) => r.id === row)
+const gridKey = (id: string, row: string, kind: Kind | undefined, sort: Sort) => `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}`
+const loadGrid = (cat: Category, def: RowDef, row: string, sort: Sort) => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true })
+/** Start loading a Browse page before it opens (a finger on its card, or Browse sitting idle). */
+function warmBrowse(path: string) {
+  const [, , a, id, c, d] = path.split('/')
+  const cat = id ? categoryOf(id) : undefined
+  if (!cat) return
+  const kindOf = (s: string | undefined): Kind | undefined => (s === 'film' || s === 'series' ? s : undefined)
+  if (a === 'c') prefetch(`browse-cat:${id}:${kindOf(c) ?? 'all'}`, () => loadCategory(cat, kindOf(c)), { maxAge: HALF_HOUR })
+  if (a === 'g' && c) {
+    const def = gridDef(cat, c, kindOf(d))
+    if (def) prefetch(gridKey(id, c, kindOf(d), def.sort ?? 'popular'), () => loadGrid(cat, def, c, def.sort ?? 'popular'), { maxAge: HALF_HOUR, persist: false })
+  }
+}
 
 // The card is about 170px wide: w300 on ordinary screens, w780 on a 3x iPhone.
 const coverSrc = (path: string) => ({ src: tmdbImage(path, 'w780'), srcSet: `${tmdbImage(path, 'w300')} 300w, ${tmdbImage(path, 'w780')} 780w`, sizes: '50vw' })
@@ -51,8 +70,9 @@ function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: strin
   const ready = loaded || cover === null
   const setReady = setLoaded
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
+  const warm = usePressWarm(() => warmBrowse(href))
   return (
-    <a className="br-card press" href={href} data-ready={ready}
+    <a className="br-card press" href={href} data-ready={ready} {...warm}
       // on the Browse tab each card has a name, so switching type moves it to its new place (see setPick there)
       data-flip={named ? cat.id : undefined} onClick={(e) => { e.preventDefault(); push(href) }}>
       {cover && <img {...coverSrc(cover)} alt="" decoding="async" draggable={false}
@@ -106,6 +126,14 @@ export default function Browse() {
   }
   const covers = useQuery('browse-covers', loadCovers, { maxAge: DAY })
   useWarmCovers(covers.data)
+  // the first cards' pages load ahead, a moment after Browse has settled
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const sec = SECTIONS[0]
+      for (const c of CATEGORIES.filter((x) => x.section === sec.id && fits(x, pick)).slice(0, sec.shown)) warmBrowse(hrefOf(c, pick))
+    }, 2000)
+    return () => clearTimeout(t)
+  }, [pick])
   return (
     <main className="page noscroll" onScroll={onDim} ref={page}>
       <div className="tab-head br-head"><h1>Browse</h1></div>
@@ -187,20 +215,28 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
   const cat = categoryOf(id)
   const q = useQuery<CategoryPage>(cat ? `browse-cat:${id}:${kind ?? 'all'}` : null, () => loadCategory(cat!, kind), { maxAge: 30 * 60 * 1000 })
   const [held, setHeld] = useState<Held | null>(null)
+  // above the fold: the first top picture and its title logo, and the first row's first posters
+  const phase = useArrival(`${id}:${kind ?? 'all'}`, !!q.data, () => {
+    const h = q.data?.hero[0]
+    return [{ src: h && (tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')) }, { src: tmdbImage(h?.logo_path, 'w500') },
+      ...(q.data?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))]
+  })
   if (!cat) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This category isn’t here any more.</p></main></>
   const empty = q.data && q.data.hero.length === 0 && q.data.rows.length === 0
   return (
     <>
       <TopBar title={cat.label} glass />
-      <main className="page noscroll" onScroll={onDim}>
+      <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim}>
         <h1 className="sr-only">{cat.label}</h1>
         {q.error && <div className="page-center"><LoadFailed what={cat.label} retry={q.retry} retrying={q.retrying} /></div>}
-        {q.data && (
-          <div className="rise">
+        {phase !== 'there' && !q.error && <Skeleton kind="rows" leaving={phase === 'in'} />}
+        {q.data && phase !== 'wait' && (
+          <div className="arrive">
             {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="br-top-gap" />}
             {q.data.rows.map((row, r) => (
               <section key={row.id} className="row">
-                <SectionHeader title={row.title} onViewAll={() => push(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`)} />
+                <SectionHeader title={row.title} onViewAll={() => push(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`)}
+                  onViewAllPress={() => warmBrowse(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`)} />
                 <PosterRow>
                   {row.items.map((card) => {
                     const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0])
@@ -226,11 +262,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const { session } = useAuth()
   const onDim = useDimOnScroll()
   const cat = categoryOf(id)
-  const def: RowDef | undefined = useMemo(() => {
-    if (!cat) return undefined
-    if (row === 'list') return { id: 'popular', title: cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only }
-    return rowsOf(cat, kind).find((r) => r.id === row)
-  }, [cat, row, kind])
+  const def = useMemo(() => (cat ? gridDef(cat, row, kind) : undefined), [cat, row, kind])
   const typed = !!def?.kind // one kind only: no type pills, and the year alone under each poster
   const start: Sort = def?.sort ?? 'popular'
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: start })
@@ -244,9 +276,10 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const uid = session?.user.id
   const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
-  const rowId = row === 'list' ? undefined : def?.id
-  const q = useQuery<Card[]>(cat && def ? `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}` : null,
-    () => titlesIn(cat!, { kind: def!.kind, sort, row: rowId, limit: 90, facets: true }), { maxAge: 30 * 60 * 1000, persist: false })
+  const key = gridKey(id, row, kind, sort)
+  const q = useQuery<Card[]>(cat && def ? key : null, () => loadGrid(cat!, def!, row, sort), { maxAge: HALF_HOUR, persist: false })
+  // above the fold: the first three rows of posters
+  const phase = useArrival(key, !!q.data, () => (q.data ?? []).slice(0, 9).map((c) => posterPicture(c.poster_path)))
 
   if (!cat || !def) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This list isn’t here any more.</p></main></>
 
@@ -288,21 +321,24 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
           <h1 ref={big}>{def.title}</h1>
           {typed && tune}
         </div>
-        {!typed && <div className="wl-filters"><TypePills pick={pick} setPick={setPick} counts={q.data ? counts : {}} />{tune}</div>}
+        {!typed && <div className="wl-filters"><TypePills pick={pick} setPick={setPick} counts={q.data && phase !== 'wait' ? counts : {}} />{tune}</div>}
         {chips.length > 0 && (
           <div className="s-chips">
             {chips.map((c) => <button key={c.key} type="button" aria-label={`Remove ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>)}
           </div>
         )}
         {q.error && <div className="br-failed"><LoadFailed what={def.title} retry={q.retry} retrying={q.retrying} compact /></div>}
-        <ul className="grid" data-typed={typed}>
+        <div className="grid-wrap">
+        {phase !== 'there' && !q.error && <Skeleton kind="grid" leaving={phase === 'in'} />}
+        <ul className={phase === 'in' ? 'grid arrive' : 'grid'} data-typed={typed} hidden={phase === 'wait'}>
           {list.map((card) => {
             const note = def.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0])
               : typed || pick !== 'all' ? String(card.year ?? '') : undefined
             return <li key={card.id}><TitleCard card={card} note={note} onHold={(c, cover) => setHeld({ card: c, cover })} /></li>
           })}
         </ul>
-        {q.data && list.length === 0 && <p className="br-none">{chips.length ? 'Nothing here with these filters.' : 'Nothing streaming here right now.'}</p>}
+        </div>
+        {q.data && phase !== 'wait' && list.length === 0 && <p className="br-none">{chips.length ? 'Nothing here with these filters.' : 'Nothing streaming here right now.'}</p>}
       </main>
       {holdMenu(held, () => setHeld(null))}
       {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map((s) => SERVICE_NAME[s] ?? s)}

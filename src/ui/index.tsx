@@ -9,9 +9,9 @@ import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
-import { SERVICE_NAME, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
-import { useRequestFailed } from '../lib/query'
+import { prefetch, useRequestFailed } from '../lib/query'
 
 // ---- Icons -----------------------------------------------------------------
 
@@ -121,10 +121,13 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
   const near = useContext(NearContext)
   const [ready, setReady] = useState(!path)
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
+  // a picture that is already loaded (the page waited for it, or it was seen before) is there from the first frame
+  const pic = useRef<HTMLImageElement>(null)
+  useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
   return (
     <div className="cover" data-ready={ready}>
       {path && (
-        <img src={tmdbImage(path, 'w342')} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
+        <img ref={pic} src={tmdbImage(path, 'w342')} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
           loading={eager || near ? undefined : 'lazy'} decoding="async" onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
@@ -140,6 +143,12 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
   return (
     <a className="card" href={`/title/${card.id}`} {...hold.handlers}
+      onPointerDown={(e) => {
+        hold.handlers.onPointerDown(e)
+        // a finger resting on the poster (not a scroll passing over it) starts loading its page
+        const el = e.currentTarget
+        setTimeout(() => { if (el.dataset.pressed) warmTitle(card.id) }, 100)
+      }}
       onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
       <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}`}>
         <Cover path={card.poster_path} service={service} eager={eager} />
@@ -198,11 +207,11 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
   }
 }
 
-export function SectionHeader({ title, onViewAll }: { title: string; onViewAll?: () => void }) {
+export function SectionHeader({ title, onViewAll, onViewAllPress }: { title: string; onViewAll?: () => void; onViewAllPress?: () => void }) {
   return (
     <div className="section-head">
       <h2>{title}</h2>
-      {onViewAll && <button type="button" className="view-all" aria-label={`View all in ${title}`} onClick={onViewAll}>View all</button>}
+      {onViewAll && <button type="button" className="view-all" aria-label={`View all in ${title}`} onPointerDown={onViewAllPress} onClick={onViewAll}>View all</button>}
     </div>
   )
 }
@@ -801,4 +810,73 @@ export function PinnedArt({ children }: { children: ReactNode }) {
 /** The small count on a type pill. Without a number yet it takes no room; when the number lands the pill eases wider as it fades in. */
 export function PillCount({ n, off }: { n?: number; off?: boolean }) {
   return <sup aria-hidden="true" data-on={n !== undefined || undefined} data-off={off || undefined}><i>{n}</i></sup>
+}
+
+// ---- Pages arriving ----------------------------------------------------------
+
+/** Start loading a title's page as a finger lands on its poster. */
+export const warmTitle = (id: number) => prefetch(`title:${id}`, () => loadTitle(id), { maxAge: 10 * 60 * 1000 })
+
+/** Start a load on a press that isn't a scroll: the finger still after 80 ms, or lifted without having moved. */
+export function usePressWarm(run: () => void) {
+  const at = useRef<[number, number] | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const stop = () => { clearTimeout(timer.current); at.current = null }
+  return {
+    onPointerDown: (e: React.PointerEvent) => { at.current = [e.clientX, e.clientY]; clearTimeout(timer.current); timer.current = setTimeout(() => { if (at.current) run() }, 80) },
+    onPointerMove: (e: React.PointerEvent) => { if (at.current && Math.hypot(e.clientX - at.current[0], e.clientY - at.current[1]) > 8) stop() },
+    onPointerUp: () => { if (at.current) run(); stop() },
+    onPointerCancel: stop,
+  }
+}
+
+export type Picture = { src: string | null | undefined; srcset?: string; sizes?: string }
+/** A poster as its card will ask for it, so the file waited for is the file shown. */
+export const posterPicture = (path: string | null): Picture => ({ src: tmdbImage(path, 'w342'), srcset: posterSrcSet(path), sizes: '147px' })
+const decodePicture = ({ src, srcset, sizes }: Picture) => {
+  if (!src) return Promise.resolve()
+  const img = new Image()
+  if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
+  img.src = src
+  return img.decode().catch(() => {})
+}
+
+export type Arrival = 'wait' | 'in' | 'there'
+/**
+ * How a page arrives. Its answer already saved when it opens: 'there' at once, nothing animates. Otherwise 'wait'
+ * (placeholders) until the answer is in and the pictures above the fold are decoded, at most 2.5 s for the
+ * pictures; then 'in' while everything fades in as one piece, and 'there' after.
+ */
+export function useArrival(key: string, has: boolean, pictures: () => Picture[]): Arrival {
+  const [st, setSt] = useState<{ key: string; phase: Arrival }>(() => ({ key, phase: has ? 'there' : 'wait' }))
+  let cur = st
+  if (st.key !== key) { cur = { key, phase: has ? 'there' : 'wait' }; setSt(cur) }
+  const phase = cur.phase
+  const pics = useRef(pictures)
+  pics.current = pictures
+  useEffect(() => {
+    if (phase !== 'wait' || !has) return
+    let live = true
+    const done = () => { if (live) { live = false; setSt({ key, phase: 'in' }) } }
+    void Promise.all(pics.current().map(decodePicture)).then(done)
+    const t = setTimeout(done, 2500)
+    return () => { live = false; clearTimeout(t) }
+  }, [key, has, phase])
+  useEffect(() => {
+    if (phase !== 'in') return
+    const t = setTimeout(() => setSt((s) => (s.key === key && s.phase === 'in' ? { key, phase: 'there' } : s)), 460)
+    return () => clearTimeout(t)
+  }, [key, phase])
+  return phase
+}
+
+/** Placeholders while a page waits: 'rows' a heading and posters under the top picture, 'grid' posters three across, 'title' a title page's first lines. */
+export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title'; leaving?: boolean }) {
+  return (
+    <div className="skel" data-kind={kind} data-leaving={leaving || undefined} aria-hidden="true">
+      {kind === 'rows' && <section><i /><div><span /><span /><span /></div></section>}
+      {kind === 'grid' && Array.from({ length: 12 }, (_, i) => <span key={i} />)}
+      {kind === 'title' && <><i /><i /><i /><b /><b /><b /></>}
+    </div>
+  )
 }

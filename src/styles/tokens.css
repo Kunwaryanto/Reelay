@@ -91,6 +91,7 @@
      field starts with it and lands softly a little after */
   --dur-keyboard-down: 340ms; --ease-keyboard-down: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-launch: 900ms; --ease-launch: cubic-bezier(0.22, 1, 0.36, 1);  /* Now arriving at launch: page, cog and tab bar together */
+  --dur-arrive: 400ms;  /* a page opened inside the app arriving: the same plain fade as launch, quicker */
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);      /* iOS drawer and context menu */
   --ease-camera: cubic-bezier(0.16, 1, 0.3, 1);      /* onboarding step camera */
 

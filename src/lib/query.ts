@@ -34,6 +34,20 @@ export function setQueryData<T>(key: string, data: T, persist = true) {
   watchers.get(key)?.forEach((f) => f())
 }
 
+// Loads started ahead of the screen that will show them (see prefetch): that screen waits for this one answer.
+const inflight = new Map<string, Promise<void>>()
+
+/** Start loading a key before its screen opens (a finger on a card): the screen then finds the answer waiting or on its way. */
+export function prefetch<T>(key: string, load: () => Promise<T>, opts: { persist?: boolean; maxAge?: number } = {}) {
+  const { persist = true, maxAge = 60_000 } = opts
+  const entry = readSaved(key)
+  if ((entry && Date.now() - entry.at <= maxAge) || inflight.has(key)) return
+  inflight.set(key, load()
+    .then((data) => { save(key, data, persist); watchers.get(key)?.forEach((f) => f()) })
+    .catch(() => { /* the screen loads it itself and shows what went wrong */ })
+    .finally(() => { inflight.delete(key) }))
+}
+
 export function clearSavedData() {
   memory.clear()
   try {
@@ -129,10 +143,13 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: { 
     setError(false)
     attempt.current = 0
     const entry = readSaved(key)
-    if (!entry || Date.now() - entry.at > maxAge) run(false)
+    const ahead = inflight.get(key)
+    let live = true
+    if (ahead) void ahead.then(() => { if (live && !readSaved(key)) run(false) })
+    else if (!entry || Date.now() - entry.at > maxAge) run(false)
     const online = () => run(false)
     window.addEventListener('online', online)
-    return () => { window.removeEventListener('online', online); clearTimeout(timer.current) }
+    return () => { live = false; window.removeEventListener('online', online); clearTimeout(timer.current) }
   }, [key, maxAge, run])
 
   return {
