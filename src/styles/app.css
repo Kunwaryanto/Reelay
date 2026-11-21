@@ -827,3 +827,8 @@ html[data-runway] .tabbar { touch-action: none; }
 #root, .hold { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text; }
 .hold { touch-action: none; }
+
+/* going down, the field follows the keyboard's quicker fall */
+.search[data-kb='down'] .s-field, .search[data-kb='down'] .s-idle, .search[data-kb='down'] .s-fade { transition: transform var(--dur-keyboard-down) var(--ease-keyboard-down), opacity 200ms var(--ease-out); }
+.search[data-arriving='true'] .s-field, .search[data-arriving='true'] .s-idle, .search[data-arriving='true'] .s-fade { transition: none; }
+@media (prefers-reduced-motion: reduce) { .search[data-kb='down'] .s-field, .search[data-kb='down'] .s-idle, .search[data-kb='down'] .s-fade { transition: none; } }

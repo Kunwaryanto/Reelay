@@ -314,7 +314,7 @@ export default function Search() {
   const up = typing && room > 0
 
   return (
-    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
+    <main className="search" data-drawer={drawer} data-arriving={arriving} data-kb={typing ? 'up' : 'down'} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
       onTouchStart={(e) => { swipe.current = drawer ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
       onTouchMove={(e) => {
         const s = swipe.current
