@@ -26,7 +26,7 @@ const hrefOf = (cat: Category, k: Pick) => (cat.list ? `/browse/g/${cat.id}/list
 const HALF_HOUR = 30 * 60 * 1000
 /** What a grid page shows: a category's own list, or one of its rows. */
 const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
-  row === 'list' ? { id: 'popular', title: cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only } : rowsOf(cat, kind).find((r) => r.id === row)
+  row === 'list' ? { id: 'popular', title: cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only, notes: cat.rule.leaving ? 'leaving' : undefined } : rowsOf(cat, kind).find((r) => r.id === row)
 const gridKey = (id: string, row: string, kind: Kind | undefined, sort: Sort) => `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}`
 const loadGrid = (cat: Category, def: RowDef, row: string, sort: Sort) => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true })
 // what's above the fold: a category's first top picture, its title logo and the first row's first posters; a grid's first three rows
@@ -34,7 +34,7 @@ const catFold = (d: CategoryPage | undefined): Picture[] => [...titleArt(d?.hero
   ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))]
 const gridFold = (cards: Card[] | undefined): Picture[] => (cards ?? []).slice(0, 9).map((c) => posterPicture(c.poster_path))
 /** Start loading a Browse page before it opens (a finger on its card, or Browse sitting idle). */
-function warmBrowse(path: string) {
+export function warmBrowse(path: string) {
   const [, , a, id, c, d] = path.split('/')
   const cat = id ? categoryOf(id) : undefined
   if (!cat) return
@@ -265,6 +265,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const def = useMemo(() => (cat ? gridDef(cat, row, kind) : undefined), [cat, row, kind])
   const typed = !!def?.kind // one kind only: no type pills, and the year alone under each poster
   const start: Sort = def?.sort ?? 'popular'
+  const sorts: [Sort, string][] = cat?.rule.leaving ? [['leaving', 'Leaving first'], ...SORTS] : SORTS
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: start })
   const sort = f.sort as Sort
   const [pick, setPick] = useState<Pick>('all')
@@ -294,7 +295,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const r = cat.rule
   // a list that already is one genre, decade or length doesn't offer that filter
   const rows = ALL_ROWS.filter((k) => !(k === 'genres' && r.genres) && !(k === 'decade' && (r.from !== undefined || r.to !== undefined)) && !(k === 'length' && r.under))
-  const chips = draftChips(f, setF, SORTS, start)
+  const chips = draftChips(f, setF, sorts, start)
   const countOf = (d: Draft): Count => ({
     key: `${JSON.stringify(d)}|${pick}|${q.data?.length ?? 0}`,
     // a different sort loads a different list: the count for it is known once it's shown
@@ -343,7 +344,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
       </main>
       {holdMenu(held, () => setHeld(null))}
       {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map((s) => SERVICE_NAME[s] ?? s)}
-        noun={typed ? (def.kind === 'film' ? ['film', 'films'] : ['series', 'series']) : ['title', 'titles']} sorts={SORTS} firstSort={start} rows={rows}
+        noun={typed ? (def.kind === 'film' ? ['film', 'films'] : ['series', 'series']) : ['title', 'titles']} sorts={sorts} firstSort={start} rows={rows}
         countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />, document.getElementById('root') ?? document.body)}
     </>
   )

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, type Card } from '../lib/catalogue'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
+import { warmBrowse } from './Browse'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { iconsReady, markLaunched } from '../lib/launch'
@@ -164,6 +165,12 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   )
 }
 
+// Where each row's "View all" goes: the Browse page for the same thing
+const MORE: Record<string, string> = {
+  leaving: '/browse/g/leaving-soon/list', rated: '/browse/g/highest-rated/list',
+  '2000s': '/browse/c/2000s', '90s': '/browse/c/90s', crime: '/browse/c/crime', comedy: '/browse/c/comedy', drama: '/browse/c/drama',
+}
+
 export default function Now() {
   const { push } = useNavActions()
   const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
@@ -253,7 +260,7 @@ export default function Now() {
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.rows.map((row, r) => (
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
-              <SectionHeader title={row.title} />
+              <SectionHeader title={row.title} onViewAll={MORE[row.id] ? () => push(MORE[row.id]) : undefined} onViewAllPress={MORE[row.id] ? () => warmBrowse(MORE[row.id]) : undefined} />
               <PosterRow>
                 {row.items.map((card) => {
                   const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined

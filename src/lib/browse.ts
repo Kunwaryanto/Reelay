@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 
 export type Kind = Card['kind']
 export type SectionId = 'genres' | 'lists' | 'decades' | 'countries'
-export type Sort = 'popular' | 'rated' | 'newest'
+export type Sort = 'popular' | 'rated' | 'newest' | 'leaving'
 
 type Rule = {
   genres?: string[]
@@ -17,6 +17,8 @@ type Rule = {
   /** IMDb: at least this rating, and between these vote counts */
   rating?: number
   votes?: [number, number?]
+  /** leaving a service within 30 days */
+  leaving?: boolean
 }
 
 export type Category = {
@@ -57,6 +59,7 @@ export const CATEGORIES: Category[] = [
   g('sci-fi', 'Sci-fi', '#23395B', ['Science Fiction', 'Sci-Fi & Fantasy']),
   g('documentary', 'Documentary', '#55555E', ['Documentary']),
 
+  { id: 'leaving-soon', section: 'lists', label: 'Leaving soon', tint: '#5A3A2A', rule: { leaving: true }, list: 'leaving' },
   { id: 'highest-rated', section: 'lists', label: 'Highest rated', tint: '#4B4A32', rule: { votes: [20000] }, list: 'rated' },
   { id: 'hidden-gems', section: 'lists', label: 'Hidden gems', tint: '#1F4F6B', rule: { rating: 7.5, votes: [2000, 30000] }, list: 'rated' },
   { id: 'under-90', section: 'lists', label: 'Under 90 minutes', tint: '#2E5A3A', only: 'film', rule: { under: 90 }, list: 'popular' },
@@ -142,12 +145,18 @@ export async function titlesIn(cat: Category, { kind, sort = 'popular', row, lim
     q = q.gte('scores.imdb_votes', cat.section === 'genres' ? 20000 : 3000)
   }
   if (row === 'new') q = q.gte('year', thisYear - 1)
-  if (row === 'leaving') q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
+  if (row === 'leaving' || r.leaving) q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
   if (art) q = q.not('backdrop_path', 'is', null).not('logo_path', 'is', null)
 
   if (sort === 'rated') q = q.order('scores(imdb_rating)', { ascending: false })
   else if (sort === 'newest') q = q.order('year', { ascending: false, nullsFirst: false })
-  return unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]
+  const list = unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]
+  // soonest first (the most popular `limit` of those leaving; the database can't order titles by a service's date)
+  if (sort === 'leaving') {
+    const soonest = (c: Card) => c.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? '9999'
+    list.sort((a, b) => soonest(a).localeCompare(soonest(b)))
+  }
+  return list
 }
 
 export type CategoryPage = { hero: Card[]; rows: (RowDef & { items: Card[] })[] }

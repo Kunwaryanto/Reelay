@@ -97,7 +97,7 @@ export async function loadNow(): Promise<NowData> {
     Promise.all(RATED.map(rated)),
     all(BOTH, { from: 2000, to: 2009 }, 25),
     all(BOTH, { from: 1990, to: 1999 }, 25),
-    all(MIXED, { genresAny: ['Crime', 'Thriller'] }, 15),
+    all(MIXED, { genresAll: ['Crime'] }, 15),
     all(MIXED, { genresAll: ['Comedy'] }, 15),
     all(MIXED, { genresAll: ['Drama'] }, 15),
   ])
@@ -118,7 +118,7 @@ export async function loadNow(): Promise<NowData> {
     { id: 'rated', title: 'Highest rated', items: interleave(ratedLists, seen) },
     { id: '2000s', title: '2000s', items: interleave(d2000, seen) },
     { id: '90s', title: '90s', items: interleave(d90, seen) },
-    { id: 'crime', title: 'Crime and thrillers', items: interleave(crime, seen) },
+    { id: 'crime', title: 'Crime', items: interleave(crime, seen) },
     { id: 'comedy', title: 'Comedy', items: interleave(comedy, seen) },
     { id: 'drama', title: 'Drama', items: interleave(drama, seen) },
   ]
