@@ -840,3 +840,6 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 
 /* Search while the app goes to the background and comes back: everything snaps to rest, no animation */
 .search[data-still] .s-field, .search[data-still] .s-idle, .search[data-still] .s-fade, .search[data-still] .s-list { transition: none !important; }
+
+/* focus moved by the app after a touch: no ring (it stays for keyboards) */
+[data-quiet]:focus, [data-quiet]:focus-visible { outline: none; }

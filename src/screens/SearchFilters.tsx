@@ -54,6 +54,19 @@ function Option({ label, checked, role, pick, count }: { label: string; checked:
   )
 }
 
+// Focus moves with the pages of the drawer (for VoiceOver and keyboards). After a touch, Safari would draw its
+// focus ring on the button that received it; the ring is only wanted when someone is using keys.
+let keys = false
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', (e) => { if (e.key === 'Tab') keys = true }, true)
+  document.addEventListener('pointerdown', () => { keys = false }, true)
+}
+function quietFocus(el: HTMLElement | null | undefined) {
+  if (!el) return
+  if (!keys) { el.dataset.quiet = ''; el.addEventListener('blur', () => { delete el.dataset.quiet }, { once: true }) }
+  el.focus({ preventScroll: true })
+}
+
 type Sub = 'sort' | 'genres' | 'decade' | 'rating' | 'length' | 'lang'
 export type FilterRow = Exclude<Sub, 'sort'>
 export const ALL_ROWS: FilterRow[] = ['genres', 'decade', 'rating', 'length', 'lang']
@@ -86,8 +99,8 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
   // a fresh draft every time it opens
   useEffect(() => { if (open) { setD(init); setSub(null) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const go = (s: Sub) => { setLast(s); setSub(s); setTimeout(() => back.current?.focus({ preventScroll: true }), 380) }
-  const home = () => { setSub(null); setTimeout(() => rows.current?.querySelector<HTMLElement>(`[data-row="${last}"]`)?.focus({ preventScroll: true }), 380) }
+  const go = (s: Sub) => { setLast(s); setSub(s); setTimeout(() => quietFocus(back.current), 380) }
+  const home = () => { setSub(null); setTimeout(() => quietFocus(rows.current?.querySelector<HTMLElement>(`[data-row="${last}"]`)), 380) }
   const set = (patch: Partial<Draft>) => setD((old) => ({ ...old, ...patch }))
   const total = useCount(open ? countOf(d) : null)
   const count = (patch: Partial<Draft>) => (open ? countOf({ ...d, ...patch }) : null)
