@@ -86,6 +86,10 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 - Language is left out until there is Swedish copy to switch to.
 - A temporary Testing section stays at the bottom (Reload, Show onboarding again, build and layout numbers).
 
+## Launch (built 21 Nov, in `src/screens/Now.tsx`)
+
+Built to the Launch and loading note above: ready = data in and the first hero picture decoded (2.5 s at most for the picture). Ready within 300 ms: hero art fades in from 104%, title and meta at 160 ms, dots and settings at 240 ms, rows from 300 ms, 60 ms apart. Otherwise the wordmark rises and holds until 1.2 s; still waiting at 3.3 s shows grey placeholders. The staged rise plays once per launch, not when coming back to the tab.
+
 ## Desktop and onboarding (21 Nov)
 
 - **Desktop** (`src/screens/Desktop.tsx`, v290): any device without a touch screen, or with a screen at least 700px both ways, gets "Made for your phone" and a QR code to this site's own address (the invite link itself when opened from one). The code is generated in the build with `qrcode-generator`. `?app` in the address shows the app anyway, for testing on a computer.

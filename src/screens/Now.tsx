@@ -143,24 +143,59 @@ export default function Now() {
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
-  const [slow, setSlow] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setSlow(true), 300); return () => clearTimeout(t) }, [])
+  // Launch: ready means the data is in and the first hero picture is decoded. Ready within 300 ms: Now just rises.
+  // Later than that: the wordmark rises on black and always finishes (900 ms) before handing over; still waiting
+  // at 3.3 s, grey placeholders stand in and the content rises over them.
+  const first = q.data?.hero[0]
+  const firstArt = first ? tmdbImage(first.backdrop_path, 'w1280') ?? tmdbImage(first.poster_path, 'w780') : undefined
+  const [artFor, setArtFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (!q.data) return
+    if (!firstArt) { setArtFor(''); return }
+    let live = true
+    const done = () => { if (live) setArtFor(firstArt) }
+    const img = new Image()
+    img.src = firstArt
+    img.decode().then(done, done)
+    const t = setTimeout(done, 2500) // a slow picture doesn't hold the page back for ever
+    return () => { live = false; clearTimeout(t) }
+  }, [q.data, firstArt])
+  const ready = !!q.data && artFor === (firstArt ?? '')
+  const readyRef = useRef(ready)
+  readyRef.current = ready
+  const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>('wait')
+  useEffect(() => {
+    const a = setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
+    const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), 1200)
+    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), 3300)
+    return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
+  }, [])
+  const show = ready && phase !== 'mark'
+  // the staged rise plays once, at launch
+  const [launching, setLaunching] = useState(true)
+  useEffect(() => { if (!show) return; const t = setTimeout(() => setLaunching(false), 1600); return () => clearTimeout(t) }, [show])
 
   return (
     <>
-    <main className="page noscroll" onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
+    <main className="page noscroll" data-launch={show && launching ? '' : undefined} onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
       onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
       <h1 className="sr-only">Now</h1>
       <div className="now-settings"><IconButton label="Settings" glass onClick={() => push('/settings')}><GearIcon /></IconButton></div>
 
-      {q.loading && slow && <div className="launch"><Wordmark height={32} rise /></div>}
+      {!show && !q.error && phase === 'mark' && <div className="launch"><Wordmark height={32} rise /></div>}
+      {!show && !q.error && phase === 'late' && (
+        <div className="now-holders" aria-hidden="true">
+          <div />
+          {[0, 1].map((r) => <section key={r}><i /><div><span /><span /><span /></div></section>)}
+        </div>
+      )}
       {q.error && <div className="page-center"><LoadFailed what="Reelay" retry={q.retry} retrying={q.retrying} /></div>}
 
-      {q.data && (
-        <div className="rise">
+      {show && q.data && (
+        <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.rows.map((row, r) => (
-            <section key={row.id} className="row">
+            <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
               <SectionHeader title={row.title} />
               <PosterRow>
                 {row.items.map((card) => {

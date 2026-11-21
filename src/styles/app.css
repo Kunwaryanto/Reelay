@@ -683,3 +683,18 @@ html[data-runway] .tabbar { touch-action: none; }
 .ob-notify p { margin: 8px 0 12px; font: var(--type-body); color: var(--text-muted); }
 .ob-notify .rows { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .ob-step, .ob-card { animation: none; } }
+
+/* ---- Launch: Now rises in stages, once ---- */
+.page[data-launch] .hero-slide[data-on='true'] .hero-art { animation: launch-art 700ms var(--ease-out) both; }
+.page[data-launch] .hero-text { animation: launch-fade 500ms var(--ease-out) 160ms both; }
+.page[data-launch] .hero-dots, .page[data-launch] .now-settings { animation: launch-fade 500ms var(--ease-out) 240ms both; }
+.page[data-launch] .now-in > .row { animation: rise-in var(--dur-rise) var(--ease-out) calc(300ms + var(--i, 0) * 60ms) both; }
+@keyframes launch-art { from { opacity: 0; transform: scale(1.04); } }
+@keyframes launch-fade { from { opacity: 0; } }
+.now-holders { position: absolute; inset: 0; overflow: hidden; animation: launch-fade 400ms var(--ease-out) both; }
+.now-holders > div { height: 540px; margin-bottom: var(--row-gap); background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 60%, #000 100%); }
+.now-holders section { margin: 0 0 var(--section-gap) var(--margin); }
+.now-holders i { display: block; width: 120px; height: 20px; border-radius: 6px; background: var(--surface); }
+.now-holders section > div { margin-top: 12px; display: flex; gap: 16px; }
+.now-holders span { flex: none; width: 147px; height: 220px; border-radius: var(--radius-media); corner-shape: squircle; background: var(--surface); }
+@media (prefers-reduced-motion: reduce) { .page[data-launch] .hero-slide[data-on='true'] .hero-art, .page[data-launch] .hero-text, .page[data-launch] .hero-dots, .page[data-launch] .now-settings, .page[data-launch] .now-in > .row { animation: none; } }
