@@ -202,8 +202,8 @@ export default function Search() {
         <div className="s-list noscroll" data-idle={!hasQ} data-pending={pending}
           // dragging the results puts the keyboard away, like iOS lists do
           onTouchMove={() => { if (typing) input.current?.blur() }}
-          // results end above the lifted field (the prompt moves with the field instead)
-          style={up && hasQ ? { bottom: `${room + 12 + 52}px` } : undefined}>
+          // results run under the field and its fade, down to the keyboard (the prompt moves with the field instead)
+          style={up && hasQ ? { bottom: lift } : undefined}>
           {!hasQ ? (
             <div className="s-idle">
               <h1>{'What are we\nwatching '}{hour >= 17 || hour < 4 ? 'tonight' : 'today'}?</h1>
@@ -279,6 +279,8 @@ export default function Search() {
           )}
         </div>
 
+        {/* the same fade as under the tab bar; it rides up with the field */}
+        <div className="tabbar-fade s-fade" aria-hidden="true" data-pending={pending}><i /><i /><i /></div>
         <form className="s-field" role="search" data-pending={pending}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
           <div className="s-input"

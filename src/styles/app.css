@@ -465,18 +465,18 @@ html[data-runway] .tabbar { touch-action: none; }
 .search[data-drawer='true'] .s-stage { transform: translateX(290px); }
 .s-stage-scrim { position: absolute; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.35); }
 .s-recents-btn { position: absolute; z-index: 2; top: calc(var(--safe-top) + 19px); left: 14px; }
-.s-list { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 21px); bottom: calc(86px + var(--edge-b)); overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; }
+.s-list { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 21px); bottom: 0; padding-bottom: calc(96px + var(--edge-b)); overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; }
 /* First time on this phone: held back until the keyboard is measured, then they rise into place. */
 /* The field and the prompt lift above the keyboard together (--lift is set on .search), at the keyboard's own pace. */
-.s-field, .s-idle { transform: translateY(calc(var(--lift, 0px) * -1)); transition: transform 380ms var(--ease-sheet), opacity 200ms var(--ease-out); }
+.s-field, .s-idle, .s-fade { transform: translateY(calc(var(--lift, 0px) * -1)); transition: transform 380ms var(--ease-sheet), opacity 200ms var(--ease-out); }
 .s-list { transition: opacity 200ms var(--ease-out); }
 .s-list[data-idle='true'] { overflow: visible; }
-.s-field[data-pending='true'], .s-list[data-pending='true'] { opacity: 0; transition: none; }
+.s-field[data-pending='true'], .s-list[data-pending='true'], .s-fade[data-pending='true'] { opacity: 0; transition: none; }
 /* Opened from the tab bar: already in place, so no movement, only a fade. */
-.search[data-arriving='true'] .s-field, .search[data-arriving='true'] .s-idle { transition: none; }
+.search[data-arriving='true'] .s-field, .search[data-arriving='true'] .s-idle, .search[data-arriving='true'] .s-fade { transition: none; }
 .search[data-arriving='true'] .s-stage { animation: s-arrive 240ms var(--ease-out) both; }
 @keyframes s-arrive { from { opacity: 0; } }
-.s-list[data-idle='true'] { top: calc(var(--safe-top) + 77px); }
+.s-list[data-idle='true'] { top: calc(var(--safe-top) + 77px); bottom: calc(86px + var(--edge-b)); padding-bottom: 0; }
 .s-idle { margin-top: auto; padding: 0 var(--margin) 16px; }
 .s-idle h1 { margin: 0 0 18px; font: 500 20px/22px var(--font); letter-spacing: var(--track-title); white-space: pre-line; }
 .s-idle ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -501,14 +501,17 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-nothing h3 { margin-top: 28px; }
 .s-nothing .s-results { margin: 4px calc(var(--margin) * -1) 0; }
 .s-field { position: absolute; z-index: 3; left: var(--margin); right: var(--margin); bottom: calc(34px + var(--edge-b)); margin: 0; display: flex; align-items: center; gap: 8px; }
-.s-input { flex: 1; min-width: 0; height: 40px; border-radius: 21px / 50%; background: var(--fill); display: flex; align-items: center; }
+.s-fade { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: calc(var(--tab-bar) + var(--edge-b)); pointer-events: none; }
+/* Glass: frosted over whatever scrolls behind, with the usual light fill on top so it still reads on plain black. */
+.s-input, .s-close { background: linear-gradient(var(--fill), var(--fill)), var(--glass); -webkit-backdrop-filter: var(--blur-glass); backdrop-filter: var(--blur-glass); }
+.s-input { flex: 1; min-width: 0; height: 40px; border-radius: 21px / 50%; display: flex; align-items: center; }
 .s-input > .ms { flex: none; margin-left: 12px; color: var(--text-faint); }
 .s-input input { flex: 1; min-width: 0; height: 40px; margin: 0; padding: 0 8px; border: 0; outline: 0; border-radius: 0; background: none; color: #fff; font: var(--type-field); caret-color: #fff; -webkit-appearance: none; appearance: none; }
 .s-input input::placeholder { color: var(--text-faint); opacity: 1; }
 .s-input input::-webkit-search-cancel-button, .s-input input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
 .s-input button { flex: none; width: 36px; height: 40px; padding: 0; border: 0; background: none; color: var(--text-faint); display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.s-close { flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-@media (prefers-reduced-motion: reduce) { .s-recents, .s-stage, .s-list, .s-field, .s-idle { transition: none; } .search[data-arriving='true'] .s-stage { animation: none; } .s-idea:active { transform: none; } }
+.s-close { flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .s-recents, .s-stage, .s-list, .s-field, .s-idle, .s-fade { transition: none; } .search[data-arriving='true'] .s-stage { animation: none; } .s-idea:active { transform: none; } }
 
 /* ---- Browse ---- */
 .br-head { min-height: calc(var(--safe-top) + 15px + var(--hit)); }
