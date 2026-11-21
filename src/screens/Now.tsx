@@ -189,24 +189,19 @@ export default function Now() {
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
   }, [])
   const show = ready && phase !== 'mark'
-  // the wordmark fades out as the page fades in, instead of being cut off
-  const [markOut, setMarkOut] = useState(false)
-  const hadMark = useRef(false)
-  if (phase === 'mark') hadMark.current = true
+  // The wordmark stays mounted while it fades out over the arriving page (mounting it again would replay its rise).
+  const [mark, setMark] = useState<'none' | 'on' | 'gone'>('none')
+  if (phase === 'mark' && mark === 'none') setMark('on')
   useEffect(() => {
-    if (!show || !hadMark.current) return
-    setMarkOut(true)
-    const t = setTimeout(() => setMarkOut(false), 450)
+    if (!show || mark !== 'on') return
+    const t = setTimeout(() => setMark('gone'), 700)
     return () => clearTimeout(t)
-  }, [show])
-  // The tab bar comes last, after the content has started to arrive (straight away when there is only an
-  // error or placeholders to show).
+  }, [show, mark])
+  // The tab bar arrives with the page, as part of the same movement.
   const failed = !!q.error
   useEffect(() => {
     if (failed || phase === 'late') { markLaunched(); return }
-    if (!show) return
-    const t = setTimeout(markLaunched, 450)
-    return () => clearTimeout(t)
+    if (show) markLaunched()
   }, [show, failed, phase])
   // the staged rise plays once, at launch
   const [launching, setLaunching] = useState(true)
@@ -219,7 +214,7 @@ export default function Now() {
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
       {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
-      {((!show && !q.error && phase === 'mark') || markOut) && <div className="launch" data-leaving={markOut || undefined}><Wordmark height={32} rise /></div>}
+      {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
         <div className="now-holders" aria-hidden="true">
           <div />

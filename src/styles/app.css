@@ -690,15 +690,14 @@ html[data-runway] .tabbar { touch-action: none; }
 .ob-notify .rows { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .ob-step, .ob-card { animation: none; } }
 
-/* ---- Launch: Now rises in stages, once ---- */
-.page[data-launch] .hero-slide[data-on='true'] .hero-art { animation: launch-art 700ms var(--ease-out) both; }
-.page[data-launch] .hero-text { animation: launch-fade 500ms var(--ease-out) 160ms both; }
-.page[data-launch] .hero-dots { animation: launch-fade 500ms var(--ease-out) 240ms both; }
-/* The cog arrives as one piece: the glass circle itself fades (with the icon in it and the dot beside it).
-   Fading a parent instead makes Safari draw the icon first and the frosted circle a moment later. */
-.page[data-launch] .now-settings .icon-btn > span, .page[data-launch] .now-settings > i { animation: launch-fade 500ms var(--ease-out) 240ms both; }
-.page[data-launch] .now-in > .row { animation: rise-in var(--dur-rise) var(--ease-out) calc(300ms + var(--i, 0) * 60ms) both; }
-@keyframes launch-art { from { opacity: 0; transform: scale(1.04); } }
+/* ---- Launch: Now arrives in one movement, once ----
+   The whole page (picture, title, rows) fades in and settles as a single piece, the wordmark dissolving into it;
+   the cog and the tab bar ride the same 900 ms curve. */
+.page[data-launch] .now-in { animation: launch-in var(--dur-launch) var(--ease-launch) both; transform-origin: 50% 35%; }
+/* The cog's glass circle fades itself (with the icon in it and the dot beside it): fading a parent instead makes
+   Safari draw the icon first and the frosted circle a moment later. */
+.page[data-launch] .now-settings .icon-btn > span, .page[data-launch] .now-settings > i { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
+@keyframes launch-in { from { opacity: 0; transform: scale(1.04); } }
 @keyframes launch-fade { from { opacity: 0; } }
 .now-holders { position: absolute; inset: 0; overflow: hidden; animation: launch-fade 400ms var(--ease-out) both; }
 .now-holders > div { height: 540px; margin-bottom: var(--row-gap); background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 60%, #000 100%); }
@@ -706,7 +705,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .now-holders i { display: block; width: 120px; height: 20px; border-radius: 6px; background: var(--surface); }
 .now-holders section > div { margin-top: 12px; display: flex; gap: 16px; }
 .now-holders span { flex: none; width: 147px; height: 220px; border-radius: var(--radius-media); corner-shape: squircle; background: var(--surface); }
-@media (prefers-reduced-motion: reduce) { .page[data-launch] .hero-slide[data-on='true'] .hero-art, .page[data-launch] .hero-text, .page[data-launch] .hero-dots, .page[data-launch] .now-settings .icon-btn > span, .page[data-launch] .now-settings > i, .page[data-launch] .now-in > .row { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .page[data-launch] .now-in { animation-name: launch-fade; animation-duration: 200ms; } }
 .block[data-flash] .rows li:first-child { animation: row-flash 1600ms var(--ease-out) 500ms both; border-radius: 12px; }
 @keyframes row-flash { 0%, 100% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0), inset 0 0 0 100px rgba(255, 255, 255, 0); } 25% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.12), inset 0 0 0 100px rgba(255, 255, 255, 0.12); } }
 @media (prefers-reduced-motion: reduce) { .block[data-flash] .rows li:first-child { animation: none; } }
@@ -797,14 +796,16 @@ html[data-runway] .tabbar { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .fd-track, .fd-pane { transition: none; } }
 @keyframes fade-in { from { opacity: 0; } }
 
-/* Launch: the tab bar arrives last; its fade eases in (elsewhere the fade is simply there) */
-.tabbar[data-arriving] .tabbar-fade { transition: opacity 500ms var(--ease-out); }
-@media (prefers-reduced-motion: reduce) { .tabbar[data-arriving] .tabbar-fade { transition: none; } }
+/* Launch: the tab bar arrives with the page, on the same curve */
+.tabbar[data-arriving] .tabbar-fade { transition: opacity var(--dur-launch) var(--ease-launch); }
+.tabbar[data-arriving] .tabbar-row { transition: opacity var(--dur-launch) var(--ease-launch), transform var(--dur-launch) var(--ease-launch); }
+.tabbar[data-arriving][data-hidden='true'] .tabbar-row { transform: translateY(40%); }
+@media (prefers-reduced-motion: reduce) { .tabbar[data-arriving] .tabbar-fade, .tabbar[data-arriving] .tabbar-row { transition: none; } }
 
 /* Launch: the wordmark fades out while the page fades in under it */
 .launch { z-index: 5; pointer-events: none; }
-.launch[data-leaving] { animation: launch-out 350ms var(--ease-out) both; }
-@keyframes launch-out { to { opacity: 0; transform: scale(1.03); } }
+.launch[data-leaving] { animation: launch-out 500ms var(--ease-launch) both; }
+@keyframes launch-out { to { opacity: 0; transform: scale(1.12); } }
 /* A card is one thing: its title and meta arrive with its picture (the grey box holds the place until then) */
 .card-title, .card-meta { transition: opacity var(--dur-image-in) var(--ease-out); }
 .card:has(.cover[data-ready='false']) .card-title, .card:has(.cover[data-ready='false']) .card-meta { opacity: 0; }

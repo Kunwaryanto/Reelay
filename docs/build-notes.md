@@ -281,3 +281,4 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - An error or the placeholders bring the tab bar and cog at once. Opening on another page (a notification) has no launch: everything is there from the start.
 - Ready also means everything above the fold is decoded: the hero picture, its title logo and the first three posters of the first row (2.5 s cap). The wordmark fades out (350 ms, scaling to 1.03) while the page fades in under it.
 - Pieces arrive whole: the cog's glass circle fades with its icon and dot; a card's title and meta fade in with its picture.
+- One movement (replaces the staged order above): the whole page fades in and settles from scale 1.04 over 900 ms (cubic-bezier(0.22, 1, 0.36, 1)); the wordmark dissolves into it (500 ms, growing to 1.12); the cog fades and the tab bar fades and rises on the same curve, all starting together.

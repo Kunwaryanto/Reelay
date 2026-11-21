@@ -58,7 +58,7 @@ function Shell() {
   // at launch the tab bar waits for Now, then arrives last: its fade eases in and the icons rise
   const launched = useLaunched()
   const [arriving, setArriving] = useState(!launched)
-  useEffect(() => { if (!launched) return; const t = setTimeout(() => setArriving(false), 900); return () => clearTimeout(t) }, [launched])
+  useEffect(() => { if (!launched) return; const t = setTimeout(() => setArriving(false), 1100); return () => clearTimeout(t) }, [launched])
   // keep this device's notification address fresh, and open what a tapped notification points at
   useEffect(() => {
     registerDevice()
