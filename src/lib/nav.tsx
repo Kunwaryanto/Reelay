@@ -257,7 +257,7 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
   }
 
   return (
-    <div ref={strip} className="stack" data-active={active} inert={!active} onScroll={onScroll}
+    <div ref={strip} className="stack" data-tab={tab} data-active={active} inert={!active} onScroll={onScroll}
       // a finger on the strip while no slide runs: make sure it can swipe and snap
       onTouchStart={(e) => { if (!sliding.current) unlockStrip(e.currentTarget) }}>
       {/* The swipe parallax moves .pane-in, never the .pane itself: Safari snaps to the transformed box,
