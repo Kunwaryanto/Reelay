@@ -397,7 +397,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-filters + .wl-section { margin-top: 20px; }
 .wl-section-head { margin: 0 var(--margin); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .wl-section-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
-.wl-section-head span { font: var(--type-meta); color: var(--text-faint); white-space: nowrap; }
+.wl-section-head > span { font: var(--type-meta); color: var(--text-faint); white-space: nowrap; }
 .wl-section ul { list-style: none; margin: 4px var(--margin) 0; padding: 0; }
 .wl-row { position: relative; min-width: 0; overflow: hidden; }
 .wl-slide { position: relative; display: flex; align-items: center; background: var(--bg); touch-action: pan-y; user-select: none; -webkit-user-select: none; transition: transform 250ms var(--ease-out); }
