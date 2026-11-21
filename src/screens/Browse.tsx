@@ -11,7 +11,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { prefetch, useQuery } from '../lib/query'
-import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, useArrival, usePressWarm } from '../ui'
+import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, titleArt, useArrival, usePressWarm, warmPictures, type Picture } from '../ui'
 import { Hero, HoldMenu } from './Now'
 
 type Pick = 'all' | Kind
@@ -29,16 +29,20 @@ const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
   row === 'list' ? { id: 'popular', title: cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only } : rowsOf(cat, kind).find((r) => r.id === row)
 const gridKey = (id: string, row: string, kind: Kind | undefined, sort: Sort) => `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}`
 const loadGrid = (cat: Category, def: RowDef, row: string, sort: Sort) => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true })
+// what's above the fold: a category's first top picture, its title logo and the first row's first posters; a grid's first three rows
+const catFold = (d: CategoryPage | undefined): Picture[] => [...titleArt(d?.hero[0]), { src: tmdbImage(d?.hero[0]?.logo_path, 'w500') },
+  ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))]
+const gridFold = (cards: Card[] | undefined): Picture[] => (cards ?? []).slice(0, 9).map((c) => posterPicture(c.poster_path))
 /** Start loading a Browse page before it opens (a finger on its card, or Browse sitting idle). */
 function warmBrowse(path: string) {
   const [, , a, id, c, d] = path.split('/')
   const cat = id ? categoryOf(id) : undefined
   if (!cat) return
   const kindOf = (s: string | undefined): Kind | undefined => (s === 'film' || s === 'series' ? s : undefined)
-  if (a === 'c') prefetch(`browse-cat:${id}:${kindOf(c) ?? 'all'}`, () => loadCategory(cat, kindOf(c)), { maxAge: HALF_HOUR })
+  if (a === 'c') prefetch(`browse-cat:${id}:${kindOf(c) ?? 'all'}`, () => loadCategory(cat, kindOf(c)).then((p) => { warmPictures(catFold(p)); return p }), { maxAge: HALF_HOUR })
   if (a === 'g' && c) {
     const def = gridDef(cat, c, kindOf(d))
-    if (def) prefetch(gridKey(id, c, kindOf(d), def.sort ?? 'popular'), () => loadGrid(cat, def, c, def.sort ?? 'popular'), { maxAge: HALF_HOUR, persist: false })
+    if (def) prefetch(gridKey(id, c, kindOf(d), def.sort ?? 'popular'), () => loadGrid(cat, def, c, def.sort ?? 'popular').then((l) => { warmPictures(gridFold(l)); return l }), { maxAge: HALF_HOUR, persist: false })
   }
 }
 
@@ -216,11 +220,7 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
   const q = useQuery<CategoryPage>(cat ? `browse-cat:${id}:${kind ?? 'all'}` : null, () => loadCategory(cat!, kind), { maxAge: 30 * 60 * 1000 })
   const [held, setHeld] = useState<Held | null>(null)
   // above the fold: the first top picture and its title logo, and the first row's first posters
-  const phase = useArrival(`${id}:${kind ?? 'all'}`, !!q.data, () => {
-    const h = q.data?.hero[0]
-    return [{ src: h && (tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')) }, { src: tmdbImage(h?.logo_path, 'w500') },
-      ...(q.data?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))]
-  })
+  const phase = useArrival(`${id}:${kind ?? 'all'}`, !!q.data, () => catFold(q.data))
   if (!cat) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This category isn’t here any more.</p></main></>
   const empty = q.data && q.data.hero.length === 0 && q.data.rows.length === 0
   return (
@@ -279,7 +279,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const key = gridKey(id, row, kind, sort)
   const q = useQuery<Card[]>(cat && def ? key : null, () => loadGrid(cat!, def!, row, sort), { maxAge: HALF_HOUR, persist: false })
   // above the fold: the first three rows of posters
-  const phase = useArrival(key, !!q.data, () => (q.data ?? []).slice(0, 9).map((c) => posterPicture(c.poster_path)))
+  const phase = useArrival(key, !!q.data, () => gridFold(q.data))
 
   if (!cat || !def) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This list isn’t here any more.</p></main></>
 

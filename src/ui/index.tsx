@@ -117,17 +117,21 @@ const NearContext = createContext(false)
  * A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the
  * image, its edge line and the service mark fade in together.
  */
+function wasDecoded(src: string | null | undefined) { return !!src && decoded.has(src) }
+function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
+
 export function Cover({ path, service, eager, sizes = '147px' }: { path: string | null; service?: string; eager?: boolean; sizes?: string }) {
   const near = useContext(NearContext)
-  const [ready, setReady] = useState(!path)
-  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
+  const src = tmdbImage(path, 'w342')
+  const [ready, setReady] = useState(!path || wasDecoded(src))
+  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => { markDecoded(src); setReady(true) }) }
   // a picture that is already loaded (the page waited for it, or it was seen before) is there from the first frame
   const pic = useRef<HTMLImageElement>(null)
   useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
   return (
     <div className="cover" data-ready={ready}>
       {path && (
-        <img ref={pic} src={tmdbImage(path, 'w342')} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
+        <img ref={pic} src={src} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
           loading={eager || near ? undefined : 'lazy'} decoding="async" onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
@@ -815,7 +819,9 @@ export function PillCount({ n, off }: { n?: number; off?: boolean }) {
 // ---- Pages arriving ----------------------------------------------------------
 
 /** Start loading a title's page as a finger lands on its poster. */
-export const warmTitle = (id: number) => prefetch(`title:${id}`, () => loadTitle(id), { maxAge: 10 * 60 * 1000 })
+export const titleArt = (t: { backdrop_path?: string | null; poster_path?: string | null } | null | undefined): Picture[] =>
+  [{ src: t && (tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')) }]
+export const warmTitle = (id: number) => prefetch(`title:${id}`, () => loadTitle(id).then((t) => { warmPictures(titleArt(t)); return t }), { maxAge: 10 * 60 * 1000 })
 
 /** Start a load on a press that isn't a scroll: the finger still after 80 ms, or lifted without having moved. */
 export function usePressWarm(run: () => void) {
@@ -833,24 +839,29 @@ export function usePressWarm(run: () => void) {
 export type Picture = { src: string | null | undefined; srcset?: string; sizes?: string }
 /** A poster as its card will ask for it, so the file waited for is the file shown. */
 export const posterPicture = (path: string | null): Picture => ({ src: tmdbImage(path, 'w342'), srcset: posterSrcSet(path), sizes: '147px' })
+// Pictures this session has already decoded: they can show from the first frame, with no fade of their own.
+const decoded = new Set<string>()
 const decodePicture = ({ src, srcset, sizes }: Picture) => {
-  if (!src) return Promise.resolve()
+  if (!src || decoded.has(src)) return Promise.resolve()
   const img = new Image()
   if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
   img.src = src
-  return img.decode().catch(() => {})
+  return img.decode().then(() => { decoded.add(src) }).catch(() => {})
 }
+/** Fetch and decode pictures ahead of the page that will show them. */
+export const warmPictures = (pictures: Picture[]) => { for (const p of pictures) void decodePicture(p) }
+const allDecoded = (pictures: Picture[]) => pictures.every((p) => !p.src || decoded.has(p.src))
 
 export type Arrival = 'wait' | 'in' | 'there'
 /**
- * How a page arrives. Its answer already saved when it opens: 'there' at once, nothing animates. Otherwise 'wait'
- * (placeholders) until the answer is in and the pictures above the fold are decoded, at most 2.5 s for the
- * pictures; then 'in' while everything fades in as one piece, and 'there' after.
+ * How a page arrives. Its answer saved and its pictures above the fold already decoded when it opens: 'there' at
+ * once, nothing animates. Otherwise 'wait' (placeholders) until the answer is in and those pictures are decoded,
+ * at most 2.5 s for the pictures; then 'in' while everything fades in as one piece, and 'there' after.
  */
 export function useArrival(key: string, has: boolean, pictures: () => Picture[]): Arrival {
-  const [st, setSt] = useState<{ key: string; phase: Arrival }>(() => ({ key, phase: has ? 'there' : 'wait' }))
+  const [st, setSt] = useState<{ key: string; phase: Arrival }>(() => ({ key, phase: has && allDecoded(pictures()) ? 'there' : 'wait' }))
   let cur = st
-  if (st.key !== key) { cur = { key, phase: has ? 'there' : 'wait' }; setSt(cur) }
+  if (st.key !== key) { cur = { key, phase: has && allDecoded(pictures()) ? 'there' : 'wait' }; setSt(cur) }
   const phase = cur.phase
   const pics = useRef(pictures)
   pics.current = pictures

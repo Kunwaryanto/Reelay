@@ -6,7 +6,7 @@ import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
-import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Skeleton, TitleCard, useArrival, usePullToRefresh } from '../ui'
+import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Skeleton, TitleCard, titleArt, useArrival, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -167,7 +167,7 @@ export default function Title({ id }: { id: number }) {
   const { bind, indicator } = usePullToRefresh(q.retry)
   const missing = !Number.isFinite(id) || (q.data === null && !q.loading)
   // above the fold: the top picture
-  const phase = useArrival(String(id), !!q.data, () => [{ src: q.data && (tmdbImage(q.data.backdrop_path, 'w1280') ?? tmdbImage(q.data.poster_path, 'w780')) }])
+  const phase = useArrival(String(id), !!q.data, () => titleArt(q.data))
   return (
     <>
     <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
