@@ -97,7 +97,9 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
     const r = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
     return () => { cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
   }, [held.cover])
-  const close = () => { setOpen(false); setTimeout(onClose, 280) }
+  // closing lands on the poster at its normal size (the pressed, slightly smaller size is only where it starts from)
+  const [closing, setClosing] = useState(false)
+  const close = () => { setClosing(true); setOpen(false); setTimeout(onClose, 280) }
   // The finger that opened the menu is still down, and still belongs to the page: without this, moving it would
   // scroll the page or the row behind the menu, and the poster would land back in the wrong place.
   useEffect(() => {
@@ -126,7 +128,8 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
         borderRadius: 20 / scale, // 16px once lifted, whatever the starting size
         transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
-          : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
+          : closing ? 'none'
+            : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
       }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
         <div className="hold-title">{card.title}</div>
