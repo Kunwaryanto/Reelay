@@ -191,6 +191,26 @@ export default function Search() {
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settled])
+  // Tapping the field: focus it ourselves at touch-down, without scrolling (left alone, iOS scrolls the whole app
+  // up to reveal it) and without the tap's own click. That click arrives after the field has already risen, so it
+  // lands on the empty page where the field used to be, which takes the focus away and closes the keyboard again.
+  // React's onTouchStart is passive and can't cancel the tap, so this listens on the element itself.
+  const box = useRef<HTMLDivElement>(null)
+  const focusedAt = useRef(0)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const down = (e: TouchEvent) => {
+      const field = input.current
+      if (!field || (e.target as HTMLElement).closest('button')) return
+      if (field === document.activeElement) return
+      e.preventDefault()
+      focusedAt.current = Date.now()
+      field.focus({ preventScroll: true })
+    }
+    el.addEventListener('touchstart', down, { passive: false })
+    return () => el.removeEventListener('touchstart', down)
+  }, [])
   // Recents: swipe it (or the page beside it) to the left to close
   const swipe = useRef<{ x: number; y: number } | null>(null)
 
@@ -229,7 +249,9 @@ export default function Search() {
         const dx = e.touches[0].clientX - s.x, dy = e.touches[0].clientY - s.y
         if (dx < -40 && Math.abs(dx) > Math.abs(dy) * 1.5) { swipe.current = null; setDrawer(false) }
       }}
-      onTouchEnd={() => { swipe.current = null }}>
+      onTouchEnd={() => { swipe.current = null }}
+      // a stray press on the empty page right after the field took focus must not take it away again
+      onMouseDown={(e) => { if (Date.now() - focusedAt.current < 700 && !(e.target as HTMLElement).closest('input, button, a')) e.preventDefault() }}>
       <nav className="s-recents" aria-label="Recent searches" inert={!drawer}>
         <div className="s-recents-head">
           <h2>Recents</h2>
@@ -346,20 +368,7 @@ export default function Search() {
         <div className="tabbar-fade s-fade" aria-hidden="true" data-pending={pending}><i /><i /><i /></div>
         <form className="s-field" role="search" data-pending={pending}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
-          <div className="s-input"
-            // Focus it ourselves, without scrolling: left alone, iOS scrolls the whole app up to reveal the field.
-            onTouchStart={(e) => {
-              const el = input.current
-              if (!el || el === document.activeElement || (e.target as HTMLElement).closest('button')) return
-              e.preventDefault()
-              el.focus({ preventScroll: true })
-            }}
-            // iOS sometimes ignores a focus made at touch-down (seen right after the recents drawer): ask again on lift
-            onTouchEnd={(e) => {
-              const el = input.current
-              if (!el || el === document.activeElement || (e.target as HTMLElement).closest('button')) return
-              el.focus({ preventScroll: true })
-            }}>
+          <div className="s-input" ref={box}>
             <Icon name="search" size={20} />
             <input ref={input} type="search" enterKeyHint="search" aria-label="Search films and series" placeholder="Films and series"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
