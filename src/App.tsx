@@ -6,8 +6,10 @@ import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
 import Browse, { browsePage } from './screens/Browse'
 import Desktop, { isDesktop } from './screens/Desktop'
+import { useProfile } from './lib/profile'
 import Invites from './screens/Invites'
 import Now from './screens/Now'
+import Onboarding from './screens/Onboarding'
 import Person from './screens/Person'
 import Search from './screens/Search'
 import { PrivacyPolicy, Terms } from './screens/Legal'
@@ -28,12 +30,23 @@ function renderPage(path: string) {
   if (path === '/privacy') return <PrivacyPolicy />
   if (path === '/terms') return <Terms />
   if (path === '/settings/invites') return <Invites />
+  if (path === '/onboarding') return <main className="page" />
   if (path === '/dev') return <Dev />
   return <Title id={NaN} />
 }
 
 const ROOT: Record<Tab, React.ReactNode> = {
   now: <Now />, browse: <Browse />, watchlist: <Watchlist />, search: <Search />,
+}
+
+/** First run, once the profile says onboarding hasn't happened. Also at /onboarding (Settings › Testing). */
+function FirstRun() {
+  const { profile } = useProfile()
+  const { path, back } = useNav()
+  const [done, setDone] = useState(false)
+  if (path === '/onboarding') return <Onboarding onDone={back} />
+  if (!profile || profile.onboarded_at || done) return null
+  return <Onboarding onDone={() => setDone(true)} />
 }
 
 function Shell() {
@@ -43,9 +56,10 @@ function Shell() {
   return (
     <SavedProvider>
       {(Object.keys(ROOT) as Tab[]).map((tab) => <TabStack key={tab} tab={tab} root={ROOT[tab]} render={renderPage} />)}
+      <FirstRun />
       <OfflinePill />
       {/* Search has its own bar at the bottom: the field and a close button */}
-      <TabBar hidden={path.startsWith('/settings') || path === '/search' || path === '/privacy' || path === '/terms'} />
+      <TabBar hidden={path.startsWith('/settings') || path === '/search' || path === '/privacy' || path === '/terms' || path === '/onboarding'} />
     </SavedProvider>
   )
 }

@@ -228,7 +228,8 @@ const BX = 150, BY = 140 // how far the wall pans; past it, it pulls back like i
 const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
 const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
 
-function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: number[]) => void }) {
+/** The wall of posters to pick from. Used when the Watchlist is empty, and as a step in onboarding (`bare`: no tab bar, no hint). */
+export function PickWall({ header, onAdd, bare }: { header: React.ReactNode; onAdd: (ids: number[]) => void; bare?: boolean }) {
   const q = useQuery<Card[]>(`picks:${PICKS}`, loadPicks, { maxAge: 60 * 60 * 1000 })
   const [sel, setSel] = useState<number[]>([])
   const [pan, setPan] = useState({ x: 0, y: 0, settle: false })
@@ -237,7 +238,7 @@ function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: num
   const n = sel.length
 
   return (
-    <main className="page pick">
+    <main className="page pick" data-bare={bare}>
       <div className="pick-pan"
         onPointerDown={(e) => { d.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }; dragged.current = false }}
         onPointerMove={(e) => {
@@ -279,7 +280,7 @@ function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: num
       </div>
       <div className="pick-fade" aria-hidden="true" />
       {header}
-      <p className="pick-hint" aria-hidden={n > 0} data-hide={n > 0}>Tap what you want to watch.</p>
+      {!bare && <p className="pick-hint" aria-hidden={n > 0} data-hide={n > 0}>Tap what you want to watch.</p>}
       {q.error && <div className="page-center"><LoadFailed what="titles to pick from" retry={q.retry} retrying={q.retrying} /></div>}
       <div className="pick-add" data-show={n > 0}>
         <Button tabIndex={n ? 0 : -1} aria-label={`Add ${n === 1 ? '1 title' : `${n} titles`} to Watchlist`} onClick={() => onAdd(sel)}>Add {n} to Watchlist</Button>

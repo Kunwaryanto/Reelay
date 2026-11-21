@@ -86,6 +86,12 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 - Language is left out until there is Swedish copy to switch to.
 - A temporary Testing section stays at the bottom (Reload, Show onboarding again, build and layout numbers).
 
+## Desktop and onboarding (21 Nov)
+
+- **Desktop** (`src/screens/Desktop.tsx`, v290): any device without a touch screen, or with a screen at least 700px both ways, gets "Made for your phone" and a QR code to this site's own address (the invite link itself when opened from one). The code is generated in the build with `qrcode-generator`. `?app` in the address shows the app anyway, for testing on a computer.
+- **Onboarding** (`src/screens/Onboarding.tsx`, v211): three steps, each skippable: services as tiles (others in a More sheet), the pick wall, then the notification switches with three example notifications. Continue on the last step asks iOS for permission if any switch is on. Shown once, when `profiles.onboarded_at` is empty; Settings › Testing shows it again.
+- Simpler than the board: service tiles show names, not logos; steps rise in one after another instead of sharing one moving wall; no lock-screen clock and no animated hand-off to Now.
+
 ## Not available, Notify me permission, long press on rows (21 Nov)
 
 - **This title / person isn’t available** (v272): the Start poster wall at 62% black, the heading with a soft shadow and a glass Search pill; Back and the tab bar stay. Shown for a removed title or person and for an address the app doesn't know.
