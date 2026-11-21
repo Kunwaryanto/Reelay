@@ -248,17 +248,32 @@ export function OfflinePill() {
     window.addEventListener('online', on); window.addEventListener('offline', off)
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
-  const offline = !online || failed
+  // Shown once a request can't get through, not the moment the connection drops: until something
+  // fails to load, being offline changes nothing on screen.
+  const offline = failed
   useEffect(() => {
     if (offline) { was.current = true; setBack(false); return }
     if (!was.current) return
     was.current = false
+    // "Back online" only if the connection really is back
+    if (!navigator.onLine) return
     setBack(true)
     const t = setTimeout(() => setBack(false), 2000)
     return () => clearTimeout(t)
-  }, [offline])
-  if (!offline && !back) return null
-  return <div className="offline-pill" role="status">{offline ? 'Offline' : 'Back online'}</div>
+  }, [offline, online])
+  // It drops in from above and lifts away; the words cross-fade when they change.
+  const text = offline ? 'Offline' : back ? 'Back online' : ''
+  const [shown, setShown] = useState(text)
+  const [leaving, setLeaving] = useState(false)
+  useEffect(() => {
+    if (text) { setShown(text); setLeaving(false); return }
+    if (!shown) return
+    setLeaving(true)
+    const t = setTimeout(() => { setShown(''); setLeaving(false) }, 320)
+    return () => clearTimeout(t)
+  }, [text, shown])
+  if (!shown) return null
+  return <div className="offline-pill" role="status" data-leaving={leaving}><span key={shown}>{shown}</span></div>
 }
 
 // ---- Pull to refresh ----------------------------------------------------

@@ -88,6 +88,8 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 
 ## Offline and notifications (built 21 Nov)
 
+- **The Offline pill** shows only after a request couldn't reach the server (the connection, not a server error), and "Back online" only after it had shown. A load the server refused shows where it happened and is listed under Settings › Testing ("Last failed load"). The pill drops in, lifts away, and its words cross-fade.
+
 - **Service worker** (`public/sw.js`, registered from `src/lib/push.ts`): pages come from the network when there is one, so a new version shows at once; the last copy is used only when the network fails or takes over 3 s. The app's own files are kept after first use. The database and TMDB pictures are left alone: what shows offline comes from the answers the app saves itself (`useQuery`) and the browser's own picture cache. Not done from the offline note: keeping the last 300 posters ourselves, and searching saved titles offline.
 - **Notifications:** the app registers the device's address in `push_subscriptions` once notifications are allowed (Settings switches, Notify me, onboarding), refreshes it on launch and removes it on sign-out. It needs `VITE_VAPID_PUBLIC_KEY` in Vercel.
 - **Sending** (`scripts/sync/notify.mjs`, end of the nightly sync): leaving tomorrow, arrived (Notify me titles) and new season, per the profile switches, never twice (`notifications_sent`); three or more of a kind become one that opens the Watchlist. Copy from the lock screen board (v269). Needs `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` as GitHub Actions secrets; without them the step is skipped.

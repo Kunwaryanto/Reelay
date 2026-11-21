@@ -41,7 +41,11 @@ export function clearSavedData() {
   } catch { /* ignore */ }
 }
 
-// A request has failed: the Offline pill listens to this.
+/** The last load that failed, and why (shown in Settings › Testing). */
+let lastError = ''
+export const lastLoadError = () => lastError
+
+// A request couldn't reach the server: the Offline pill listens to this.
 const failListeners = new Set<(failed: boolean) => void>()
 let lastFailed = false
 function reportFailure(failed: boolean) {
@@ -91,9 +95,14 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: { 
       attempt.current = 0
       setError(false)
       reportFailure(false)
-    } catch {
+    } catch (e) {
       setError(true)
-      reportFailure(true)
+      // Only a request that never reached the server says anything about the connection. A request the server
+      // answered with an error is our problem, not the network's: it shows where it happened, not as "Offline".
+      const message = e instanceof Error ? e.message : String(e)
+      lastError = `${key}: ${message}`.slice(0, 160)
+      if (!navigator.onLine || /failed to fetch|load failed|networkerror|network request failed|timed? ?out/i.test(message)) reportFailure(true)
+      else console.warn('Reelay: couldn’t load', lastError)
       const wait = Math.min(30_000, 1000 * 2 ** attempt.current++)
       clearTimeout(timer.current)
       timer.current = setTimeout(() => run(false), wait)

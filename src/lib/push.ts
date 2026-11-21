@@ -42,7 +42,7 @@ export async function registerDevice(): Promise<boolean> {
       ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(KEY) })
     const { error } = await supabase.from('push_subscriptions').upsert(
       { user_id: session.user.id, endpoint: sub.endpoint, p256dh: text(sub.getKey('p256dh')), auth: text(sub.getKey('auth')) },
-      { onConflict: 'endpoint' },
+      { onConflict: 'endpoint', ignoreDuplicates: true },
     )
     return !error
   } catch { return false }

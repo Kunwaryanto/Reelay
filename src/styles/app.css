@@ -706,3 +706,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .block[data-flash] .rows li:first-child { animation: row-flash 1600ms var(--ease-out) 500ms both; border-radius: 12px; }
 @keyframes row-flash { 0%, 100% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0), inset 0 0 0 100px rgba(255, 255, 255, 0); } 25% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.12), inset 0 0 0 100px rgba(255, 255, 255, 0.12); } }
 @media (prefers-reduced-motion: reduce) { .block[data-flash] .rows li:first-child { animation: none; } }
+/* The Offline pill drops in from above and lifts away; its words cross-fade. */
+.offline-pill { animation: pill-in 420ms var(--ease-sheet) both; transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out); }
+.offline-pill[data-leaving='true'] { opacity: 0; transform: translateY(-10px) scale(0.96); }
+.offline-pill > span { display: block; animation: launch-fade 300ms var(--ease-out) both; }
+@keyframes pill-in { from { opacity: 0; transform: translateY(-14px) scale(0.94); } }
+@media (prefers-reduced-motion: reduce) { .offline-pill, .offline-pill > span { animation: none; transition: none; } }

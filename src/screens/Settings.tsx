@@ -5,7 +5,7 @@ import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
 import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
-import { clearSavedData, useQuery } from '../lib/query'
+import { clearSavedData, lastLoadError, useQuery } from '../lib/query'
 import { BUILD, layoutReadout, newVersionOut, reloadApp } from '../lib/update'
 import { BackButton, Button, Icon, Spinner, useToast } from '../ui'
 
@@ -141,6 +141,7 @@ export default function Settings() {
         </ul>
         <p className="version">Build {BUILD}</p>
         <p className="version">{readout}</p>
+        {lastLoadError() && <p className="version">Last failed load: {lastLoadError()}</p>}
       </section>
 
       {asking && (

@@ -54,7 +54,8 @@ export function useMyServices() {
     const before = mine
     setQueryData(key, on ? [...before.filter((x) => x !== id), id] : before.filter((x) => x !== id))
     const res = on
-      ? await supabase.from('user_services').upsert({ user_id: uid, service_id: id })
+      // insert, skipping one that's already there (people may add and remove rows here, not change them)
+      ? await supabase.from('user_services').upsert({ user_id: uid, service_id: id }, { ignoreDuplicates: true })
       : await supabase.from('user_services').delete().eq('user_id', uid).eq('service_id', id)
     if (res.error) { setQueryData(key, before); throw new Error(res.error.message) }
   }
