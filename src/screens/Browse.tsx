@@ -11,7 +11,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { prefetch, useQuery } from '../lib/query'
-import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, titleArt, useArrival, usePressWarm, warmPictures, type Picture } from '../ui'
+import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, titleArt, useArrival, usePressWarm, useSwitched, warmPictures, type Picture } from '../ui'
 import { Hero, HoldMenu } from './Now'
 
 type Pick = 'all' | Kind
@@ -268,6 +268,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: start })
   const sort = f.sort as Sort
   const [pick, setPick] = useState<Pick>('all')
+  const switched = useSwitched(pick)
   const [sheet, setSheet] = useState(false)
   const [small, setSmall] = useState(false)
   const [held, setHeld] = useState<Held | null>(null)
@@ -330,7 +331,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
         {q.error && <div className="br-failed"><LoadFailed what={def.title} retry={q.retry} retrying={q.retrying} compact /></div>}
         <div className="grid-wrap">
         {phase !== 'there' && !q.error && <Skeleton kind="grid" leaving={phase === 'in'} />}
-        <ul className={phase === 'in' ? 'grid arrive' : 'grid'} data-typed={typed} hidden={phase === 'wait'}>
+        <ul key={pick} className={phase === 'in' ? 'grid arrive' : switched ? 'grid pill-in' : 'grid'} data-typed={typed} hidden={phase === 'wait'}>
           {list.map((card) => {
             const note = def.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0])
               : typed || pick !== 'all' ? String(card.year ?? '') : undefined

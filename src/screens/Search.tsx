@@ -114,12 +114,12 @@ const Skeleton = () => (
   </ul>
 )
 
-function Row({ h, onOpen, onHold }: { h: Hit; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
+function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   return (
     <li>
       <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
-        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
         {h.rating !== null && <span className="s-rating"><span>IMDb</span><b>{h.rating.toFixed(1)}</b></span>}
       </a>
@@ -432,8 +432,9 @@ export default function Search() {
               )}
               <p className="sr-only" role="status">{waiting ? 'Searching' : ''}</p>
               {skeleton && <Skeleton />}
-              <ul className="s-results" data-waiting={waiting}>
-                {list.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}
+              {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
+              <ul className="s-results" key={kind} data-waiting={waiting}>
+                {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} onHold={hold} />)}
               </ul>
 
               {nothing && online && (

@@ -10,7 +10,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress } from '../ui'
+import { Button, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched } from '../ui'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { HoldMenu } from './Now'
 
@@ -35,6 +35,7 @@ export default function Watchlist() {
   const q = useQuery<SavedTitle[]>(uid ? `watchlist-titles:${uid}` : null, loadWatchlistTitles)
   const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
   const [kind, setKind] = useState<Kind>('all')
+  const switched = useSwitched(kind)
   // sort and filters, set in the Sort and filter drawer
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: 'added' })
   const sort = f.sort as Sort
@@ -133,7 +134,7 @@ export default function Watchlist() {
               ? <button type="button" className="wl-services" onClick={() => push('/settings/services')}>{s.sub}<Icon name="chevron_right" size={14} /></button>
               : <span>{s.sub}</span>)}
           </div>
-          <ul>
+          <ul key={kind} className={switched ? 'pill-in' : undefined}>
             {s.rows.map((r) => (
               <WatchRow key={r.t.id} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
@@ -206,7 +207,7 @@ function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, on
           if (open) { setOpen(false); return }
           onOpen()
         }}>
-        <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="sync" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{t.title}</b><small>{meta}</small>{where && <small className="wl-where">{where}</small>}</span>
         {note && <span className="wl-note">{note}</span>}
        </a>

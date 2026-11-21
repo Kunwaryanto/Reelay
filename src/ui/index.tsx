@@ -968,3 +968,11 @@ export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title'; l
     </div>
   )
 }
+
+/** True once a pill has been switched on this screen: its list is then keyed by the pill and plays the entrance (`pill-in`) on every switch, never on first showing. */
+export function useSwitched(value: string) {
+  const prev = useRef(value)
+  const switched = useRef(false)
+  if (prev.current !== value) { prev.current = value; switched.current = true }
+  return switched.current
+}

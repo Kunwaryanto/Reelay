@@ -7,7 +7,7 @@ import { useDimOnScroll } from '../lib/nav'
 import { servicesLabel, useMyServices } from '../lib/profile'
 import { useQuery } from '../lib/query'
 import { supabase } from '../lib/supabase'
-import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, TitleCard } from '../ui'
+import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, useSwitched, TitleCard } from '../ui'
 import { HoldMenu } from './Now'
 import { Gone } from './Title'
 
@@ -41,6 +41,7 @@ export default function Person({ id }: { id: number }) {
   const q = useQuery<PersonData | null>(Number.isFinite(id) ? `person:${id}` : null, () => loadPerson(id), { maxAge: 30 * 60 * 1000 })
   const { mine } = useMyServices()
   const [dept, setDept] = useState<Role | null>(null)
+  const switched = useSwitched(dept ?? '')
   const [sort, setSort] = useState<Sort>('new')
   const [kind, setKind] = useState<Kind>('all')
   const [onlyMine, setOnlyMine] = useState(false)
@@ -87,7 +88,7 @@ export default function Person({ id }: { id: number }) {
                 {(sort !== 'new' || kind !== 'all' || onlyMine) && <i aria-hidden="true" />}
               </button>
             </div>
-            <ul className="grid" data-typed="true" aria-label="Filmography">
+            <ul key={dept ?? ''} className={switched ? 'grid pill-in' : 'grid'} data-typed="true" aria-label="Filmography">
               {list.map((c) => {
                 const job = c.role === 'cast' ? c.character : JOB[c.role]
                 return <li key={c.title.id}><TitleCard card={c.title} note={[c.title.year, job].filter(Boolean).join(' · ')} onHold={(card, cover) => setHeld({ card, cover })} /></li>
