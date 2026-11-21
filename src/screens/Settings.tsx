@@ -220,25 +220,38 @@ const CREDITS: [string, [string, string][]][] = [
 // Testing: which kind of link opens the service's app from the Home Screen app. Two known titles, each linked
 // several ways; tap each and note what opens.
 const APP_LINKS: [string, [string, string, boolean][]][] = [
-  ['Netflix · the title from your share link (70285785)', [
-    ['https link, new window (as Open in does today)', 'https://www.netflix.com/title/70285785', true],
-    ['https link, same window', 'https://www.netflix.com/title/70285785', false],
-    ['https link with /se/', 'https://www.netflix.com/se/title/70285785', true],
-    ['App scheme nflx://', 'nflx://www.netflix.com/title/70285785', false],
-    ['Search (today’s fallback)', 'https://www.netflix.com/search?q=Lupin', true],
+  ['Netflix', [
+    ['Stranger Things', 'https://www.netflix.com/title/80057281', true],
+    ['Stranger Things, play', 'https://www.netflix.com/watch/80057281', true],
   ]],
-  ['HBO Max · The End of Oak Street', [
-    ['https link, new window (as Open in does today)', 'https://play.hbomax.com/movie/710798da-f811-40be-9ed9-3a7443e36278', true],
-    ['https link, same window', 'https://play.hbomax.com/movie/710798da-f811-40be-9ed9-3a7443e36278', false],
-    ['The share link as copied', 'https://play.hbomax.com/movie/710798da-f811-40be-9ed9-3a7443e36278?utm_medium=sharebutton&utm_id=A803F9B7-7703-479C-B9FF-978FF03A9E5E', true],
-    ['Search (today’s fallback)', 'https://play.hbomax.com/search?q=The%20End%20of%20Oak%20Street', true],
+  ['HBO Max', [
+    ['House of the Dragon', 'https://play.hbomax.com/show/c68e69d7-9317-428a-a615-cdf8fe5a2e06', true],
+    ['One Battle After Another', 'https://play.hbomax.com/movie/711f5d63-3baa-4dd2-8eec-a73a91e48536', true],
+  ]],
+  ['Disney+', [
+    ['Zootopia 2', 'https://www.disneyplus.com/browse/entity-0818ff05-d4fd-4419-92ed-4f907f09bacb', true],
+    ['Zootopia 2, play', 'https://www.disneyplus.com/play/0818ff05-d4fd-4419-92ed-4f907f09bacb', true],
+  ]],
+  ['Prime Video', [
+    ['The Last Viking', 'https://app.primevideo.com/detail?gti=amzn1.dv.gti.b26bf046-04ec-4178-9488-6b6e723be619', true],
+  ]],
+  ['SkyShowtime', [
+    ['Dexter: Resurrection', 'https://www.skyshowtime.com/se/stream/tv/dexter-resurrection/d9292b0d-1d79-3b83-958a-459c953305e9', true],
+    ['Dexter: Resurrection, play', 'https://www.skyshowtime.com/watch/asset/tv/dexter-resurrection/d9292b0d-1d79-3b83-958a-459c953305e9', true],
+  ]],
+  ['Apple TV', [
+    ['Project Hail Mary', 'https://tv.apple.com/se/movie/project-hail-mary/umc.cmc.7jxdlxvz304lj3iwhtrhbe8fv', true],
+  ]],
+  ['Others', [
+    ['Mubi · The Mastermind', 'https://mubi.com/films/the-mastermind', true],
+    ['Crunchyroll · Solo Leveling', 'https://www.crunchyroll.com/series/GDKHZEJ0K/solo-leveling', true],
   ]],
 ]
 
 function AppLinks() {
   return (
     <Page title="App links">
-      <div className="set-small"><p>Tap each link and note whether it opens the app on the title, the app’s start, Safari, or nothing. Try with the app installed and signed in.</p></div>
+      <div className="set-small"><p>Links from Streaming Availability. Tap each and note whether it opens the app on the title, the app’s start, Safari, or nothing. Apps you don’t have open in Safari.</p></div>
       {APP_LINKS.map(([title, rows]) => (
         <section key={title} className="settings-block set-list">
           <h2 className="block-title">{title}</h2>
