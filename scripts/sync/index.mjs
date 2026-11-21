@@ -28,6 +28,8 @@ const LIMIT = Number(process.env.SYNC_LIMIT || 0);
 const FULL = LIMIT === 0;
 const MDBLIST_PER_RUN = Number(process.env.MDBLIST_PER_RUN || 900);
 const SA_PAGES = Number(process.env.SA_PAGES || 10);
+// Requests for links to the services' apps each night. The free plan allows 100 a day; leaving dates use up to SA_PAGES.
+const SA_LINK_REQUESTS = Number(process.env.SA_LINK_REQUESTS || 70);
 const REFRESH_ALL = process.env.SYNC_REFRESH === 'all';
 const REFRESH_PER_RUN = Number(process.env.SYNC_REFRESH_PER_RUN || 2500);
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -328,6 +330,118 @@ async function saveAvailability(found, keys) {
 }
 
 // ---------------------------------------------------------------------------
+// Links into the services' apps (Streaming Availability)
+// ---------------------------------------------------------------------------
+// A title's link on a service doesn't change, so each is fetched once and kept in availability.link. A title that
+// leaves a service loses its row (and link); when it comes back, it's in the "new" list and gets a fresh one.
+//  1. Filling: each service's catalogue is read page by page (20 titles a page), most popular first, over as many
+//     nights as it takes; where it stopped is kept in sync_state. A finished service is read again only after 30
+//     days, and only if some of its titles still have no link.
+//  2. Keeping up: titles added to a service since the last run, a few pages a night.
+// Any show object the API returns on the way (including the leaving-dates list) is harvested for links too.
+const SA_HOST = 'streaming-availability.p.rapidapi.com';
+const saLinks = new Map(); // "tv|123|netflix" -> link, from any response this run
+
+function harvestLinks(show, svcBySa) {
+  const [k, id] = String(show?.tmdbId ?? '').split('/');
+  if (!id) return;
+  const rank = { subscription: 0, free: 1, addon: 2 };
+  const best = {};
+  for (const o of show.streamingOptions?.se ?? []) {
+    const ours = svcBySa[o.service?.id];
+    if (!ours || !(o.type in rank) || !o.link) continue;
+    if (!best[ours] || rank[o.type] < rank[best[ours].type]) best[ours] = o;
+  }
+  for (const [svc, o] of Object.entries(best)) saLinks.set(`${k === 'movie' ? 'film' : 'series'}|${id}|${svc}`, o.link);
+}
+
+async function saveLinks() {
+  if (!saLinks.size) return 0;
+  const rows = [...saLinks].map(([k, link]) => [...k.split('|'), link]);
+  const cols = [0, 1, 2, 3].map((j) => rows.map((r) => r[j]));
+  const r = await db.query(
+    `update public.availability a set link = x.link
+     from unnest($1::text[], $2::int[], $3::text[], $4::text[]) as x(kind, tmdb_id, svc, link)
+     join public.titles t on t.tmdb_id = x.tmdb_id and t.kind = x.kind
+     where a.title_id = t.id and a.service_id = x.svc and a.link is distinct from x.link`,
+    cols,
+  );
+  saLinks.clear();
+  return r.rowCount;
+}
+
+const getState = async (key, fallback) => (await db.query('select value from public.sync_state where key = $1', [key])).rows[0]?.value ?? fallback;
+const setState = (key, value) => db.query(
+  `insert into public.sync_state (key, value, updated_at) values ($1, $2, now())
+   on conflict (key) do update set value = excluded.value, updated_at = now()`, [key, JSON.stringify(value)]);
+
+async function syncLinks() {
+  const key = env('STREAMING_AVAILABILITY_KEY', false);
+  if (!key) return log('links: no key, skipped');
+  const headers = { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': SA_HOST };
+  const services = (await db.query('select id, sa_service_id from public.services where sa_service_id is not null order by sort_order')).rows;
+  const svcBySa = Object.fromEntries(services.map((r) => [r.sa_service_id, r.id]));
+  let left = SA_LINK_REQUESTS;
+  let stopped = false;
+  // One request; null when the day's allowance is used up (then nothing more is asked tonight).
+  const ask = async (path) => {
+    if (left <= 0 || stopped) return null;
+    left--;
+    const r = await fetch(`https://${SA_HOST}${path}`, { headers });
+    if (r.status === 429) { stopped = true; log('links: daily allowance used up'); return null; }
+    if (!r.ok) { log(`links: ${r.status} ${path.slice(0, 80)}`); return null; }
+    return r.json();
+  };
+
+  // 2. Keeping up: what was added since the last run (first run: the last day)
+  const since = await getState('links:since', Math.floor(Date.now() / 1000) - 86400);
+  const now = Math.floor(Date.now() / 1000);
+  let cursor = '';
+  let pages = 0;
+  for (; pages < 10; pages++) {
+    const q = new URLSearchParams({ country: 'se', change_type: 'new', item_type: 'show', from: String(since), output_language: 'en' });
+    if (cursor) q.set('cursor', cursor);
+    const r = await ask(`/changes?${q}`);
+    if (!r) break;
+    for (const show of Object.values(r.shows ?? {})) harvestLinks(show, svcBySa);
+    if (!r.hasMore) { cursor = ''; break; }
+    cursor = r.nextCursor;
+  }
+  if (!stopped && !cursor) await setState('links:since', now); // all of it read: next time from now
+  const added = await saveLinks();
+
+  // 1. Filling, service by service
+  const fill = await getState('links:fill', {});
+  let filled = 0;
+  for (const { id: svc, sa_service_id: sa } of services) {
+    const st = fill[svc] ?? { cursor: '', done: null };
+    if (st.done) {
+      const age = (Date.now() - Date.parse(st.done)) / 86400000;
+      const missing = (await db.query('select count(*)::int n from public.availability where service_id = $1 and link is null', [svc])).rows[0].n;
+      if (age < 30 || missing === 0) continue;
+      st.done = null; st.cursor = '';
+    }
+    // rent and buy are left out: only what's included in a subscription (or free)
+    const catalog = ['prime', 'apple'].includes(sa) ? `${sa}.subscription` : sa;
+    while (left > 0 && !stopped) {
+      const q = new URLSearchParams({ country: 'se', catalogs: catalog, order_by: 'popularity_alltime', output_language: 'en' });
+      if (st.cursor) q.set('cursor', st.cursor);
+      const r = await ask(`/shows/search/filters?${q}`);
+      if (!r) break;
+      for (const show of r.shows ?? []) harvestLinks(show, svcBySa);
+      if (r.hasMore) st.cursor = r.nextCursor;
+      else { st.cursor = ''; st.done = new Date().toISOString(); break; }
+    }
+    fill[svc] = st;
+    filled += await saveLinks();
+    if (left <= 0 || stopped) break;
+  }
+  await setState('links:fill', fill);
+  const missing = (await db.query('select count(*)::int n from public.availability where link is null')).rows[0].n;
+  log(`links: ${added} from new arrivals (${pages} pages), ${filled} from catalogues; ${SA_LINK_REQUESTS - left} requests; ${missing} offers still without a link`);
+}
+
+// ---------------------------------------------------------------------------
 // 4. Leaving dates (Streaming Availability)
 // ---------------------------------------------------------------------------
 async function syncLeavingDates() {
@@ -344,6 +458,7 @@ async function syncLeavingDates() {
     if (cursor) q.set('cursor', cursor);
     const r = await getJson(`https://${host}/changes?${q}`, headers);
     if (!r) break;
+    for (const show of Object.values(r.shows ?? {})) harvestLinks(show, svc);
     for (const c of r.changes ?? []) {
       seen++;
       const show = r.shows?.[c.showId];
@@ -512,6 +627,9 @@ async function main() {
   log(`title details saved: ${results.filter(Boolean).length} of ${todo.length}`);
   await saveAvailability(found, keys);
   await syncLeavingDates();
+  await saveLinks(); // what the leaving-dates list carried
+  // a failure here never fails the sync: the app falls back to the service's search
+  await syncLinks().catch((e) => log('links failed:', e.message));
   await syncImdbRatings();
   await syncMdblist();
   if (FULL) await reconcile(runStart);
