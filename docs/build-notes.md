@@ -299,3 +299,4 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Closing: Search sinks 36 px with the keyboard and fades out (300 ms) over the page coming back; the tab bar icons rise as usual.
 
 - Long press: nothing behind the menu scrolls while it is open (the finger that opened it is still down), and holding never selects text or shows Copy / Look Up anywhere in the app, except in fields and on the legal pages.
+- Search cross-fade revised: 420 ms ease-in-out, content travels 90 px (480 ms). Top-picture parallax moves only `translate` inside a clipping frame, so it stays on the scrolling thread.

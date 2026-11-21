@@ -44,7 +44,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   return (
     <>
       <section className="title-top" aria-labelledby="t-title">
-        {art && <img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" />}
+        {art && <div className="title-art-box"><img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" /></div>}
         <div className="hero-shade" aria-hidden="true" />
         <div className="title-head">
           <h1 id="t-title">{t.title}</h1>

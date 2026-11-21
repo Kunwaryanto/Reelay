@@ -154,7 +154,8 @@ button { font: inherit; color: inherit; }
 
 /* ---- Title page ---- */
 .title-top { position: relative; padding: 508px 0 6px; }
-.title-art { position: absolute; top: 0; left: 0; width: 100%; height: 540px; object-fit: cover; object-position: center 25%; }
+.title-art-box { position: absolute; top: calc(var(--pull) * -1); left: 0; width: 100%; height: calc(540px + var(--pull)); overflow: hidden; }
+.title-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 .title-art[data-poster='true'] { object-position: center top; }
 .title-top .hero-shade { bottom: auto; height: 540px; }
 .title-head { position: relative; margin: 0 var(--margin); display: flex; align-items: flex-start; gap: 12px; }
@@ -795,26 +796,27 @@ html[data-runway] .tabbar { touch-action: none; }
    Pulling down: it stays at the top of the screen and grows to fill the gap, instead of sliding down with the page.
    --pull is how far the page is pulled; it is a registered length so it can ease back with the page. */
 @property --pull { syntax: '<length>'; inherits: true; initial-value: 0px; }
-.title-art, .title-top .hero-shade { top: calc(var(--pull) * -1); height: calc(540px + var(--pull)); }
+.title-top .hero-shade { top: calc(var(--pull) * -1); height: calc(540px + var(--pull)); }
 /* Scrolling up: the picture moves at about two thirds of the page's speed, so the page slides over it. */
 @supports (animation-timeline: scroll()) {
   .page { scroll-timeline: --page block; }
   @media (prefers-reduced-motion: no-preference) {
-    .hero-slide[data-on='true'] .hero-art, .title-art { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
+    .hero-art, .title-art { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
   }
-  /* the part that would hang below its frame is cut off as it goes */
-  @keyframes art-drift { to { translate: 0 170px; clip-path: inset(0 0 170px 0); } }
+  /* Only `translate` moves (its frame cuts off what hangs below): anything else here, a clip-path for one, takes the
+     animation off the scrolling thread in Safari and the picture then judders behind the page. */
+  @keyframes art-drift { to { translate: 0 170px; } }
 }
 
 /* ---- Search opens and closes as a cross-fade (after Cosmos) ----
    Opening: the page you were on stays put and fades away under Search, whose content rises with the keyboard.
    Closing: Search sinks with the keyboard and fades out over the page coming back. */
-.stack[data-tab='search'] { opacity: 0; transition: opacity 300ms var(--ease-out), visibility 0s 300ms; }
-.stack[data-tab='search'][data-active='true'] { opacity: 1; transition: opacity 300ms var(--ease-out), visibility 0s; }
+.stack[data-tab='search'] { opacity: 0; transition: opacity 420ms ease-in-out, visibility 0s 420ms; }
+.stack[data-tab='search'][data-active='true'] { opacity: 1; transition: opacity 420ms ease-in-out, visibility 0s; }
 /* the page under it stays visible while Search fades in (Search is the last stack, so it sits on top) */
-.stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: visibility 0s 300ms; }
-.s-stage { transition: transform var(--dur-sheet) var(--ease-sheet), translate var(--dur-sheet) var(--ease-sheet); }
-.stack[data-tab='search'][data-active='false'] .s-stage { translate: 0 36px; }
+.stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: visibility 0s 420ms; }
+.s-stage { transition: transform var(--dur-sheet) var(--ease-sheet), translate 480ms var(--ease-sheet); }
+.stack[data-tab='search'][data-active='false'] .s-stage { translate: 0 90px; }
 @media (prefers-reduced-motion: reduce) { .stack[data-tab='search'], .stack[data-tab='search'][data-active='true'], .stack[data-active='false']:has(~ .stack[data-tab='search'][data-active='true']) { transition: none; } .stack[data-tab='search'][data-active='false'] .s-stage { translate: none; } }
 
 /* ---- It's an app: holding a finger down never selects text or brings up Copy / Look Up ----
