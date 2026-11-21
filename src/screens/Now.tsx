@@ -177,8 +177,7 @@ export default function Now() {
 
   return (
     <>
-    <main className="page noscroll" data-launch={show && launching ? '' : undefined} onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
-      onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
+    <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
       <h1 className="sr-only">Now</h1>
       <div className="now-settings"><IconButton label="Settings" glass onClick={() => push('/settings')}><GearIcon /></IconButton></div>
 

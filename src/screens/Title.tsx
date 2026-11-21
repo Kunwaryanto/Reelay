@@ -169,8 +169,7 @@ export default function Title({ id }: { id: number }) {
   const missing = !Number.isFinite(id) || (q.data === null && !q.loading)
   return (
     <>
-    <main className="page noscroll" onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
-      onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
+    <main className="page noscroll" ref={bind.ref} onScroll={onScroll}>
       <div className="page-back"><BackButton glass /></div>
       {q.error && <div className="page-center"><LoadFailed what="this title" retry={q.retry} retrying={q.retrying} /></div>}
       {missing && <Gone what="title" />}
