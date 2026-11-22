@@ -3,13 +3,13 @@
 // and the step's text and controls fade out as it starts and rise in as it settles. Every step can be skipped.
 // Shown once (profiles.onboarded_at), and again from Settings while testing.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { loadPicks, type Card } from '../lib/catalogue'
+import { loadWall, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { loadServices, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission } from '../lib/push'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, Icon, ServiceMark, Sheet, useToast } from '../ui'
+import { Button, Icon, Sheet, useToast } from '../ui'
 
 type Step = 'svc' | 'pick' | 'notify'
 type Cam = 'enter' | Step | 'exit'
@@ -28,6 +28,23 @@ const DRIFT_MS = [2500, 2650, 2600, 2800, 2700, 2900]
 const BX = 150, BY = 160 // how far the wall pans while picking; past it, it pulls back like iOS
 const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
 const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
+
+// On to start with, so the wall shows straight away what picking a service does.
+const DEFAULTS = ['netflix', 'hbo-max', 'svt-play']
+// The services' own logos in white, each drawn at about the same area (380 px², at most 52 × 20) from its proportions.
+const LOGOS: Record<string, [file: string, ratio: number]> = {
+  netflix: ['netflix.png', 3.7], 'hbo-max': ['hbo-max.png', 1.39], 'svt-play': ['svt-play.png', 2.4], viaplay: ['viaplay.png', 4.13],
+  'disney-plus': ['disney-plus.png', 1.84], 'prime-video': ['prime-video.png', 3.24], 'apple-tv': ['apple-tv.png', 1.98],
+  skyshowtime: ['skyshowtime.png', 4.28], 'tv4-play': ['tv4-play.svg', 1],
+}
+function Logo({ service }: { service: Service }) {
+  const logo = LOGOS[service.id]
+  if (!logo) return <span className="ob-more-tile">{service.name}</span>
+  let h = Math.sqrt(380 / logo[1]), w = h * logo[1]
+  if (w > 52) { w = 52; h = w / logo[1] }
+  if (h > 20) { h = 20; w = h * logo[1] }
+  return <img src={`/icons/services/logos/${logo[0]}`} alt="" width={w} height={h} style={{ width: w, height: h }} draggable={false} />
+}
 
 const NOTIFY: [NotifyKey, string][] = [['notify_leaving', 'Leaving soon'], ['notify_arrivals', 'Arriving on your services'], ['notify_new_seasons', 'New seasons']]
 const EXAMPLES: Record<NotifyKey, [string, string, string]> = {
@@ -48,13 +65,22 @@ function Head({ onBack, onSkip }: { onBack?: () => void; onSkip: () => void }) {
   )
 }
 
-export default function Onboarding({ onDone }: { onDone: () => void }) {
-  const { mine, set } = useMyServices()
+export default function Onboarding({ onDone, replay }: { onDone: () => void; replay?: boolean }) {
+  const { mine, loaded, setAll } = useMyServices()
   const { update } = useProfile()
   const saved = useSaved()
   const toast = useToast()
   const services = useQuery<Service[]>('services', loadServices, { maxAge: 24 * 60 * 60 * 1000 })
-  const picks = useQuery<Card[]>('picks:49', loadPicks, { maxAge: 60 * 60 * 1000 })
+  const all = services.data ?? []
+  const popular = all.filter((s) => s.popular).slice(0, 9)
+  const rest = all.filter((s) => !popular.includes(s))
+  const wallKey = popular.length ? `wall:${popular.map((s) => s.id).join()}` : null
+  const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id)), { maxAge: 60 * 60 * 1000 })
+  // What's switched on here: your own services, or three common ones when you have none yet (and always when this
+  // is shown again from Settings, to see it as a new person does; that run never changes your services).
+  // Saved when you continue; Skip saves nothing.
+  const [edits, setEdits] = useState<string[] | null>(null)
+  const on = edits ?? (!replay && mine.length ? mine : DEFAULTS.filter((id) => all.some((s) => s.id === id)))
 
   const [step, setStep] = useState<Step>('svc')       // where the camera is
   const [view, setView] = useState<Step | null>(null) // whose text and controls are mounted
@@ -83,7 +109,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const wall = useMemo(() => (picks.data ?? []).slice(0, COLS * PER), [picks.data])
   const [started, setStarted] = useState(false)
   useEffect(() => {
-    if (started || (!picks.data && !picks.error)) return
+    if (started || (!picks.data && !picks.error && !services.error)) return
     let live = true
     const go = () => { if (live) { live = false; setStarted(true) } }
     void Promise.all(wall.map((c) => {
@@ -95,7 +121,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     })).then(go)
     const t = window.setTimeout(go, 1500)
     return () => { live = false; clearTimeout(t) }
-  }, [picks.data, picks.error, started, wall])
+  }, [picks.data, picks.error, services.error, started, wall])
   useEffect(() => {
     if (!started) return
     later(() => { setWallOn(true); setCam({ at: 'svc', tr: 'transform 2700ms cubic-bezier(0.25, 1, 0.5, 1)' }) }, 40)
@@ -111,11 +137,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     return () => window.removeEventListener('resize', on)
   }, [])
 
-  const all = services.data ?? []
-  const popular = all.filter((s) => s.popular).slice(0, 9)
-  const rest = all.filter((s) => !popular.includes(s))
-  const extra = rest.filter((s) => mine.includes(s.id)).length
-  const toggle = (s: Service) => set(s.id, !mine.includes(s.id)).catch(() => toast({ text: 'Couldn’t save that. Try again.' }))
+  const extra = rest.filter((s) => on.includes(s.id)).length
+  const toggle = (s: Service) => setEdits(on.includes(s.id) ? on.filter((x) => x !== s.id) : [...on, s.id])
+  const saveServices = () => { if (!replay && loaded) setAll(on).catch(() => toast({ text: 'Couldn’t save your services. Try again in Settings.' })) }
 
   const setCard = (key: NotifyKey, p: Phase) => setCards((c) => ({ ...c, [key]: p }))
   const arrive = (key: NotifyKey, delay: number) => later(() => { setCard(key, 'pre'); later(() => setCard(key, 'shown'), 140) }, delay)
@@ -137,8 +161,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       later(() => { setUi(true); setView('notify') }, 440)
       // oldest first: each new one lands on top and pushes the others down, like iOS
       later(() => {
-        const on = NOTIFY.map(([key]) => key).filter((key) => want[key]).reverse()
-        on.forEach((key, i) => arrive(key, i * 90))
+        NOTIFY.map(([key]) => key).filter((key) => want[key]).reverse().forEach((key, i) => arrive(key, i * 90))
       }, 500)
       later(() => setLocked(false), 900)
       return
@@ -221,16 +244,15 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                     <div key={c} className="ob-col" data-drift={started || undefined}
                       style={{ marginTop: top, '--S': `${(c % 2 ? -1 : 1) * col.length * CELL * 0.45}px`, animationDuration: `${DRIFT_MS[c]}ms`, animationDelay: `${c * 50}ms` } as CSSProperties}>
                       {[0, 1, 2].flatMap((copy) => col.map((card, r) => {
-                        const on = sel.includes(card.id)
-                        // nothing picked yet: nothing to tell apart, so the whole wall stays lit
-                        const lit = !(step === 'svc' && grey && mine.length > 0) || card.availability.some((a) => mine.includes(a.service_id))
+                        const chosen = sel.includes(card.id)
+                        const lit = !(step === 'svc' && grey) || card.availability.some((a) => on.includes(a.service_id))
                         const y = top + (copy * col.length + r) * CELL + CELL / 2
                         const dd = sweep && !lit ? Math.round(clamp((818 - y) / 818, 1) * 280) : 0
                         return (
-                          <button key={`${copy}-${card.id}`} type="button" className="ob-tile" data-lit={lit} data-shade={step === 'pick' && n > 0 && !on}
-                            aria-pressed={step === 'pick' ? on : undefined} aria-label={card.title} aria-hidden={copy !== 1 || undefined}
+                          <button key={`${copy}-${card.id}`} type="button" className="ob-tile" data-svc={card.availability[0]?.service_id} data-lit={lit} data-shade={step === 'pick' && n > 0 && !chosen}
+                            aria-pressed={step === 'pick' ? chosen : undefined} aria-label={card.title} aria-hidden={copy !== 1 || undefined}
                             tabIndex={picking && copy === 1 ? 0 : -1} style={dd > 0 ? { '--dd': `${dd}ms` } as CSSProperties : undefined}
-                            onClick={() => { if (picking && !dragged.current) setSel((s) => (on ? s.filter((x) => x !== card.id) : [...s, card.id])) }}>
+                            onClick={() => { if (picking && !dragged.current) setSel((s) => (chosen ? s.filter((x) => x !== card.id) : [...s, card.id])) }}>
                             {card.poster_path && <img src={tmdbImage(card.poster_path, 'w342')} alt="" draggable={false} decoding="async" />}
                             <i aria-hidden="true" /><b aria-hidden="true" />
                           </button>
@@ -273,7 +295,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             <h1 className="ob-rise" style={{ animationDelay: '60ms' }}>{'Which services\ndo you have?'}</h1>
             <ul className="ob-tiles ob-rise" role="group" aria-label="Your services" style={{ animationDelay: '160ms' }}>
               {popular.map((s) => (
-                <li key={s.id}><button type="button" className="press" role="checkbox" aria-checked={mine.includes(s.id)} aria-label={s.name} onClick={() => toggle(s)}><ServiceMark service={s.id} /></button></li>
+                <li key={s.id}><button type="button" className="press" role="checkbox" aria-checked={on.includes(s.id)} aria-label={s.name} onClick={() => toggle(s)}><Logo service={s} /></button></li>
               ))}
               {rest.length > 0 && (
                 <li><button type="button" className="press" aria-haspopup="dialog" aria-checked={extra > 0} aria-label={extra ? `More services, ${extra} selected` : 'More services'} onClick={() => setMore(true)}>
@@ -281,7 +303,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                 </button></li>
               )}
             </ul>
-            <div className="ob-next ob-rise" style={{ animationDelay: '240ms' }}><Button onClick={() => go('pick')}>Continue</Button></div>
+            <div className="ob-next ob-rise" style={{ animationDelay: '240ms' }}><Button onClick={() => { if (locked) return; saveServices(); go('pick') }}>Continue</Button></div>
           </section>
         )}
 
@@ -307,10 +329,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                 {NOTIFY.map(([key, label]) => (
                   <li key={key}><button type="button" role="switch" className="set-switch" aria-checked={want[key]}
                     onClick={() => {
-                      const on = !want[key]
-                      setWant((w) => ({ ...w, [key]: on }))
+                      const next = !want[key]
+                      setWant((w) => ({ ...w, [key]: next }))
                       // its example lands again, or is swiped away
-                      if (on) arrive(key, 0); else { setCard(key, 'swipe'); later(() => setCard(key, 'gone'), 260) }
+                      if (next) arrive(key, 0); else { setCard(key, 'swipe'); later(() => setCard(key, 'gone'), 260) }
                     }}>
                     <span className="row-text"><b>{label}</b></span><i aria-hidden="true" />
                   </button></li>
@@ -326,9 +348,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         <h2 className="sheet-title ob-sheet-title">More services</h2>
         <ul className="rows ob-more" role="group" aria-label="More services">
           {rest.map((s) => (
-            <li key={s.id}><button type="button" role="checkbox" aria-checked={mine.includes(s.id)} onClick={() => toggle(s)}>
+            <li key={s.id}><button type="button" role="checkbox" aria-checked={on.includes(s.id)} onClick={() => toggle(s)}>
               <span className="row-text"><b>{s.name}</b>{s.kind === 'free' && <small>Free</small>}</span>
-              <Icon name="check" size={20} style={{ opacity: mine.includes(s.id) ? 1 : 0 }} />
+              <Icon name="check" size={20} style={{ opacity: on.includes(s.id) ? 1 : 0 }} />
             </button></li>
           ))}
         </ul>

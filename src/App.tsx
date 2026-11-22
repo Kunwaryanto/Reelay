@@ -47,7 +47,7 @@ function FirstRun() {
   const { profile } = useProfile()
   const { path, back } = useNav()
   const [done, setDone] = useState(false)
-  if (path === '/onboarding') return <Onboarding onDone={back} />
+  if (path === '/onboarding') return <Onboarding replay onDone={back} />
   if (!profile || profile.onboarded_at || done) return null
   return <Onboarding onDone={() => setDone(true)} />
 }

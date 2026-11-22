@@ -59,7 +59,21 @@ export function useMyServices() {
       : await supabase.from('user_services').delete().eq('user_id', uid).eq('service_id', id)
     if (res.error) { setQueryData(key, before); throw new Error(res.error.message) }
   }
-  return { mine, loaded: q.data !== undefined, set }
+  /** Replace the whole selection in one go (onboarding's Continue). */
+  const setAll = async (ids: string[]) => {
+    if (!uid || !key) return
+    const before = mine
+    const add = ids.filter((x) => !before.includes(x)), drop = before.filter((x) => !ids.includes(x))
+    if (!add.length && !drop.length) return
+    setQueryData(key, ids)
+    const res = await Promise.all([
+      add.length ? supabase.from('user_services').upsert(add.map((service_id) => ({ user_id: uid, service_id })), { ignoreDuplicates: true }) : null,
+      drop.length ? supabase.from('user_services').delete().eq('user_id', uid).in('service_id', drop) : null,
+    ])
+    const failed = res.find((r) => r?.error)
+    if (failed?.error) { setQueryData(key, before); throw new Error(failed.error.message) }
+  }
+  return { mine, loaded: q.data !== undefined, set, setAll }
 }
 
 /** "Netflix, Viaplay" or "Netflix, Viaplay +3" */

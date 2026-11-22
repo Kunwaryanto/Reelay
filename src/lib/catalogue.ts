@@ -212,6 +212,32 @@ export async function loadPicks(): Promise<Card[]> {
   return interleave(lists, new Set(), 49)
 }
 
+/**
+ * Onboarding's wall of posters: the most popular titles of each given service, laid out for six columns so that
+ * any few neighbouring rows hold every service (slot (row, column) takes service (column + 3 × row) mod n).
+ * Each card's `availability` holds only the service it stands for.
+ */
+export async function loadWall(serviceIds: string[], rows = 6, cols = 6): Promise<Card[]> {
+  const n = serviceIds.length
+  if (!n) return []
+  const lists = await Promise.all(serviceIds.map(async (s) => unwrap((await supabase.from('titles').select(CARD)
+    .eq('availability.service_id', s).not('poster_path', 'is', null).order('popularity', { ascending: false }).limit(24)) as never) as Card[]))
+  const seen = new Set<number>()
+  const next = (i: number): Card | undefined => {
+    const l = lists[i]
+    while (l.length) { const c = l.shift()!; if (!seen.has(c.id)) { seen.add(c.id); return c } }
+  }
+  const out: Card[] = []
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const want = (c + 3 * r) % n
+    // a service that runs out lends its slot to the next one that still has titles
+    let card: Card | undefined
+    for (let k = 0; k < n && !card; k++) card = next((want + k) % n)
+    if (card) out.push(card)
+  }
+  return out
+}
+
 // ---- Invites (admins) ------------------------------------------------------
 
 export type Invite = {
