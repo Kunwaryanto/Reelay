@@ -81,6 +81,7 @@ Push and pop draw the slide with transform animations (Web Animations, run off t
 
 - Board v296. Pages: Your services, Region, Credits, Privacy, Delete account (plus Invite friends), and the privacy policy and terms at `/privacy` and `/terms`, which can also be read signed out.
 - **Your services** saves each tap to `user_services`. Watchlist, Search and Browse read the same cached list (`my-services:<user>`), and `setQueryData` updates every screen showing it at once.
+- Services (22 Nov): the nine popular ones, then under More: Cineasterna (free with a library card), MUBI, Crunchyroll, Curiosity Stream, Pluto TV, Draken Film, TriArt Play, Hayu, BritBox. Paramount+ from the canvas list is left out (replaced by SkyShowtime in Sweden). The five added 22 Nov have no leaving dates, logos or app links yet; the sync finds their TMDB provider by name and logs any it can't find.
 - **Notifications:** three switches on the profile. The first one tapped asks iOS for permission. In Safari (no Home Screen app) or when iOS has them blocked, a card says so and the switches dim. Sending them is the notifications piece.
 - **Get a copy of my data** builds the copy on the phone and opens the share sheet (the design promised an email within days).
 - **Delete account** calls the `delete-account` Edge Function, which removes the auth user (the user tables cascade). Functions deploy from `main`.

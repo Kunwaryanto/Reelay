@@ -109,6 +109,11 @@ const PROVIDER_NAMES = {
   crunchyroll: ['crunchyroll'],
   curiosity: ['curiosity stream', 'curiositystream'],
   'pluto-tv': ['pluto tv'],
+  cineasterna: ['cineasterna'],
+  'draken-film': ['draken films', 'draken film'],
+  'triart-play': ['triart play', 'tri art play'],
+  hayu: ['hayu'],
+  britbox: ['britbox', 'britbox international'],
 };
 
 async function syncServices() {
