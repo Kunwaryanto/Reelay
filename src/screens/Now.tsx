@@ -97,12 +97,24 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   // and hide the original until the copy has landed back on it, so there's never two or a blank one.
   useLayoutEffect(() => {
     const copy = held.cover.cloneNode(true) as HTMLElement
-    // a lazy image doesn't paint again in the copy until it has been seen: make it load now
-    copy.querySelectorAll('img').forEach((img) => { img.loading = 'eager' })
+    // The copy's picture has to be on screen in the same frame the original is hidden, or the poster blinks
+    // (seen the first time a poster is held; after that the browser has the decoded picture at hand). So the copy
+    // shows the very file the original is showing, decoded before it paints, and the original is hidden only
+    // once the copy's picture is ready.
+    const from = held.cover.querySelector('img')
+    const img = copy.querySelector('img')
+    if (img && from) {
+      img.removeAttribute('srcset'); img.removeAttribute('sizes')
+      img.loading = 'eager'; img.decoding = 'sync'
+      img.src = from.currentSrc || from.src
+    }
     lift.current?.append(copy)
-    held.cover.style.visibility = 'hidden'
+    let live = true
+    const hide = () => { if (live) held.cover.style.visibility = 'hidden' }
+    const late = setTimeout(hide, 200)
+    if (img?.src) img.decode().then(hide, hide); else hide()
     const r = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
-    return () => { cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
+    return () => { live = false; clearTimeout(late); cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
   }, [held.cover])
   // closing lands on the poster at its normal size (the pressed, slightly smaller size is only where it starts from)
   // It is measured again at that moment: the first measurement was taken mid-press (the card shrinks around its
