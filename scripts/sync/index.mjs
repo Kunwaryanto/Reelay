@@ -734,6 +734,18 @@ async function main() {
     log('scores only');
     await syncMdblist();
     log('scores now:', JSON.stringify((await db.query(COUNTS)).rows[0]));
+    // Rotten Tomatoes: how many titles have both scores, and how many only one (with examples to check by hand)
+    const rt = (await db.query(
+      `select count(*) filter (where rt_critics is not null and rt_audience is not null) both_scores,
+              count(*) filter (where rt_critics is not null and rt_audience is null) only_critics,
+              count(*) filter (where rt_critics is null and rt_audience is not null) only_audience from public.scores`)).rows[0];
+    log('Rotten Tomatoes:', JSON.stringify(rt));
+    for (const [label, cond] of [['only audience', 'rt_critics is null and rt_audience is not null'], ['only critics', 'rt_critics is not null and rt_audience is null']]) {
+      const ex = (await db.query(
+        `select t.title, t.year, t.kind, t.imdb_id, s.rt_critics, s.rt_audience from public.scores s join public.titles t on t.id = s.title_id
+         where ${cond} order by t.popularity desc nulls last limit 8`)).rows;
+      log(`  ${label}, most popular:`, ex.map((r) => `${r.title} (${r.year}, ${r.kind}, ${r.imdb_id}) ${r.rt_critics ?? '–'}/${r.rt_audience ?? '–'}`).join(' · '));
+    }
     await db.end();
     return;
   }
