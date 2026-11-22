@@ -27,7 +27,7 @@ const hrefOf = (cat: Category, k: Pick) => (cat.list ? `/browse/g/${cat.id}/list
 const HALF_HOUR = 30 * 60 * 1000
 /** What a grid page shows: a category's own list, or one of its rows. */
 const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
-  row === 'list' ? { id: 'popular', title: cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only, notes: cat.rule.leaving ? 'leaving' : undefined } : rowsOf(cat, kind).find((r) => r.id === row)
+  row === 'list' ? { id: 'popular', title: (kind && cat.labels?.[kind]) || cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only, notes: cat.rule.leaving ? 'leaving' : undefined } : rowsOf(cat, kind).find((r) => r.id === row)
 const gridKey = (id: string, row: string, kind: Kind | undefined, sort: Sort) => `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}`
 const loadGrid = (cat: Category, def: RowDef, row: string, sort: Sort) => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true })
 // what's above the fold: a category's first top picture, its title logo and the first row's first posters; a grid's first three rows
@@ -256,8 +256,9 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
             {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="br-top-gap" />}
             {q.data.rows.map((row, r) => (
               <section key={row.id} className="row">
-                <SectionHeader title={row.title} onViewAll={() => push(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`)}
-                  onViewAllPress={() => warmBrowse(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`)} />
+                {/* View all only when the row doesn't already hold the whole list */}
+                <SectionHeader title={row.title} onViewAll={row.more ? () => push(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`) : undefined}
+                  onViewAllPress={row.more ? () => warmBrowse(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`) : undefined} />
                 <PosterRow>
                   {row.items.map((card) => {
                     const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0])
@@ -286,7 +287,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const def = useMemo(() => (cat ? gridDef(cat, row, kind) : undefined), [cat, row, kind])
   const typed = !!def?.kind // one kind only: no type pills, and the year alone under each poster
   const start: Sort = def?.sort ?? 'popular'
-  const sorts: [Sort, string][] = cat?.rule.leaving ? [['leaving', 'Leaving first'], ...SORTS] : SORTS
+  const sorts: [Sort, string][] = cat?.rule.leaving ? [['leaving', 'Leaving first'], ...SORTS] : cat?.rule.trending ? [['trending', 'Trending'], ...SORTS] : SORTS
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: start })
   const seen = useWatched()
   const sort = f.sort as Sort

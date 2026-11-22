@@ -301,7 +301,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
 }
 
 export default function Now() {
-  const { push } = useNavActions()
+  const { push, setTab } = useNavActions()
   // Home is built for this member: their services, and whether films they have logged are left out
   const uid = useAuth().session?.user.id
   const services = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
@@ -398,7 +398,8 @@ export default function Now() {
           {q.data.rows.map((row, r) => (
             row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
-              <SectionHeader title={row.title} onViewAll={row.more ? () => push(row.more!) : undefined} onViewAllPress={row.more ? () => warmBrowse(row.more!) : undefined} />
+              <SectionHeader title={row.title} onViewAll={row.more ? () => (row.more === 'tab:watchlist' ? setTab('watchlist') : push(row.more!)) : undefined}
+                onViewAllPress={row.more && row.more.startsWith('/') ? () => warmBrowse(row.more!) : undefined} />
               <PosterRow>
                 {row.items.map((card) => {
                   const note = card.note ?? (row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined)

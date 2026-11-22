@@ -17,7 +17,8 @@ export type HomeRow = {
   title: string
   items: HomeCard[]
   notes?: 'leaving'
-  /** the Browse page with the whole list, for View all */
+  /** where View all goes: a Browse page, or 'tab:watchlist'. Set only when the full list has more than the row
+   *  shows (see `row` in loadHome), so a row that holds everything never offers it. */
   more?: string
   /** a row of large cards instead of posters, each with its reason */
   spotlight?: HomeCard[]
@@ -36,7 +37,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 3
+export const HOME_VERSION = 4
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -97,8 +98,8 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const themed = day % 2 === 0 ? 'awards' : 'gems'
 
   const [trendF, trendS, arrivals, leaving, saved, because, friends, taste, newF, newS, theme] = await Promise.all([
-    titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(20).then(hard<Card[]>),
-    titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(20).then(hard<Card[]>),
+    titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
+    titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     soft<Arrival>(on(arrivalsQ, 'title.availability.service_id') as never),
     soft<Leaving>(on(leavingQ, 'title.availability.service_id') as never),
     soft<{ title: Card }>(on(supabase.from('watchlist').select(`added_at,title:titles!inner(${H})`).order('added_at', { ascending: false }).limit(60), 'title.availability.service_id') as never),
@@ -223,20 +224,24 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     return [...head, ...moved, ...tail]
   }
 
+  // Each row: its titles, the whole list they were taken from, and where that list opens. View all is offered
+  // only when the list holds more than the row shows; a row that has everything doesn't get one.
+  const row = (id: string, title: string, items: HomeCard[], from: { length: number }, to?: string, extra: Partial<HomeRow> = {}): HomeRow =>
+    ({ id, title, items, ...(to && from.length > items.length ? { more: to } : {}), ...extra })
   const rows: HomeRow[] = [
-    { id: 'new', title: mine ? 'New on your services' : 'New this month', items: rowNew },
-    { id: 'trending-films', title: 'Trending films', items: rowTrendF },
-    { id: 'trending-series', title: 'Trending series', items: rowTrendS },
-    { id: 'leaving', title: 'Leaving soon', items: rowLeaving, notes: 'leaving', more: '/browse/g/leaving-soon/list' },
-    { id: 'watchlist', title: 'From your watchlist', items: savedCards },
-    { id: 'because', title: because.length ? `Because you liked ${because[0].source}` : '', items: rowBecause },
+    row('new', mine ? 'New on your services' : 'New this month', rowNew, arrived, '/browse/g/new-arrivals/list'),
+    row('trending-films', 'Trending films', rowTrendF, trendF, '/browse/g/trending/list/film'),
+    row('trending-series', 'Trending series', rowTrendS, trendS, '/browse/g/trending/list/series'),
+    row('leaving', 'Leaving soon', rowLeaving, leaving, '/browse/g/leaving-soon/list', { notes: 'leaving' }),
+    row('watchlist', 'From your watchlist', savedCards, saved, 'tab:watchlist'),
+    row('because', because.length ? `Because you liked ${because[0].source}` : '', rowBecause, because),
     ...(spots.length >= 2 ? [{ id: 'spotlight', title: 'Picked for you', items: [], spotlight: spots }] : []),
-    { id: 'friends', title: 'Friends liked', items: rowFriends },
-    { id: 'new-films', title: 'New films', items: rowNewF },
-    { id: 'new-series', title: 'New series', items: rowNewS },
-    themed === 'awards' ? { id: 'awards', title: 'Award winners', items: rowTheme } : { id: 'gems', title: 'Hidden gems', items: rowTheme, more: '/browse/g/hidden-gems/list' },
-    ...rowGenres.map(({ c, items }) => ({ id: c.id, title: c.label, items, more: `/browse/c/${c.id}` })),
-    { id: decade.id, title: decade.label, items: rowDecade, more: `/browse/c/${decade.id}` },
+    row('friends', 'Friends liked', rowFriends, friends),
+    row('new-films', 'New films', rowNewF, newF, '/browse/g/new-releases/list/film'),
+    row('new-series', 'New series', rowNewS, newS, '/browse/g/new-releases/list/series'),
+    themed === 'awards' ? row('awards', 'Award winners', rowTheme, theme, '/browse/g/award-winners/list') : row('gems', 'Hidden gems', rowTheme, theme, '/browse/g/hidden-gems/list'),
+    ...rowGenres.map(({ c, items }, i) => row(c.id, c.label, items, mix(genreLists[i] as Card[][]), `/browse/c/${c.id}`)),
+    row(decade.id, decade.label, rowDecade, mix(decadeLists), `/browse/c/${decade.id}`),
   ]
   return { hero, rows: rows.filter((r) => r.spotlight || r.items.length >= 3).map((r) => ({ ...r, items: back(r.items) })) }
 }

@@ -396,3 +396,10 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - **Hide watched films on Home** (Settings › Letterboxd, on by default): leaves logged films out of the recommendation rows (Because, Friends, the theme, genre and decade rows). New, Trending, Leaving soon and the watchlist row show everything.
 - Without services, a watchlist or Letterboxd: New this month, both Trending rows, Leaving soon, the spotlight, New films and series, and the rotating rows across every service.
 
+## View all (23 Nov)
+
+- One rule everywhere: a row offers View all only when its whole list has more than the row shows. A row that already holds everything has none.
+- Each Home row says where its list opens: New on your services → New on streaming, Trending films/series → Trending (films or series), Leaving soon → Leaving soon, From your watchlist → the Watchlist tab, New films/series → New releases (films or series), Award winners and Hidden gems → their lists, genre and decade rows → their Browse category page. Picked for you, Because you liked and Friends liked have no list of their own (the row is the list).
+- The lists behind Home's rows open on Browse's list page (grid, type pills, filter drawer) and cover every service; Home's rows are limited to your services because those come first, not because the rest is hidden.
+- Browse category pages: each row asks for one more title than it shows, and offers View all only when that one came back.
+
