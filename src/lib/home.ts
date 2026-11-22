@@ -204,8 +204,18 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   spot(rowTrendS, () => 'Trending this week')
   spot(rowTrendF, () => 'Trending this week', 2)
 
-  // a title in the hero goes to the end of its row: the row starts with something else, and it is still there
-  const back = (items: HomeCard[]) => [...items.filter((t) => !inHero.has(t.id)), ...items.filter((t) => inHero.has(t.id))]
+  // A featured title (in the hero or the spotlight) can be in a row too, but not in its first four places: it is
+  // moved back to just after them, so each row starts with something the page hasn't shown yet.
+  const featured = new Set([...inHero, ...spots.map((t) => t.id)])
+  const FIRST = 4
+  const back = (items: HomeCard[]) => {
+    const head: HomeCard[] = [], moved: HomeCard[] = [], tail: HomeCard[] = []
+    for (const t of items) {
+      if (head.length < FIRST) (featured.has(t.id) ? moved : head).push(t)
+      else tail.push(t)
+    }
+    return [...head, ...moved, ...tail]
+  }
 
   const rows: HomeRow[] = [
     { id: 'new', title: mine ? 'New on your services' : 'New this month', items: rowNew },
@@ -214,7 +224,7 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     { id: 'leaving', title: 'Leaving soon', items: rowLeaving, notes: 'leaving', more: '/browse/g/leaving-soon/list' },
     { id: 'watchlist', title: 'From your watchlist', items: savedCards },
     { id: 'because', title: because.length ? `Because you liked ${because[0].source}` : '', items: rowBecause },
-    ...(spots.length >= 2 ? [{ id: 'spotlight', title: '', items: [], spotlight: spots }] : []),
+    ...(spots.length >= 2 ? [{ id: 'spotlight', title: 'Picked for you', items: [], spotlight: spots }] : []),
     { id: 'friends', title: 'Friends liked', items: rowFriends },
     { id: 'new-films', title: 'New films', items: rowNewF },
     { id: 'new-series', title: 'New series', items: rowNewS },

@@ -288,8 +288,8 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
           <a key={card.id} role="listitem" className="spot press" href={`/title/${card.id}`} onClick={(e) => { e.preventDefault(); push(`/title/${card.id}`) }}>
             {art && <img src={art} alt="" loading="lazy" draggable={false} />}
             <span className="spot-text">
-              {card.reason && <small>{card.reason}</small>}
               <b>{card.title}</b>
+              {card.reason && <small>{card.reason}</small>}
               {/* the service, unless the reason already names one ("New on Netflix") */}
               <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
             </span>
@@ -396,7 +396,7 @@ export default function Now() {
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.rows.map((row, r) => (
-            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><Spotlight cards={row.spotlight} /></section> :
+            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
               <SectionHeader title={row.title} onViewAll={row.more ? () => push(row.more!) : undefined} onViewAllPress={row.more ? () => warmBrowse(row.more!) : undefined} />
               <PosterRow>
