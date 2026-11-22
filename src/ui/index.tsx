@@ -785,7 +785,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function TabBar({ hidden, arriving }: { hidden?: boolean; arriving?: boolean }) {
   const { tab, setTab, dimmed } = useNav()
   const items: [Tab, string, ReactNode][] = [
-    ['now', 'Now', <HomeIcon key="i" />], ['browse', 'Browse', <Icon key="i" name="browse" />],
+    ['now', 'Home', <HomeIcon key="i" />], ['browse', 'Browse', <Icon key="i" name="browse" />],
     ['watchlist', 'Watchlist', <Icon key="i" name="bookmark" />], ['search', 'Search', <Icon key="i" name="search" />],
   ]
   return (

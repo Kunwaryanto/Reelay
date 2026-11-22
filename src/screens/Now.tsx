@@ -347,7 +347,7 @@ export default function Now() {
   return (
     <>
     <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
-      <h1 className="sr-only">Now</h1>
+      <h1 className="sr-only">Home</h1>
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
       {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
