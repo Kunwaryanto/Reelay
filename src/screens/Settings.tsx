@@ -93,13 +93,6 @@ export default function Settings() {
   const [error, setError] = useState('')
   const fresh = useNewVersion()
   const [reloading, setReloading] = useState(false)
-  const [check, setCheck] = useState<'idle' | 'busy' | 'none'>('idle')
-  const look = async () => {
-    if (fresh || check === 'busy') return
-    setCheck('busy')
-    const [found] = await Promise.all([checkVersion(), new Promise((r) => setTimeout(r, 600))])
-    setCheck(found ? 'idle' : 'none')
-  }
   const [readout, setReadout] = useState('')
   useEffect(() => { const t = setTimeout(() => setReadout(layoutReadout()), 600); return () => clearTimeout(t) }, [])
   const names = (services.data ?? []).filter((s) => mine.includes(s.id)).map((s) => s.name)
@@ -138,10 +131,7 @@ export default function Settings() {
           <Link label="Region" note="Sweden" to="/settings/region" />
           <Link label="Credits" to="/settings/credits" />
           <Link label="Privacy" to="/settings/privacy" />
-          <li><button type="button" onClick={look} aria-live="polite">
-            <span className="row-text"><b>Version</b><small>{BUILD}</small></span>
-            <span className="row-note">{check === 'busy' ? <Spinner light label="Checking" /> : fresh ? 'Update ready' : check === 'none' ? 'Up to date' : 'Check for update'}</span>
-          </button></li>
+<Link label="Version" note={fresh ? 'Update ready' : BUILD} to="/settings/version" />
         </ul>
       </section>
       {/* Temporary while testing */}
@@ -200,6 +190,38 @@ function Services() {
     <Page title="Your services">
       <p className="sheet-text">Reelay shows what’s on these first.</p>
       <div className="settings-block set-list"><ServiceList /></div>
+    </Page>
+  )
+}
+
+/** The version this phone runs, a check for a newer one, and the update itself (the card on Settings does the same when one is out). */
+function Version() {
+  const fresh = useNewVersion()
+  const [reloading, setReloading] = useState(false)
+  const [check, setCheck] = useState<'busy' | 'none' | 'offline' | 'idle'>('idle')
+  const look = async () => {
+    if (check === 'busy') return
+    if (!navigator.onLine) { setCheck('offline'); return }
+    setCheck('busy')
+    // the answer often comes at once: hold the spinner a moment so the check is seen to happen
+    const [found] = await Promise.all([checkVersion(), new Promise((r) => setTimeout(r, 600))])
+    setCheck(found ? 'idle' : navigator.onLine ? 'none' : 'offline')
+  }
+  // opening the page checks once
+  useEffect(() => { void look() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const status = fresh ? 'A new version is ready' : check === 'busy' ? 'Checking…' : check === 'none' ? 'Up to date' : check === 'offline' ? 'You’re offline' : ''
+  return (
+    <Page title="Version">
+      <ul className="rows set-solo">
+        <li className="row-plain"><span className="row-text"><b>Installed</b></span><span className="row-note">{BUILD}</span></li>
+        <li className="row-plain" aria-live="polite"><span className="row-text"><b>Status</b></span><span className="row-note">{status}</span></li>
+      </ul>
+      <div className="set-action">
+        {fresh
+          ? <Button busy={reloading} onClick={() => { if (reloading) return; setReloading(true); void reloadApp() }}>Update</Button>
+          : <Button busy={check === 'busy'} onClick={look}>Check for update</Button>}
+      </div>
+      <p className="set-foot">{fresh ? 'Updating takes a few seconds. You stay signed in.' : 'Reelay also checks by itself when you open it, and shows a dot by the Settings cog when a new version is out.'}</p>
     </Page>
   )
 }
@@ -364,6 +386,7 @@ export function settingsPage(path: string): ReactNode | null {
   switch (path) {
     case '/settings/services': return <Services />
     case '/settings/region': return <Region />
+    case '/settings/version': return <Version />
     case '/settings/credits': return <Credits />
     case '/settings/app-links': return <AppLinks />
     case '/settings/privacy': return <Privacy />
