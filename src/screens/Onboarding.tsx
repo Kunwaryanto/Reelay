@@ -1,6 +1,6 @@
 // First run: which services you have, a few titles to start the Watchlist, and which notifications you want.
 // One wall of posters and one camera (canvas: Onboarding v19): every step change is a single move of the wall,
-// and the step's text and controls fade out as it starts and rise in as it settles. Every step can be skipped.
+// and the step's text and controls fade out as it starts and rise in together as it settles. Every step can be skipped.
 // Shown once (profiles.onboarded_at), and again from Settings while testing.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { loadWall, type Card } from '../lib/catalogue'
@@ -92,6 +92,8 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
   // posters for services you don't have are dimmed on Services; on the way back the dimming sweeps up the wall
   const [grey, setGrey] = useState(true)
   const [sweep, setSweep] = useState(false)
+  // the wall opens all dimmed; the posters of the services that are on light up as the UI arrives
+  const [revealed, setRevealed] = useState(false)
   const [sel, setSel] = useState<number[]>([])
   const [pan, setPan] = useState({ x: 0, y: 0, tr: 'none' })
   const [cards, setCards] = useState(NO_CARDS)
@@ -125,7 +127,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
   useEffect(() => {
     if (!started) return
     later(() => { setWallOn(true); setCam({ at: 'svc', tr: 'transform 2700ms cubic-bezier(0.25, 1, 0.5, 1)' }) }, 40)
-    later(() => { setUi(true); setView('svc') }, 1300)
+    later(() => { setUi(true); setView('svc'); setRevealed(true) }, 1300)
     later(() => setLocked(false), 2600)
   }, [started])
 
@@ -167,7 +169,8 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
       return
     }
     setBlur(false)
-    setCam({ at: to, tr: 'transform 1400ms var(--ease-camera)' })
+    // between Services and Pick the camera eases in and out: it starts gently instead of jumping off
+    setCam({ at: to, tr: 'transform 1400ms cubic-bezier(0.65, 0, 0.35, 1)' })
     later(() => setCards(NO_CARDS), 200)
     // the wall moves untouched; the dimming comes back once the camera has nearly settled
     if (to === 'svc') { later(() => { setGrey(true); setSweep(true) }, 450); later(() => setSweep(false), 1400) }
@@ -248,7 +251,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
                       style={{ marginTop: top, '--S': `${(c % 2 ? -1 : 1) * col.length * CELL * 0.45}px`, animationDuration: `${DRIFT_MS[c]}ms`, animationDelay: `${c * 50}ms` } as CSSProperties}>
                       {[0, 1, 2].flatMap((copy) => col.map((card, r) => {
                         const chosen = sel.includes(card.id)
-                        const lit = !(step === 'svc' && grey) || card.availability.some((a) => on.includes(a.service_id))
+                        const lit = !(step === 'svc' && grey) || (revealed && card.availability.some((a) => on.includes(a.service_id)))
                         const y = top + (copy * col.length + r) * CELL + CELL / 2
                         const dd = sweep && !lit ? Math.round(clamp((818 - y) / 818, 1) * 280) : 0
                         return (
@@ -295,8 +298,8 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
         {view === 'svc' && (
           <section aria-label="Your services">
             <Head onSkip={() => go('pick')} />
-            <h1 className="ob-rise" style={{ animationDelay: '60ms' }}>{'Which services\ndo you have?'}</h1>
-            <ul className="ob-tiles ob-rise" role="group" aria-label="Your services" style={{ animationDelay: '160ms' }}>
+            <h1 className="ob-rise">{'Which services\ndo you have?'}</h1>
+            <ul className="ob-tiles ob-rise" role="group" aria-label="Your services">
               {popular.map((s) => (
                 <li key={s.id}><button type="button" className="press" role="checkbox" aria-checked={on.includes(s.id)} aria-label={s.name} onClick={() => toggle(s)}><Logo service={s} /></button></li>
               ))}
@@ -306,14 +309,14 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
                 </button></li>
               )}
             </ul>
-            <div className="ob-next ob-rise" style={{ animationDelay: '240ms' }}><Button onClick={() => { if (locked) return; saveServices(); go('pick') }}>Continue</Button></div>
+            <div className="ob-next ob-rise"><Button onClick={() => { if (locked) return; saveServices(); go('pick') }}>Continue</Button></div>
           </section>
         )}
 
         {view === 'pick' && (
           <section aria-label="Pick titles">
             <Head onBack={() => go('svc')} onSkip={() => go('notify')} />
-            <h1 className="ob-rise" style={{ animationDelay: '60ms' }}>{'Pick a few\nto watch later'}</h1>
+            <h1 className="ob-rise">{'Pick a few\nto watch later'}</h1>
             <div className="ob-next ob-add" data-show={n > 0}>
               <Button tabIndex={n ? 0 : -1} aria-label={`Add ${n === 1 ? '1 title' : `${n} titles`} to Watchlist`}
                 onClick={() => { if (locked) return; if (!replay) void saved.addMany(sel); go('notify') }}>Add {n} to Watchlist</Button>
@@ -325,7 +328,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
           <section aria-label="Notifications">
             <Head onBack={() => go('pick')} onSkip={() => finish(false)} />
             <div className="ob-clock ob-rise" aria-hidden="true"><span>{day}</span><b>{time}</b></div>
-            <div className="ob-notify ob-rise" style={{ animationDelay: '120ms' }}>
+            <div className="ob-notify ob-rise">
               <h1>Never miss a title</h1>
               <p>Only about titles on your Watchlist.</p>
               <ul className="rows">
@@ -342,7 +345,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
                 ))}
               </ul>
             </div>
-            <div className="ob-next ob-rise" style={{ animationDelay: '200ms' }}><Button onClick={() => finish(true)}>Continue</Button></div>
+            <div className="ob-next ob-rise"><Button onClick={() => finish(true)}>Continue</Button></div>
           </section>
         )}
       </div>
