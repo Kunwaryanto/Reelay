@@ -178,6 +178,9 @@ export type SavedTitle = {
   poster_path: string | null
   availability: Avail[]
   rating: number | null
+  /** Rotten Tomatoes critics (%), Letterboxd (0 to 5) */
+  rt?: number | null
+  lb?: number | null
   notify: boolean
   added_at: string
   genres?: string[]
@@ -186,14 +189,15 @@ export type SavedTitle = {
 }
 
 export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
-  type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'notify' | 'added_at'> & { scores: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null }) | null }
+  type Sc = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
+  type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'rt' | 'lb' | 'notify' | 'added_at'> & { scores: Sc | Sc[] | null }) | null }
   const rows = unwrap(await supabase.from('watchlist')
-    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,availability(service_id,leaves_on),scores(imdb_rating))')
+    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
     .order('added_at', { ascending: false }) as never) as Raw[]
   return rows.filter((r) => r.title).map((r) => {
     const { scores, ...t } = r.title!
     const score = Array.isArray(scores) ? scores[0] : scores
-    return { ...t, availability: t.availability ?? [], rating: score?.imdb_rating ?? null, notify: r.notify, added_at: r.added_at }
+    return { ...t, availability: t.availability ?? [], rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, notify: r.notify, added_at: r.added_at }
   })
 }
 

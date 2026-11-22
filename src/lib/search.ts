@@ -11,6 +11,9 @@ export type Hit = {
   services: string[]
   leaves: string | null
   rating: number | null
+  /** Rotten Tomatoes critics (%), Letterboxd (0 to 5) */
+  rt: number | null
+  lb: number | null
   genres: string[]
   lang: string | null
   runtime: number | null
@@ -25,7 +28,9 @@ export type Filters = {
   lang?: string
   leaving?: boolean
   /** from the filter drawer */
-  minRating?: number
+  minRating?: number // IMDb, 0 to 10
+  minRt?: number // Rotten Tomatoes critics, %
+  minLb?: number // Letterboxd, 0 to 5
   length?: 'short' | 'mid' | 'long' // under 90 min, up to 2 h, over 2 h
   services?: string[]
 }
@@ -130,9 +135,12 @@ type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
   genres: string[] | null; original_language: string | null; runtime_min: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
-  scores: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null
+  scores: Score | Score[] | null
 }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,scores(imdb_rating)'
+type Score = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)'
+/** a filter on a score only counts titles that have that score */
+const scored = (f: Filters) => !!(f.minRating || f.minRt || f.minLb)
 
 function toHit(r: Raw): Hit {
   const score = Array.isArray(r.scores) ? r.scores[0] : r.scores
@@ -141,7 +149,7 @@ function toHit(r: Raw): Hit {
     id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
-    rating: score?.imdb_rating ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null,
+    rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null,
   }
 }
 
@@ -155,6 +163,8 @@ function passes(h: Hit, f: Filters): boolean {
   if (f.leaving && !(h.leaves && h.leaves <= inDays(30))) return false
   if (f.services && !h.services.some((s) => f.services!.includes(s))) return false
   if (f.minRating && !(h.rating !== null && h.rating >= f.minRating)) return false
+  if (f.minRt && !(h.rt !== null && h.rt >= f.minRt)) return false
+  if (f.minLb && !(h.lb !== null && h.lb >= f.minLb)) return false
   if (f.length) {
     const m = h.runtime
     if (m === null || (f.length === 'short' ? m >= 90 : f.length === 'mid' ? m > 120 : m <= 120)) return false
@@ -186,6 +196,8 @@ function narrow<Q>(query: Q, f: Filters): Q {
   if (f.genres) q = q.overlaps('genres', f.genres)
   if (f.lang) q = q.eq('original_language', f.lang)
   if (f.minRating) q = q.gte('scores.imdb_rating', f.minRating)
+  if (f.minRt) q = q.gte('scores.rt_critics', f.minRt)
+  if (f.minLb) q = q.gte('scores.letterboxd', f.minLb)
   if (f.length === 'short') q = q.lt('runtime_min', 90)
   if (f.length === 'mid') q = q.lte('runtime_min', 120)
   if (f.length === 'long') q = q.gt('runtime_min', 120)
@@ -194,7 +206,7 @@ function narrow<Q>(query: Q, f: Filters): Q {
 
 /** Streaming titles that fit the filters, most popular first. */
 export async function byFilters(f: Filters, max = 60): Promise<Hit[]> {
-  const fields = f.minRating ? FIELDS.replace('scores(', 'scores!inner(') : FIELDS
+  const fields = scored(f) ? FIELDS.replace('scores(', 'scores!inner(') : FIELDS
   const q = narrow(supabase.from('titles').select(`${fields},availability!inner(service_id,leaves_on)`), f)
   const rows = unwrap(await q.order('popularity', { ascending: false }).limit(max) as never) as Raw[]
   return rows.map(toHit)
@@ -285,7 +297,7 @@ export async function countWith(typed: string, removed: string[], extra: Filters
   if (p.pool) return p.pool.filter((h) => passes(h, f)).length
   if (!some(combine(p.f, extra)) && !p.kind) return 0
   return once(`count:${JSON.stringify(f)}`, async () => {
-    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${f.minRating ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
+    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${scored(f) ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
     if (res.error) throw new Error(res.error.message)
     return res.count as number | null
   })

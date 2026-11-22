@@ -287,7 +287,10 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 ## Search: Sort and filter drawer (v300 D)
 
 - Behind the plain tune button, with no count or dot on it: what's on already shows as chips right under it (the button's label tells screen readers how many filters are on). What's on shows as chips above the results: the ones read from the words, the drawer's, and a non-default sort.
-- One list: Sort by, Only on my services (hidden when no services are picked), then Filter: Genre, Released, IMDb rating, Length, Original language. Each row shows its value (white) or "Any" (grey). Clear all in the header.
+- One list: Sort by, Only on my services (hidden when no services are picked), then Filter: Genre, Released, Ratings, Length, Original language. Each row shows its value (white) or "Any" (grey). Clear all in the header.
+- Ratings has one more level: IMDb (6+, 7+, 8+), Rotten Tomatoes (60%+, 75%+, 90%+, critics) and Letterboxd (3.0+, 3.5+, 4.0+), each a row with its value, each opening its steps. Several can be set; a title must pass all of them, and one without that score doesn't pass. The row reads e.g. "IMDb 7+, RT 75%+"; chips are per source. The drawer is three pages side by side (`data-level`).
+- Option counts fade in (240 ms) when known, in place kept for them. No line above the button: the lists run on under it to the bottom of the drawer and blur and fade out beneath it (`.fd-fade`, like pages under the tab bar).
+- The Show button: its number rolls digit by digit to the new count (`Rolling`: 480 ms, digits kept by place so only the ones that change move) and keeps the last number while the next is counted. The button is at least 208 wide (room for three digits), and a digit place that comes or goes opens or closes over 320 ms so the width eases.
 - A row slides in to its options (380 ms, the list behind fades to 40%); Back returns. Genre takes several (any of them); the others take one. Each option shows how many results it gives; one that gives none is dimmed and can't be picked.
 - Changes are a draft: "Show n films / series / results" applies them; closing any other way drops them. The button reads "No films match" and is off when the draft gives nothing.
 - A filter set in the drawer replaces what the words say about the same thing ("90s films", then Released: 80s).

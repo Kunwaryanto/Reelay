@@ -1063,3 +1063,29 @@ export function useSwitched(value: string) {
   if (prev.current !== value) { prev.current = value; switched.current = true }
   return switched.current
 }
+
+// ---- A rolling number -------------------------------------------------------
+
+const TEN = Array.from({ length: 10 }, (_, i) => i)
+/**
+ * A number whose digits roll to their new value, each in its own column (1,204 to 1,198: only the digits that
+ * change move). Digits are kept by place, counted from the right, so the ones stay the ones. A place the number
+ * no longer has (1,204 to 87) closes up instead of vanishing, and a new one opens, so whatever holds the number
+ * changes width smoothly. Hidden from screen readers: give the holder the plain text as its label.
+ */
+export function Rolling({ n }: { n: number }) {
+  const s = Math.max(0, Math.round(n)).toLocaleString('en')
+  const most = useRef(0)
+  most.current = Math.max(most.current, s.length)
+  // not on first showing: the number is simply there
+  const [live, setLive] = useState(false)
+  useEffect(() => { setLive(true) }, [])
+  const cells: ReactNode[] = []
+  for (let place = most.current; place >= 1; place--) {
+    const ch = s[s.length - place]
+    cells.push(place % 4 === 0
+      ? <span key={place} className="roll-c" data-off={ch === undefined || undefined}>,</span>
+      : <span key={place} className="roll-d" data-off={ch === undefined || undefined} style={{ '--d': ch ?? 0 } as CSSProperties}><span>{TEN.map((i) => <i key={i}>{i}</i>)}</span></span>)
+  }
+  return <span className="roll" data-live={live || undefined} aria-hidden="true">{cells}</span>
+}

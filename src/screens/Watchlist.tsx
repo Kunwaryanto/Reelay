@@ -73,7 +73,7 @@ export default function Watchlist() {
     return { t: { ...t, notify: saved.isNotifying(t.id) }, service: a?.service_id ?? null, mine: !!own, leaves: own?.leaves_on ?? null }
   }), [q.data, saved, hasPicked, picked])
 
-  const facets = (r: Row): Facets => ({ year: r.t.year, genres: r.t.genres, rating: r.t.rating, runtime: r.t.runtime_min, lang: r.t.original_language, services: [] })
+  const facets = (r: Row): Facets => ({ year: r.t.year, genres: r.t.genres, rating: r.t.rating, rt: r.t.rt, lb: r.t.lb, runtime: r.t.runtime_min, lang: r.t.original_language, services: [] })
   // "mine" is checked against the row (which knows about the services someone has picked), the rest on the title
   const fits = (r: Row, d: Draft) => (!d.mine || r.mine) && passesDraft(facets(r), { ...d, mine: false }, picked)
   const shown = all.filter((r) => fits(r, f))

@@ -179,7 +179,6 @@ button.pill-open { padding: 0 12px 0 10px; }
 .pill-open[data-on='true'] { background: var(--fill); color: #fff; }
 .title-meta { margin: 2px var(--margin) 0; font: var(--type-meta); color: var(--text-muted); }
 .title-meta span { color: var(--text-secondary); }
-.title-meta i { font-style: normal; color: var(--text-faint); } /* a label, like IMDb beside its number */
 .ratings { margin: 18px var(--margin) 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font: var(--type-meta); }
 .ratings div { display: flex; gap: 5px; } .ratings dt { color: var(--text-faint); } .ratings dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .overview { position: relative; margin: 18px var(--margin) 0; }
@@ -786,11 +785,15 @@ html[data-runway] .tabbar { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .now-settings > i, .update-card { animation: none; } }
 
 /* ---- Search: Sort and filter drawer ---- */
-.fd { position: relative; height: min(500px, calc(100lvh - 260px)); margin: -12px calc(var(--margin) * -1) 0; overflow: hidden; }
-.fd-track { position: absolute; top: 0; bottom: 0; left: 0; width: 200%; display: flex; transition: transform var(--dur-sheet) var(--ease-sheet); }
-.fd-track[data-sub='true'] { transform: translateX(-50%); }
-.fd-pane { width: 50%; height: 100%; display: flex; flex-direction: column; transition: opacity 300ms var(--ease-out); }
-.fd-track[data-sub='true'] > .fd-pane:first-child { opacity: 0.4; }
+/* The drawer's own area runs to the bottom of the sheet: the lists scroll on under the button (--fd-foot is the
+   button's zone: 16 above it, the button, then the sheet's bottom padding). */
+.fd { --fd-foot: calc(16px + var(--button) + 20px + var(--safe-bottom)); position: relative; height: calc(min(500px, 100lvh - 260px) + var(--fd-foot)); margin: -12px calc(var(--margin) * -1) calc(-20px - var(--safe-bottom)); overflow: hidden; }
+/* three pages side by side: the list, a filter's options, and (Ratings only) one source's steps */
+.fd-track { position: absolute; top: 0; bottom: 0; left: 0; width: 300%; display: flex; transition: transform var(--dur-sheet) var(--ease-sheet); }
+.fd-track[data-level='1'] { transform: translateX(calc(-100% / 3)); }
+.fd-track[data-level='2'] { transform: translateX(calc(-200% / 3)); }
+.fd-pane { width: calc(100% / 3); height: 100%; display: flex; flex-direction: column; transition: opacity 300ms var(--ease-out); }
+.fd-track[data-level='1'] > .fd-pane:nth-child(1), .fd-track[data-level='2'] > .fd-pane:nth-child(-n+2) { opacity: 0.4; }
 .fd-head { flex: none; height: var(--hit); padding: 0 var(--margin); display: flex; align-items: center; gap: 2px; }
 .fd-head h2 { flex: 1; margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
 .fd-head button { height: var(--hit); margin-right: -8px; padding: 0 8px; border: 0; background: none; font: var(--type-text); color: #fff; cursor: pointer; }
@@ -798,8 +801,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .fd-head-sub { padding-left: 12px; }
 .fd-head .fd-back { width: 32px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; }
 .fd-hint { flex: none; margin: -6px var(--margin) 4px; font: var(--type-meta); color: var(--text-faint); }
-.fd-list { flex: 1; min-height: 0; margin: 0; padding: 0 var(--margin) 16px; list-style: none; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
-  mask-image: linear-gradient(#000 calc(100% - 20px), transparent); -webkit-mask-image: linear-gradient(#000 calc(100% - 20px), transparent); }
+.fd-list { flex: 1; min-height: 0; margin: 0; padding: 0 var(--margin) calc(var(--fd-foot) + 12px); list-style: none; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
 .fd-list h3 { margin: 20px 0 4px; font: var(--type-text); font-weight: 500; color: var(--text-faint); }
 .fd-row { width: 100%; min-height: var(--row); padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 2px; text-align: left; cursor: pointer; font: var(--type-text); color: var(--text-secondary); }
 .fd-row > span:first-child { flex: 1; }
@@ -809,12 +811,32 @@ html[data-runway] .tabbar { touch-action: none; }
 .fd-switch { margin-top: 0; border-top: 0; min-height: var(--row); }
 .fd-opt { width: 100%; min-height: var(--hit); padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; font: var(--type-text); color: var(--text-secondary); }
 .fd-opt > span:first-child { flex: 1; }
-.fd-opt small { font: var(--type-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; animation: fade-in 200ms var(--ease-out) both; }
+.fd-opt small { font: var(--type-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; transition: opacity 240ms var(--ease-out); }
+.fd-opt small[data-in='false'] { opacity: 0; }
 .fd-opt .ms { color: #fff; transition: opacity var(--dur-press) var(--ease-out); }
 .fd-opt[aria-disabled='true'] { color: var(--text-faint); cursor: default; }
-.fd-action { margin-top: 0; padding-top: 12px; box-shadow: 0 -0.5px 0 rgba(255, 255, 255, 0.08); margin-left: calc(var(--margin) * -1); margin-right: calc(var(--margin) * -1); }
+/* Under the button: a soft blur that deepens downward and a fade into the sheet's colour, the way pages go under
+   the tab bar. No line. Touches pass through it to the list. */
+.fd-fade { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--fd-foot) + 28px); pointer-events: none; }
+.fd-fade i { position: absolute; inset: 0; }
+.fd-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(transparent 0, #000 50%); mask-image: linear-gradient(transparent 0, #000 50%); }
+.fd-fade i:nth-child(2) { -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); -webkit-mask-image: linear-gradient(transparent 35%, #000 85%); mask-image: linear-gradient(transparent 35%, #000 85%); }
+.fd-fade i:nth-child(3) { background: linear-gradient(rgb(20 20 20 / 0) 0, rgb(20 20 20 / 0.55) 45%, var(--sheet) 92%); }
+.fd-action { position: absolute; left: 0; right: 0; bottom: calc(20px + var(--safe-bottom)); margin: 0; pointer-events: none; }
+.fd-action .btn { pointer-events: auto; min-width: 208px; } /* room for three digits, so the usual counts never change its width */
 .fd-action .btn:disabled { background: var(--fill); color: var(--text-faint); }
 @media (prefers-reduced-motion: reduce) { .fd-track, .fd-pane { transition: none; } }
+
+/* ---- A rolling number (Rolling) ----
+   Each digit is a column of 0 to 9 in a one-line window; --d is the digit showing. A place that isn't used closes
+   to no width, and a new one opens (once the number has been shown: data-live), so the holder's width eases. */
+.roll { display: inline-flex; vertical-align: bottom; font-variant-numeric: tabular-nums; }
+.roll-d, .roll-c { display: inline-block; height: 1lh; overflow: hidden; max-width: 1em; transition: max-width 320ms var(--ease-sheet), opacity 240ms var(--ease-out); }
+.roll-d > span { display: flex; flex-direction: column; transform: translateY(calc(var(--d) * -1lh)); transition: transform 480ms var(--ease-sheet); }
+.roll-d i { display: block; height: 1lh; font-style: normal; }
+.roll :is(.roll-d, .roll-c)[data-off] { max-width: 0; opacity: 0; }
+.roll[data-live] :is(.roll-d, .roll-c) { @starting-style { max-width: 0; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .roll-d, .roll-c, .roll-d > span { transition: none; } }
 @keyframes fade-in { from { opacity: 0; } }
 
 /* Launch: the tab bar behaves as it does coming back from Search: its blur is simply there, the icons rise in. */

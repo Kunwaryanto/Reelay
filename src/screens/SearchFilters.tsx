@@ -1,8 +1,8 @@
 // The "Sort and filter" drawer (Search, Browse lists, Watchlist): one list (Sort by, Only on my services, then a row per filter with its value);
 // a row slides in to its options. Changes are a draft until "Show n" is tapped; closing any other way drops them.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { GENRE_OPTIONS, LANG_OPTIONS, genreNames, type Filters } from '../lib/search'
-import { Button, Icon, Sheet } from '../ui'
+import { Button, Icon, Rolling, Sheet } from '../ui'
 
 export type Sort = 'best' | 'rated' | 'newest'
 export type Len = NonNullable<Filters['length']>
@@ -10,7 +10,14 @@ export const SORTS: [Sort, string][] = [['best', 'Best match'], ['rated', 'Highe
 /** Decade starts; 0 is everything before 1980. */
 export const DECADES: [string, number][] = [['2020s', 2020], ['2010s', 2010], ['2000s', 2000], ['90s', 1990], ['80s', 1980], ['Older', 0]]
 export const LENGTHS: [string, Len][] = [['Under 90 min', 'short'], ['Up to 2 h', 'mid'], ['Over 2 h', 'long']]
-const RATINGS = [6, 7, 8]
+/** Where a rating comes from: the draft's key for it, its name (long, and short for chips), the steps on offer and how a step reads. */
+export type Source = 'rating' | 'rt' | 'lb'
+export const SOURCES: { key: Source; name: string; short: string; steps: number[]; show: (n: number) => string }[] = [
+  { key: 'rating', name: 'IMDb', short: 'IMDb', steps: [6, 7, 8], show: (n) => `${n}+` },
+  { key: 'rt', name: 'Rotten Tomatoes', short: 'RT', steps: [60, 75, 90], show: (n) => `${n}%+` },
+  { key: 'lb', name: 'Letterboxd', short: 'Letterboxd', steps: [3, 3.5, 4], show: (n) => `${n.toFixed(1)}+` },
+]
+const ratingNote = (d: Draft) => SOURCES.filter((s) => d[s.key]).map((s) => `${s.short} ${s.show(d[s.key])}`).join(', ')
 
 export const decadeName = (d: number) => DECADES.find((x) => x[1] === d)?.[0] ?? ''
 export const lengthName = (l: Len) => LENGTHS.find((x) => x[1] === l)?.[0] ?? ''
@@ -18,8 +25,9 @@ export const langName = (code: string) => LANG_OPTIONS.find((x) => x[0] === code
 export const sortName = (s: Sort) => SORTS.find((x) => x[0] === s)![1]
 
 /** Everything the drawer can set. Empty values mean "any". */
-export type Draft = { sort: string; mine: boolean; genres: string[]; decade: number | null; rating: number; length: Len | null; lang: string | null }
-export const NO_FILTERS: Draft = { sort: 'best', mine: false, genres: [], decade: null, rating: 0, length: null, lang: null }
+/** `rating` is IMDb's (0 to 10), `rt` Rotten Tomatoes critics (%), `lb` Letterboxd (0 to 5); 0 is any. */
+export type Draft = { sort: string; mine: boolean; genres: string[]; decade: number | null; rating: number; rt: number; lb: number; length: Len | null; lang: string | null }
+export const NO_FILTERS: Draft = { sort: 'best', mine: false, genres: [], decade: null, rating: 0, rt: 0, lb: 0, length: null, lang: null }
 
 /** A count to fetch: `key` names it (the same key is never fetched twice), `run` gets it. */
 export type Count = { key: string; run: () => Promise<number | null> }
@@ -47,7 +55,8 @@ function Option({ label, checked, role, pick, count }: { label: string; checked:
     <li>
       <button type="button" role={role} aria-checked={checked} aria-disabled={dead || undefined} className="fd-opt" onClick={() => { if (!dead) pick() }}>
         <span>{label}</span>
-        {typeof n === 'number' && <small>{n.toLocaleString('en')}</small>}
+        {/* the number fades in when it is known; its place is there from the start */}
+        <small data-in={typeof n === 'number'}>{typeof n === 'number' ? n.toLocaleString('en') : ''}</small>
         <Icon name="check" size={20} style={{ opacity: checked ? 1 : 0 }} />
       </button>
     </li>
@@ -70,7 +79,7 @@ function quietFocus(el: HTMLElement | null | undefined) {
 type Sub = 'sort' | 'genres' | 'decade' | 'rating' | 'length' | 'lang'
 export type FilterRow = Exclude<Sub, 'sort'>
 export const ALL_ROWS: FilterRow[] = ['genres', 'decade', 'rating', 'length', 'lang']
-const TITLES: Record<Sub, string> = { sort: 'Sort by', genres: 'Genre', decade: 'Released', rating: 'IMDb rating', length: 'Length', lang: 'Original language' }
+const TITLES: Record<Sub, string> = { sort: 'Sort by', genres: 'Genre', decade: 'Released', rating: 'Ratings', length: 'Length', lang: 'Original language' }
 
 export function FilterDrawer({ open, onClose, init, yearsNote = '', services, noun, countOf, apply, sorts = SORTS, firstSort = 'best', rows: shownRows = ALL_ROWS }: {
   open: boolean
@@ -94,26 +103,33 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
   const [sub, setSub] = useState<Sub | null>(null)
   // the options stay drawn while their page slides away
   const [last, setLast] = useState<Sub>('sort')
+  // Ratings has one more level: a source (IMDb, Rotten Tomatoes, Letterboxd), then its steps
+  const [src, setSrc] = useState<Source | null>(null)
+  const [lastSrc, setLastSrc] = useState<Source>('rating')
+  const back2 = useRef<HTMLButtonElement>(null)
+  const srcRows = useRef<HTMLUListElement>(null)
   const back = useRef<HTMLButtonElement>(null)
   const rows = useRef<HTMLDivElement>(null)
   // a fresh draft every time it opens
-  useEffect(() => { if (open) { setD(init); setSub(null) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setD(init); setSub(null); setSrc(null) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = (s: Sub) => { setLast(s); setSub(s); setTimeout(() => quietFocus(back.current), 380) }
   const home = () => { setSub(null); setTimeout(() => quietFocus(rows.current?.querySelector<HTMLElement>(`[data-row="${last}"]`)), 380) }
+  const goSrc = (s: Source) => { setLastSrc(s); setSrc(s); setTimeout(() => quietFocus(back2.current), 380) }
+  const homeSrc = () => { setSrc(null); setTimeout(() => quietFocus(srcRows.current?.querySelector<HTMLElement>(`[data-row="${lastSrc}"]`)), 380) }
   const set = (patch: Partial<Draft>) => setD((old) => ({ ...old, ...patch }))
   const total = useCount(open ? countOf(d) : null)
   const count = (patch: Partial<Draft>) => (open ? countOf({ ...d, ...patch }) : null)
 
   const notes: Record<Exclude<Sub, 'sort'>, string> = {
     genres: d.genres.join(', '), decade: d.decade !== null ? decadeName(d.decade) : yearsNote,
-    rating: d.rating ? `${d.rating}+` : '', length: d.length ? lengthName(d.length) : '', lang: d.lang ? langName(d.lang) : '',
+    rating: ratingNote(d), length: d.length ? lengthName(d.length) : '', lang: d.lang ? langName(d.lang) : '',
   }
-  const set_ = { genres: d.genres.length > 0, decade: d.decade !== null, rating: d.rating > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
+  const set_ = { genres: d.genres.length > 0, decade: d.decade !== null, rating: d.rating > 0 || d.rt > 0 || d.lb > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
   const any = Object.values(set_).some(Boolean) || d.mine
   const clear: Record<Sub, () => void> = {
     sort: () => set({ sort: firstSort }), genres: () => set({ genres: [] }), decade: () => set({ decade: null }),
-    rating: () => set({ rating: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }),
+    rating: () => set({ rating: 0, rt: 0, lb: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }),
   }
   const shown = sub ?? last
 
@@ -128,10 +144,13 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
         <Option key="any" label="Any time" role="radio" checked={d.decade === null} pick={() => set({ decade: null })} count={count({ decade: null })} />,
         ...DECADES.map(([label, y]) => <Option key={y} label={label} role="radio" checked={d.decade === y} pick={() => set({ decade: y })} count={count({ decade: y })} />),
       ]
-      case 'rating': return [
-        <Option key={0} label="Any rating" role="radio" checked={d.rating === 0} pick={() => set({ rating: 0 })} count={count({ rating: 0 })} />,
-        ...RATINGS.map((r) => <Option key={r} label={`${r}+`} role="radio" checked={d.rating === r} pick={() => set({ rating: r })} count={count({ rating: r })} />),
-      ]
+      case 'rating': return SOURCES.map((s) => (
+        <li key={s.key}>
+          <button type="button" className="fd-row" data-row={s.key} onClick={() => goSrc(s.key)}>
+            <span>{s.name}</span><small data-set={d[s.key] ? '' : undefined}>{d[s.key] ? s.show(d[s.key]) : 'Any'}</small><Icon name="chevron_right" size={16} />
+          </button>
+        </li>
+      ))
       case 'length': return [
         <Option key="any" label="Any length" role="radio" checked={d.length === null} pick={() => set({ length: null })} count={count({ length: null })} />,
         ...LENGTHS.map(([label, l]) => <Option key={l} label={label} role="radio" checked={d.length === l} pick={() => set({ length: l })} count={count({ length: l })} />),
@@ -143,15 +162,27 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
     }
   }
 
+  const source = SOURCES.find((s) => s.key === lastSrc)!
+  const steps = (): ReactNode[] => [
+    <Option key={0} label="Any rating" role="radio" checked={!d[source.key]} pick={() => set({ [source.key]: 0 })} count={count({ [source.key]: 0 })} />,
+    ...source.steps.map((r) => <Option key={r} label={source.show(r)} role="radio" checked={d[source.key] === r} pick={() => set({ [source.key]: r })} count={count({ [source.key]: r })} />),
+  ]
+  const level = sub === null ? 0 : src === null || sub !== 'rating' ? 1 : 2
+
+  // The button keeps the last number it knew while the next one is being counted, and rolls to it
+  const known = useRef<number | null>(null)
+  if (typeof total === 'number') known.current = total
+  if (!open) known.current = null
+  const n = typeof total === 'number' ? total : known.current
   const none = total === 0
-  const show = none ? (noun[1] === 'results' ? 'No results' : `No ${noun[1]} match`)
-    : typeof total === 'number' ? `Show ${total.toLocaleString('en')} ${total === 1 ? noun[0] : noun[1]}` : `Show ${noun[1]}`
+  const said = none ? (noun[1] === 'results' ? 'No results' : `No ${noun[1]} match`)
+    : typeof n === 'number' ? `Show ${n.toLocaleString('en')} ${n === 1 ? noun[0] : noun[1]}` : `Show ${noun[1]}`
 
   return (
     <Sheet open={open} onClose={onClose} label="Sort and filter">
       <div className="fd">
-        <div className="fd-track" data-sub={sub !== null}>
-          <section className="fd-pane" inert={sub !== null} aria-label="Sort and filter">
+        <div className="fd-track" data-level={level}>
+          <section className="fd-pane" inert={level !== 0} aria-label="Sort and filter">
             <div className="fd-head">
               <h2>Sort and filter</h2>
               <button type="button" disabled={!any} onClick={() => setD({ ...NO_FILTERS, sort: firstSort })}>Clear all</button>
@@ -175,7 +206,7 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
             </div>
           </section>
 
-          <section className="fd-pane" inert={sub === null} aria-label={TITLES[shown]}>
+          <section className="fd-pane" inert={level !== 1} aria-label={TITLES[shown]}>
             <div className="fd-head fd-head-sub">
               {/* named after where it goes back to */}
               <button type="button" ref={back} className="fd-back" aria-label="Back to Sort and filter" onClick={home}><Icon name="chevron_left" size={20} /></button>
@@ -183,17 +214,32 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
               {set_[shown] && <button type="button" onClick={clear[shown]}>Clear</button>}
             </div>
             {shown === 'genres' && <p className="fd-hint">Any of the ones you pick</p>}
-            <ul className="fd-list noscroll" role={shown === 'genres' ? 'group' : 'radiogroup'} aria-label={TITLES[shown]}>{options()}</ul>
+            <ul className="fd-list noscroll" ref={srcRows} role={shown === 'genres' || shown === 'rating' ? 'group' : 'radiogroup'} aria-label={TITLES[shown]}>{options()}</ul>
+          </section>
+
+          <section className="fd-pane" inert={level !== 2} aria-label={source.name}>
+            <div className="fd-head fd-head-sub">
+              <button type="button" ref={back2} className="fd-back" aria-label="Back to Ratings" onClick={homeSrc}><Icon name="chevron_left" size={20} /></button>
+              <h2>{source.name}</h2>
+              {d[source.key] > 0 && <button type="button" onClick={() => set({ [source.key]: 0 })}>Clear</button>}
+            </div>
+            <ul className="fd-list noscroll" role="radiogroup" aria-label={source.name}>{steps()}</ul>
           </section>
         </div>
+        {/* The lists run on under the button to the bottom of the drawer; they blur and fade out beneath it, as pages do under the tab bar */}
+        <div className="fd-fade" aria-hidden="true"><i /><i /><i /></div>
+        <div className="sheet-action fd-action">
+          <Button disabled={none} aria-label={said} onClick={() => { if (!none) apply(d) }}>
+            {none || typeof n !== 'number' ? said : <>Show <Rolling n={n} /> {n === 1 ? noun[0] : noun[1]}</>}
+          </Button>
+        </div>
       </div>
-      <div className="sheet-action fd-action"><Button disabled={none} onClick={() => { if (!none) apply(d) }}>{show}</Button></div>
     </Sheet>
   )
 }
 
 /** What a title needs for the drawer's filters to be checked on the phone (Browse lists, Watchlist). */
-export type Facets = { year: number | null; genres?: string[] | null; rating?: number | null; runtime?: number | null; lang?: string | null; services: string[] }
+export type Facets = { year: number | null; genres?: string[] | null; rating?: number | null; rt?: number | null; lb?: number | null; runtime?: number | null; lang?: string | null; services: string[] }
 
 /** Does a title pass the draft? `mine`: the person's services. */
 export function passesDraft(t: Facets, d: Draft, mine: string[]): boolean {
@@ -204,6 +250,8 @@ export function passesDraft(t: Facets, d: Draft, mine: string[]): boolean {
     if (y === null || (d.decade === 0 ? y >= 1980 : y < d.decade || y > d.decade + 9)) return false
   }
   if (d.rating && !((t.rating ?? 0) >= d.rating)) return false
+  if (d.rt && !((t.rt ?? 0) >= d.rt)) return false
+  if (d.lb && !((t.lb ?? 0) >= d.lb)) return false
   if (d.length) {
     const m = t.runtime ?? null
     if (m === null || (d.length === 'short' ? m >= 90 : d.length === 'mid' ? m > 120 : m <= 120)) return false
@@ -217,7 +265,7 @@ export function draftChips(d: Draft, set: (d: Draft) => void, sorts: [string, st
   return [
     ...(d.decade !== null ? [{ key: 'decade', label: decadeName(d.decade), drop: () => set({ ...d, decade: null }) }] : []),
     ...d.genres.map((g) => ({ key: `g:${g}`, label: g, drop: () => set({ ...d, genres: d.genres.filter((x) => x !== g) }) })),
-    ...(d.rating ? [{ key: 'rating', label: `IMDb ${d.rating}+`, drop: () => set({ ...d, rating: 0 }) }] : []),
+    ...SOURCES.filter((s) => d[s.key]).map((s) => ({ key: s.key, label: `${s.short} ${s.show(d[s.key])}`, drop: () => set({ ...d, [s.key]: 0 }) })),
     ...(d.length ? [{ key: 'length', label: lengthName(d.length), drop: () => set({ ...d, length: null }) }] : []),
     ...(d.lang ? [{ key: 'lang', label: langName(d.lang), drop: () => set({ ...d, lang: null }) }] : []),
     ...(d.mine ? [{ key: 'mine', label: 'My services', drop: () => set({ ...d, mine: false }) }] : []),

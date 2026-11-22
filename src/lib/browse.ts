@@ -128,8 +128,8 @@ export async function titlesIn(cat: Category, { kind, sort = 'popular', row, lim
   const k = kind ?? cat.only
   const scored = sort === 'rated' || r.rating !== undefined || r.votes !== undefined
   // facets: what the filter drawer checks on the phone (genre, language, length, rating)
-  const extra = facets ? `,genres,original_language,runtime_min${scored ? '' : ',scores(imdb_rating)'}` : ''
-  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? ',scores!inner(imdb_rating,imdb_votes)' : ''}${extra}`)
+  const extra = facets ? `,genres,original_language,runtime_min${scored ? '' : ',scores(imdb_rating,rt_critics,letterboxd)'}` : ''
+  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? `,scores!inner(imdb_rating,imdb_votes${facets ? ',rt_critics,letterboxd' : ''})` : ''}${extra}`)
   if (k) q = q.eq('kind', k)
   if (r.genres) q = q.overlaps('genres', r.genres)
   if (r.from !== undefined) q = q.gte('year', r.from)

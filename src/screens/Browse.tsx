@@ -290,9 +290,10 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
 
   // the drawer's filters are checked here, on the list as loaded (the list's own rule is the category's)
   const facets = (c: Card): Facets => {
-    const x = c as Card & { original_language?: string | null; runtime_min?: number | null; scores?: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null }
+    type Sc = { imdb_rating: number | null; rt_critics?: number | null; letterboxd?: number | null }
+    const x = c as Card & { original_language?: string | null; runtime_min?: number | null; scores?: Sc | Sc[] | null }
     const sc = Array.isArray(x.scores) ? x.scores[0] : x.scores
-    return { year: c.year, genres: c.genres, rating: sc?.imdb_rating ?? null, runtime: x.runtime_min ?? null, lang: x.original_language ?? null, services: c.availability.map((a) => a.service_id) }
+    return { year: c.year, genres: c.genres, rating: sc?.imdb_rating ?? null, rt: sc?.rt_critics ?? null, lb: sc?.letterboxd ?? null, runtime: x.runtime_min ?? null, lang: x.original_language ?? null, services: c.availability.map((a) => a.service_id) }
   }
   const all = (q.data ?? []).filter((c) => passesDraft(facets(c), f, picked))
   const r = cat.rule

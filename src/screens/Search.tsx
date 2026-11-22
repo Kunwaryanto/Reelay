@@ -12,7 +12,7 @@ import {
   addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
-import { FilterDrawer, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
+import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
 import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
 import { HoldMenu } from './Now'
 
@@ -22,7 +22,7 @@ type Kind = 'all' | 'series' | 'film' | 'people'
  * What the filter drawer has set, on top of the words. A key that is present has been decided in the drawer, even
  * when its value is "any" (null, []): it then replaces what the words say about it ("90s" typed, Released set to 80s).
  */
-type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; rating?: number; length?: Len }
+type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; rating?: number; rt?: number; lb?: number; length?: Len }
 const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
 /** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
 const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
@@ -32,6 +32,8 @@ function toFilters(x: Extra, services: string[] | null): Filters {
   if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
   if (x.lang) f.lang = x.lang
   if (x.rating) f.minRating = x.rating
+  if (x.rt) f.minRt = x.rt
+  if (x.lb) f.minLb = x.lb
   if (x.length) f.length = x.length
   if (services) f.services = services
   return f
@@ -214,7 +216,7 @@ export default function Search() {
   const xchips: { key: string; label: string; drop: () => void }[] = [
     ...(typeof extra.decade === 'number' ? [{ key: 'x-decade', label: decadeName(extra.decade), drop: () => less({ decade: null }) }] : []),
     ...(extra.genres ?? []).map((g) => ({ key: `x-genre:${g}`, label: g, drop: () => less({ genres: (extra.genres ?? []).filter((x) => x !== g) }) })),
-    ...(extra.rating ? [{ key: 'x-rating', label: `IMDb ${extra.rating}+`, drop: () => less({ rating: undefined }) }] : []),
+    ...SOURCES.filter((s) => extra[s.key]).map((s) => ({ key: `x-${s.key}`, label: `${s.short} ${s.show(extra[s.key]!)}`, drop: () => less({ [s.key]: undefined }) })),
     ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
     ...(extra.lang ? [{ key: 'x-lang', label: langName(extra.lang), drop: () => less({ lang: null }) }] : []),
     ...(myOnly ? [{ key: 'x-mine', label: 'My services', drop: () => setOnlyMine(false) }] : []),
@@ -224,7 +226,7 @@ export default function Search() {
   // the drawer opens on how things stand: what it set itself, else what the words say
   const yearsToken = tokens.find((t) => t.key === 'years')
   const init: Draft = {
-    sort, mine: myOnly, rating: extra.rating ?? 0, length: extra.length ?? null,
+    sort, mine: myOnly, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
     genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
     decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
     lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
@@ -234,7 +236,7 @@ export default function Search() {
   const countOf = (d: Draft): Count => {
     const keepYears = d.decade === null && yearsNote !== ''
     const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
-    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null)
+    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null)
     const k = kind === 'film' || kind === 'series' ? kind : undefined
     return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
   }
@@ -242,7 +244,7 @@ export default function Search() {
     setSort(d.sort as Sort)
     setOnlyMine(d.mine)
     setExtra((x) => {
-      const next: Extra = { ...x, rating: d.rating || undefined, length: d.length ?? undefined }
+      const next: Extra = { ...x, rating: d.rating || undefined, rt: d.rt || undefined, lb: d.lb || undefined, length: d.length ?? undefined }
       if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres
       if (d.decade !== init.decade) next.decade = d.decade
       if (d.lang !== init.lang) next.lang = d.lang
