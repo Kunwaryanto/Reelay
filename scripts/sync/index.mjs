@@ -8,7 +8,8 @@
 //    every two weeks. SYNC_REFRESH=all refetches every title (slow: hours).
 // 4. Leaving dates: Streaming Availability's list of titles leaving in Sweden.
 // 5. Scores: IMDb's daily ratings file, then MDBList for Rotten Tomatoes and Letterboxd.
-// 6. Letterboxd: the diary feeds of connected members (full runs only).
+// 6. Letterboxd: the diary feeds of connected members (full runs only), then for Home: TMDB's weekly trending
+//    lists and its recommendations for films members rated 4 or higher.
 // 7. Full runs only: offers that are gone lose their rows, "added"/"left" events are written by
 //    comparing with the night before, and old rows are cleaned up.
 //
@@ -789,6 +790,8 @@ function parseLetterboxd(xml) {
     const rating = Number(/<letterboxd:memberRating>([\d.]+)</.exec(item)?.[1]);
     logs.push({
       entry_id: guid.slice(0, 80), tmdb_id: Number(tmdb),
+      film_name: text(/<letterboxd:filmTitle>([^<]*)</.exec(item)?.[1] ?? '').slice(0, 200) || null,
+      film_year: Number(/<letterboxd:filmYear>(\d{4})</.exec(item)?.[1]) || null,
       watched_on: /<letterboxd:watchedDate>(\d{4}-\d\d-\d\d)</.exec(item)?.[1] ?? null,
       rating: rating >= 0.5 && rating <= 5 ? rating : null,
       rewatch: /<letterboxd:rewatch>Yes</.test(item),
@@ -814,10 +817,11 @@ async function syncLetterboxd() {
       const rows = [...new Map(logs.map((l) => [l.entry_id, l])).values()];
       if (rows.length) {
         await db.query(
-          `insert into public.letterboxd_logs (user_id, entry_id, tmdb_id, watched_on, rating, rewatch)
-           select $1, x.entry_id, x.tmdb_id, x.watched_on, x.rating, x.rewatch
-           from jsonb_to_recordset($2::jsonb) as x(entry_id text, tmdb_id int, watched_on date, rating numeric, rewatch boolean)
-           on conflict (user_id, entry_id) do update set tmdb_id = excluded.tmdb_id, watched_on = excluded.watched_on, rating = excluded.rating, rewatch = excluded.rewatch`,
+          `insert into public.letterboxd_logs (user_id, entry_id, tmdb_id, film_name, film_year, watched_on, rating, rewatch)
+           select $1, x.entry_id, x.tmdb_id, x.film_name, x.film_year, x.watched_on, x.rating, x.rewatch
+           from jsonb_to_recordset($2::jsonb) as x(entry_id text, tmdb_id int, film_name text, film_year int, watched_on date, rating numeric, rewatch boolean)
+           on conflict (user_id, entry_id) do update set tmdb_id = excluded.tmdb_id, film_name = excluded.film_name, film_year = excluded.film_year,
+             watched_on = excluded.watched_on, rating = excluded.rating, rewatch = excluded.rewatch`,
           [m.user_id, JSON.stringify(rows)]);
       }
       await db.query('update public.letterboxd_accounts set synced_at = now(), sync_error = null, display_name = coalesce($2, display_name) where user_id = $1', [m.user_id, name]);
@@ -834,7 +838,62 @@ async function syncLetterboxd() {
   if (matched) log(`Letterboxd: ${matched} imported entries matched to the catalogue`);
 }
 
+// Home: this week's trending films and series (TMDB's lists, worldwide; Home shows the ones on a member's
+// services, in this order). 100 of each; the rank is cleared for everything else.
+async function syncTrending() {
+  for (const [path, kind] of [['movie', 'film'], ['tv', 'series']]) {
+    const ids = [];
+    for (let page = 1; page <= 5; page++) {
+      const r = await tmdb(`/trending/${path}/week`, { page });
+      for (const x of r?.results ?? []) if (!ids.includes(x.id)) ids.push(x.id);
+    }
+    if (ids.length < 20) { log(`trending ${kind}: only ${ids.length} came back, kept last week's`); continue; }
+    const done = await db.query(
+      `with ranked as (select id::int as tmdb_id, ord::int as rank from unnest($1::int[]) with ordinality as u(id, ord)),
+            cleared as (update public.titles set trend_rank = null where kind = $2 and trend_rank is not null and tmdb_id <> all ($1::int[]))
+       update public.titles t set trend_rank = r.rank from ranked r where t.kind = $2 and t.tmdb_id = r.tmdb_id`,
+      [ids, kind]);
+    log(`trending ${kind}: ${ids.length} listed, ${done.rowCount} of them in the catalogue`);
+  }
+}
+
+// Home: "Because you liked …". TMDB's recommendations for the films members rated 4 or higher: asked once per
+// film, again after 60 days, the most recently watched first. One request each.
+const RECS_PER_RUN = Number(process.env.RECS_PER_RUN || 400);
+async function syncRecs() {
+  const todo = (await db.query(
+    `select l.tmdb_id from public.letterboxd_logs l
+     left join public.rec_sources s on s.tmdb_id = l.tmdb_id
+     where l.rating >= 4 and l.tmdb_id is not null and (s.tmdb_id is null or s.fetched_at < now() - interval '60 days')
+     group by l.tmdb_id order by max(l.watched_on) desc nulls last limit $1`, [RECS_PER_RUN])).rows.map((r) => r.tmdb_id);
+  if (!todo.length) return;
+  let saved = 0;
+  await pool(todo.map((id) => ({ id })), 6, async ({ id }) => {
+    const r = await tmdb(`/movie/${id}/recommendations`, { page: 1 }).catch(() => undefined);
+    if (r === undefined) return; // a failed request: asked again next night
+    const recs = (r?.results ?? []).slice(0, 20).map((x, i) => ({ rec: x.id, rank: i + 1 }));
+    await db.query('delete from public.title_recs where source_tmdb_id = $1', [id]);
+    if (recs.length) {
+      await db.query(
+        `insert into public.title_recs (source_tmdb_id, rec_tmdb_id, rank)
+         select $1, x.rec, x.rank from jsonb_to_recordset($2::jsonb) as x(rec int, rank int) on conflict do nothing`, [id, JSON.stringify(recs)]);
+    }
+    await db.query('insert into public.rec_sources (tmdb_id) values ($1) on conflict (tmdb_id) do update set fetched_at = now()', [id]);
+    saved++;
+  });
+  log(`recommendations: ${saved} of ${todo.length} liked films asked about`);
+}
+
 async function main() {
+  // SYNC_ONLY=home: just what Home needs beyond the catalogue (the Home data workflow)
+  if (ONLY === 'home') {
+    log('home data only');
+    await syncTrending();
+    await syncLetterboxd();
+    await syncRecs();
+    await db.end();
+    return;
+  }
   if (ONLY === 'scores') {
     log('scores only');
     await syncMdblist();
@@ -894,6 +953,8 @@ async function main() {
   await syncOmdb().catch((e) => log('OMDb failed:', e.message));
   // a failure here never fails the sync
   if (FULL) await syncLetterboxd().catch((e) => log('Letterboxd failed:', e.message));
+  if (FULL) await syncTrending().catch((e) => log('trending failed:', e.message));
+  if (FULL) await syncRecs().catch((e) => log('recommendations failed:', e.message));
   if (FULL) await reconcile(runStart);
   // after reconcile, so today's arrivals are in the events; a failure here never fails the sync
   if (FULL) await sendNotifications(db, log).catch((e) => log('notifications failed:', e.message));
