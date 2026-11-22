@@ -29,7 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) return
     let live = true
     // select * so this keeps working before the is_admin column exists
-    supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle().then(({ data }) => {
+    supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle().then(async ({ data, error }) => {
+      // No profile at all (an account older than the rule that makes one): make it, so settings, onboarding
+      // and the admin rows work. A new profile is never an admin, so there is nothing more to read.
+      if (!data && !error) await supabase.rpc('ensure_profile').then(() => {}, () => {})
       if (live) setIsAdmin(!!(data as { is_admin?: boolean } | null)?.is_admin)
     })
     return () => { live = false }

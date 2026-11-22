@@ -6,7 +6,7 @@ import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
 import { clearSavedData, lastLoadError, useQuery } from '../lib/query'
-import { BUILD, checkVersion, layoutReadout, reloadApp, useNewVersion } from '../lib/update'
+import { BUILD, checkVersion, reloadApp, useNewVersion } from '../lib/update'
 import { BackButton, Button, Icon, SmallButton, Spinner, useToast } from '../ui'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -93,8 +93,6 @@ export default function Settings() {
   const [error, setError] = useState('')
   const fresh = useNewVersion()
   const [reloading, setReloading] = useState(false)
-  const [readout, setReadout] = useState('')
-  useEffect(() => { const t = setTimeout(() => setReadout(layoutReadout()), 600); return () => clearTimeout(t) }, [])
   const names = (services.data ?? []).filter((s) => mine.includes(s.id)).map((s) => s.name)
 
   const out = async () => {
@@ -141,8 +139,6 @@ export default function Settings() {
           <li><button type="button" onClick={() => push('/onboarding')}><span className="row-text"><b>Show onboarding again</b></span></button></li>
           <li><button type="button" onClick={() => push('/settings/app-links')}><span className="row-text"><b>App links</b></span></button></li>
         </ul>
-        <p className="version">{readout}</p>
-        {lastLoadError() && <p className="version">Last failed load: {lastLoadError()}</p>}
       </section>
 
       {asking && (
@@ -199,6 +195,7 @@ function Version() {
   const fresh = useNewVersion()
   const [reloading, setReloading] = useState(false)
   const [check, setCheck] = useState<'busy' | 'none' | 'offline' | 'idle'>('idle')
+  const [problem] = useState(lastLoadError)
   const look = async () => {
     if (check === 'busy') return
     if (!navigator.onLine) { setCheck('offline'); return }
@@ -222,6 +219,13 @@ function Version() {
           : <Button busy={check === 'busy'} onClick={look}>Check for update</Button>}
       </div>
       <p className="set-foot">{fresh ? 'Updating takes a few seconds. You stay signed in.' : 'Reelay also checks by itself when you open it, and shows a dot by the Settings cog when a new version is out.'}</p>
+      {/* the most recent thing the app failed to fetch since it opened: what to send along when something looks wrong */}
+      {problem && (
+        <section className="settings-block">
+          <h2 className="block-title">Last problem</h2>
+          <p className="set-foot set-problem">{problem}</p>
+        </section>
+      )}
     </Page>
   )
 }

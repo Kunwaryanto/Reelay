@@ -664,6 +664,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .set-group { margin-top: 28px; }
 .set-list > .set-group:first-child { margin-top: 0; }
 .set-foot { margin: 12px 0 0; font: var(--type-meta); color: var(--text-faint); }
+.set-problem { margin-top: 0; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .set-text { margin-top: 8px; }
 .set-text p, .set-small p { margin: 0; font: var(--type-body); color: var(--text-muted); }
 .set-text p + p { margin-top: 8px; }
