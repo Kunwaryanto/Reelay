@@ -65,7 +65,7 @@ function Head({ onBack, onSkip }: { onBack?: () => void; onSkip: () => void }) {
   )
 }
 
-export default function Onboarding({ onDone, replay }: { onDone: () => void; replay?: boolean }) {
+export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => void; onLeave?: () => void; replay?: boolean }) {
   const { mine, loaded, setAll } = useMyServices()
   const { update } = useProfile()
   const saved = useSaved()
@@ -195,6 +195,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
     setLocked(true); setUi(false); setMore(false); fadeCards(); setBlur(false)
     setCam({ at: 'exit', tr: 'transform 900ms cubic-bezier(0.32, 0.72, 0, 1)' })
     setWallOn(false); setLeaving('wall')
+    onLeave?.()
     later(() => setView(null), 220)
     later(() => setLeaving('out'), 360)
     later(onDone, 800)
