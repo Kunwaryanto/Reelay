@@ -46,11 +46,13 @@ const ROOT: Record<Tab, React.ReactNode> = {
 function FirstRun() {
   const { profile } = useProfile()
   const { path, home } = useNav()
+  const { isAdmin } = useAuth()
   const [done, setDone] = useState(false)
   // The test run ends like the real one: it leaves for Now (the pages under it are dropped as it starts to leave)
   // and stays up until its hand-off has finished.
   const [replay, setReplay] = useState(false)
-  if (path === '/onboarding' && !replay) setReplay(true)
+  // admins only (Settings › Testing): for anyone else the address shows nothing
+  if (path === '/onboarding' && isAdmin && !replay) setReplay(true)
   if (replay) return <Onboarding replay onLeave={home} onDone={() => setReplay(false)} />
   if (!profile || profile.onboarded_at || done) return null
   return <Onboarding onDone={() => setDone(true)} />
