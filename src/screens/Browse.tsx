@@ -48,6 +48,9 @@ export function warmBrowse(path: string) {
 
 // The card is about 170px wide: w300 on ordinary screens, w780 on a 3x iPhone.
 const coverSrc = (path: string) => ({ src: tmdbImage(path, 'w780'), srcSet: `${tmdbImage(path, 'w300')} 300w, ${tmdbImage(path, 'w780')} 780w`, sizes: '50vw' })
+/** The category covers as their cards ask for them, for the arrival to wait on. */
+const coverPictures = (covers: Record<string, string | null> | undefined, cats: { id: string }[]): Picture[] =>
+  cats.map((c) => covers?.[c.id]).filter((p): p is string => !!p).map((p) => { const c = coverSrc(p); return { src: c.src, srcset: c.srcSet, sizes: c.sizes } })
 
 /** Load every card picture ahead (a couple of seconds after Browse shows), so View all opens with them ready. */
 // The saved card pictures are per set of categories: a new category makes the app look them up again, not wait a day.
@@ -141,10 +144,17 @@ export default function Browse() {
     }, 2000)
     return () => clearTimeout(t)
   }, [pick])
+  // The heading and pills are there at once; the cards wait for their pictures above the fold (the first two
+  // sections), then fade in as one piece. Once seen, Browse shows straight away.
+  const phase = useArrival('browse-tab', !!covers.data, () => coverPictures(covers.data, SECTIONS.slice(0, 2).flatMap((sec) =>
+    CATEGORIES.filter((c) => c.section === sec.id && fits(c, pick)).slice(0, sec.shown))))
   return (
-    <main className="page noscroll" onScroll={onDim} ref={page}>
+    <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim} ref={page}>
       <div className="tab-head br-head"><h1>Browse</h1></div>
       <div className="wl-filters"><TypePills pick={pick} setPick={setPick} /></div>
+      <div className="br-body">
+      {phase !== 'there' && <Skeleton kind="cards" leaving={phase === 'in'} />}
+      <div className={phase === 'in' ? 'arrive' : undefined} hidden={phase === 'wait'}>
       {SECTIONS.map((sec, i) => {
         const cats = CATEGORIES.filter((c) => c.section === sec.id && fits(c, pick))
         return (
@@ -161,6 +171,8 @@ export default function Browse() {
           </section>
         )
       })}
+      </div>
+      </div>
     </main>
   )
 }
@@ -199,12 +211,16 @@ export function BrowseSection({ section, kind }: { section: SectionId; kind?: Ki
   const covers = useQuery(COVERS_KEY, loadCovers, { maxAge: DAY })
   const sec = SECTIONS.find((s) => s.id === section)
   const cats = CATEGORIES.filter((c) => c.section === section && fits(c, pick))
+  // above the fold: the first eight cards' pictures (Browse usually fetched them already, then it shows at once)
+  const phase = useArrival(`section:${section}:${pick}`, !!covers.data, () =>
+    coverPictures(covers.data, cats.slice(0, 8)))
   return (
     <>
       <TopBar title={sec?.title ?? 'Browse'} />
-      <main className="page noscroll" onScroll={onDim}>
+      <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim}>
         <h1 className="sr-only">{sec?.title}</h1>
-        <div className="br-grid br-grid-page">
+        {phase !== 'there' && <Skeleton kind="cards" leaving={phase === 'in'} />}
+        <div className={phase === 'in' ? 'br-grid br-grid-page arrive' : 'br-grid br-grid-page'} hidden={phase === 'wait'}>
           {cats.map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data ? covers.data[c.id] ?? null : undefined} pick={pick} />)}
         </div>
       </main>

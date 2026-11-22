@@ -1053,12 +1053,14 @@ export function useArrival(key: string, has: boolean, pictures: () => Picture[])
 }
 
 /** Placeholders while a page waits: 'rows' a heading and posters under the top picture, 'grid' posters three across, 'title' a title page's first lines. */
-export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title'; leaving?: boolean }) {
+export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title' | 'person' | 'cards'; leaving?: boolean }) {
   return (
     <div className="skel" data-kind={kind} data-leaving={leaving || undefined} aria-hidden="true">
       {kind === 'rows' && <section><i /><div><span /><span /><span /></div></section>}
       {kind === 'grid' && Array.from({ length: 12 }, (_, i) => <span key={i} />)}
       {kind === 'title' && <><i /><i /><i /><b /><b /><b /></>}
+      {kind === 'person' && <><header><i /><div><b /><b /></div></header><div>{Array.from({ length: 9 }, (_, i) => <span key={i} />)}</div></>}
+      {kind === 'cards' && Array.from({ length: 10 }, (_, i) => <span key={i} />)}
     </div>
   )
 }

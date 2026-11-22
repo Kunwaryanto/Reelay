@@ -7,7 +7,7 @@ import { useDimOnScroll } from '../lib/nav'
 import { servicesLabel, useMyServices } from '../lib/profile'
 import { useQuery } from '../lib/query'
 import { supabase } from '../lib/supabase'
-import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, useSwitched, TitleCard } from '../ui'
+import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, useSwitched, TitleCard, Skeleton, posterPicture, useArrival } from '../ui'
 import { HoldMenu } from './Now'
 import { Gone } from './Title'
 
@@ -58,16 +58,22 @@ export default function Person({ id }: { id: number }) {
     sort === 'az' ? a.title.title.localeCompare(b.title.title)
       : sort === 'new' ? (b.title.year ?? 0) - (a.title.year ?? 0) : (a.title.year ?? 9999) - (b.title.year ?? 9999))
 
+  // above the fold: the portrait and the first three rows of posters, then all of it fades in as one piece
+  const phase = useArrival(`person:${id}`, !!q.data, () => [
+    { src: tmdbImage(q.data?.profile_path ?? null, 'w185') },
+    ...list.slice(0, 9).map((c) => posterPicture(c.title.poster_path)),
+  ])
   if (q.error) return <main className="page"><div className="page-back"><BackButton /></div><div className="page-center"><LoadFailed what="this person" retry={q.retry} retrying={q.retrying} /></div></main>
   if (q.data === null) return <main className="page"><div className="page-back"><BackButton glass /></div><Gone what="person" /></main>
   const total = new Set((p?.credits ?? []).map((c) => c.title.id)).size
 
   return (
     <>
-      <main className="page noscroll" onScroll={onDim}>
+      <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim}>
         <div className="page-back"><BackButton /></div>
-        {p && (
-          <div className="rise">
+        {phase !== 'there' && <Skeleton kind="person" leaving={phase === 'in'} />}
+        {p && phase !== 'wait' && (
+          <div className="arrive">
             <header className="person-head">
               <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" /> : initials(p.name)}</span>
               <div>
