@@ -29,10 +29,10 @@ const FULL = LIMIT === 0;
 const MDBLIST_PER_RUN = Number(process.env.MDBLIST_PER_RUN || 900);
 // Streaming Availability's free plan allows 100 requests a day. Leaving dates come first and read the whole list
 // (up to SA_PAGES pages, 25 changes each); links to the services' apps get what is left of SA_BUDGET, at most
-// SA_LINK_REQUESTS. The 5 spare are for a retry or a test run the same day.
+// SA_LINK_REQUESTS (80 since 22 Nov: the leaving list took 15 pages that night). The 5 spare are for a retry or a test run the same day.
 const SA_PAGES = Number(process.env.SA_PAGES || 30);
 const SA_BUDGET = Number(process.env.SA_BUDGET || 95);
-const SA_LINK_REQUESTS = Number(process.env.SA_LINK_REQUESTS || 70);
+const SA_LINK_REQUESTS = Number(process.env.SA_LINK_REQUESTS || 80);
 const REFRESH_ALL = process.env.SYNC_REFRESH === 'all';
 const REFRESH_PER_RUN = Number(process.env.SYNC_REFRESH_PER_RUN || 2500);
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -542,16 +542,24 @@ async function syncMdblist() {
      order by s.mdblist_synced_at nulls first, t.popularity desc limit $1`,
     [MDBLIST_PER_RUN],
   )).rows;
-  let ok = 0, sample = null, spent = false;
-  await pool(todo.map((t) => ({ ...t, key: t.imdb_id })), 4, async (t) => {
+  let ok = 0, sample = null, spent = false, slowed = 0;
+  // Two at a time with a short pause: four at once got a quarter of the lookups refused as "too many requests"
+  // (22 Nov). That refusal is about pace and is waited out; the daily limit is not, and ends the step.
+  await pool(todo.map((t) => ({ ...t, key: t.imdb_id })), 2, async (t) => {
     // MDBList allows a fixed number of lookups a day: once it says no, stop asking (the rest come tomorrow).
     if (spent) return;
-    let r;
-    try {
-      r = await getJson(`https://api.mdblist.com/imdb/${t.kind === 'film' ? 'movie' : 'show'}/${t.imdb_id}?apikey=${key}`, {}, spent ? 0 : 1);
-    } catch (e) {
-      if (/Daily API limit/i.test(e.message)) { spent = true; return; }
-      throw e;
+    const url = `https://api.mdblist.com/imdb/${t.kind === 'film' ? 'movie' : 'show'}/${t.imdb_id}?apikey=${key}`;
+    let r = null;
+    for (let i = 0; ; i++) {
+      if (spent) return;
+      await sleep(200);
+      const res = await fetch(url);
+      if (res.ok) { r = await res.json(); break; }
+      if (res.status === 404) return;
+      const body = (await res.text()).slice(0, 300);
+      if (/Daily API limit/i.test(body)) { spent = true; return; }
+      if ((res.status === 429 || res.status >= 500) && i < 3) { slowed++; await sleep(2000 * 2 ** i); continue; }
+      throw new Error(`${res.status} mdblist ${t.imdb_id}: ${body.slice(0, 80)}`);
     }
     if (!r) return;
     sample ??= r.ratings;
@@ -565,7 +573,7 @@ async function syncMdblist() {
     );
     ok++;
   });
-  log(`MDBList: ${ok} of ${todo.length} titles updated${spent ? ' (daily limit reached, the rest next run)' : ''}`);
+  log(`MDBList: ${ok} of ${todo.length} titles updated${spent ? ' (daily limit reached, the rest next run)' : ''}${slowed ? `, waited out ${slowed} “too many requests”` : ''}`);
   if (sample) log('  sample ratings:', JSON.stringify(sample).slice(0, 400));
 }
 
