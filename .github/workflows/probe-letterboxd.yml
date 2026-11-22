@@ -1,0 +1,25 @@
+# Temporary: can a GitHub runner read a public Letterboxd diary feed?
+name: Probe Letterboxd
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for ua in "Mozilla/5.0 (compatible; Reelay/1.0; +https://usereelay.vercel.app)" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"; do
+            echo "== $ua"
+            curl -sS -o feed.xml -w "%{http_code} %{content_type} %{size_download}\n" -A "$ua" https://letterboxd.com/dave/rss/ || true
+            head -c 600 feed.xml; echo
+          done
+          echo "== items"; grep -c "<item>" feed.xml || true
+          python3 - <<'PY'
+          import re
+          s=open('feed.xml',encoding='utf-8',errors='replace').read()
+          items=re.findall(r'<item>(.*?)</item>',s,re.S)
+          for it in items[:3]:
+              print(re.sub(r'<description>.*?</description>','<description/>',it,flags=re.S)[:900]); print('--')
+          print(sorted(set(re.findall(r'<([a-zA-Z:]+)[ >]',' '.join(items)))))
+          print(sorted(set(g.split('-')[1] for g in re.findall(r'<guid[^>]*>([^<]+)',s))))
+          PY
+          echo "== missing user"; curl -sS -o /dev/null -w "%{http_code}\n" -A "Mozilla/5.0 (compatible; Reelay/1.0)" https://letterboxd.com/this-user-does-not-exist-9x7q/rss/ || true
