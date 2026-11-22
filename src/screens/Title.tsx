@@ -65,7 +65,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </div>
       </section>
 
-      <p className="title-meta">{meta1}{meta2 && <><br />{meta2}</>}{by && <><br />{film ? 'Directed by' : 'Created by'} <span>{by}</span></>}</p>
+      <p className="title-meta">{meta1}{by && <><br />{film ? 'Directed by' : 'Created by'} <span>{by}</span></>}{meta2 && <><br />{meta2}</>}</p>
       {ratings.length > 0 && <dl className="ratings">{ratings.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
       {t.overview && (
         <div className="overview" data-open={open || !long}>
