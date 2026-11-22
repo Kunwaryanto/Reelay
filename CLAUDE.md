@@ -38,4 +38,5 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 - Inter at opsz 32; Material Symbols Outlined weight 250, 24px.
 - No sharing of titles (dropped 20 Nov: links can't open the Home Screen app). Reelay is invite only: admins create single-use invite links in Settings.
 - iPhone web app limits: links always open in Safari (or the service's own app, for its https links when it's installed), Safari and the installed app don't share storage, no background sync, no haptics.
+- Fields: a tap on a text field is focused by the app itself without scrolling (`guardFieldTaps` in `src/lib/keyboard.ts`, installed once for every field), so iOS never jumps the page when the keyboard opens. Don't add per-screen versions; a field that moves with the keyboard itself opts out with `data-own-focus`.
 - UI copy is English for now; Swedish copy is decided in the Supabase phase.

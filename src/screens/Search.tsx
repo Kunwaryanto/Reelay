@@ -472,7 +472,7 @@ export default function Search() {
         <div className="tabbar-fade s-fade" aria-hidden="true" data-pending={pending}><i /><i /><i /></div>
         <form className="s-field" role="search" data-pending={pending}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
-          <div className="s-input" ref={box}>
+          <div className="s-input" ref={box} data-own-focus="">
             <Icon name="search" size={20} />
             <input ref={input} type="search" enterKeyHint="search" aria-label="Search films and series" placeholder="Films and series"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
