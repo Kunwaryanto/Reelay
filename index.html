@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background:#000">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -7,6 +7,8 @@
     <meta name="description" content="Where films and series stream in Sweden." />
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
+    <!-- Black from the very first frame: until the stylesheet arrives, a dark-scheme page is Safari's dark grey, which showed as a one-frame flash when opening the app -->
+    <style>html, body, #root { background: #000; }</style>
 
     <!-- Home Screen web app (see docs/build-notes.md, Home Screen setup) -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -21,7 +23,7 @@
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/material-symbols-reelay.woff2" as="font" type="font/woff2" crossorigin />
   </head>
-  <body>
+  <body style="background:#000">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

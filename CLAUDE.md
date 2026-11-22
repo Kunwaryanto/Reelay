@@ -15,13 +15,13 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 ## Stack
 
 - Vite + React + TypeScript, deployed on Vercel from `main` to https://usereelay.vercel.app.
-- Testing branch: `sprint-2` is the one staging branch (decided 20 Nov). New work is pushed there so its preview URL stays the same: https://reelay-git-sprint-2-kunwaryanto.vercel.app. Merge it into `main` when a round is approved. Settings has a temporary Reload Reelay row and shows the build (commit) so a Home Screen install can pick up a new deploy.
+- Testing branch: `sprint-2` is the one staging branch (decided 20 Nov). New work is pushed there so its preview URL stays the same: https://reelay-git-sprint-2-kunwaryanto.vercel.app. Merge it into `main` when a round is approved. A Home Screen install can't be reloaded by hand, so the app notices a new deploy itself: a white dot by the Settings cog on Now, an Update card at the top of Settings, and a Version row under About that shows the build (commit) and checks on tap.
 - Supabase (database, auth with 6-digit email code). Everything Supabase is in `supabase/`:
   migrations in `supabase/migrations`, auth settings in `supabase/config.toml`, email template in `supabase/templates`.
   The `Supabase migrations` workflow applies new migrations when they reach `main` (`supabase db push`); `Supabase status` lists what's applied. Never change the database by hand in the dashboard; add a migration.
   Invite only: open sign-ups are off; `supabase/functions/redeem-invite` creates the account from an invite link (`invites` table, `create_invite`/`cancel_invite`/`restore_invite` RPCs for admins, `profiles.is_admin`). The `Make admin` workflow makes someone an admin. Edge Functions deploy with the `Supabase functions` workflow.
   Catalogue tables are readable by signed-in users only and written only by the sync; user tables (profiles, user_services, watchlist, push_subscriptions, invites) are private to their owner via RLS.
-- Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`) and Vercel env vars. Never commit them.
+- Secrets live in GitHub Actions secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL`, and for notifications `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) and Vercel env vars (`VITE_VAPID_PUBLIC_KEY` is the same public key). Never commit them.
 
 ## Browser support
 
@@ -36,5 +36,5 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 - Dark only. One grey (#808080) for meta, faint text and every inactive icon.
 - Inter at opsz 32; Material Symbols Outlined weight 250, 24px.
 - No sharing of titles (dropped 20 Nov: links can't open the Home Screen app). Reelay is invite only: admins create single-use invite links in Settings.
-- iPhone web app limits: links always open in Safari, Safari and the installed app don't share storage, no background sync, no haptics.
+- iPhone web app limits: links always open in Safari (or the service's own app, for its https links when it's installed), Safari and the installed app don't share storage, no background sync, no haptics.
 - UI copy is English for now; Swedish copy is decided in the Supabase phase.

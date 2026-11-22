@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { SERVICE_NAME, kindWord, leavingNote, loadTitle, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
-import { useDimOnScroll } from '../lib/nav'
+import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { BackButton, Icon, Laurel, LoadFailed, PosterRow, SectionHeader, TitleCard, usePullToRefresh } from '../ui'
+import { takeOpenedFrom } from '../lib/push'
+import { supabase } from '../lib/supabase'
+import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Skeleton, TitleCard, titleArt, useArrival, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -12,6 +14,9 @@ const names = (t: TitleDetail, role: string) => t.credits.filter((c) => c.role =
 
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
+  const { push } = useNavActions()
+  // opened from a notification: where it streams lights up once, then settles
+  const [flash] = useState(() => takeOpenedFrom(`/title/${t.id}`))
   const [open, setOpen] = useState(false)
   const film = t.kind === 'film'
   const first = t.availability[0]
@@ -20,6 +25,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const years = film || !t.year ? t.year : t.end_year && t.end_year !== t.year ? `${t.year}–${t.end_year}` : `${t.year}–`
   const meta1 = [kindWord(t.kind), years, film ? runtime(t.runtime_min) : t.seasons ? (t.seasons === 1 ? '1 season' : `${t.seasons} seasons`) : null].filter(Boolean).join(' · ')
   const meta2 = [film ? null : runtime(t.runtime_min), t.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ')
+  const by = t.credits.filter((c) => c.role === (film ? 'director' : 'creator')).slice(0, 2).map((c) => c.person.name).join(', ')
   const ratings: [string, string][] = []
   if (t.scores?.imdb_rating != null) ratings.push(['IMDb', Number(t.scores.imdb_rating).toFixed(1)])
   if (t.scores?.rt_critics != null) ratings.push(['Tomatometer', `${t.scores.rt_critics}%`])
@@ -39,8 +45,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   return (
     <>
       <section className="title-top" aria-labelledby="t-title">
-        {art && <img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" />}
-        <div className="hero-shade" aria-hidden="true" />
+        {art && <PinnedArt><img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" /></PinnedArt>}
         <div className="title-head">
           <h1 id="t-title">{t.title}</h1>
           <div className="title-actions">
@@ -53,14 +58,14 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
                 <Icon name="notifications" size={16} fill={notifying} />{notifying ? 'Notifying' : 'Notify me'}
               </button>
             )}
-            <button type="button" className="icon-btn" aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'} onClick={() => saved.toggleSaved(t.id, t.title)}>
+            <button type="button" className="icon-btn" aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'} onClick={() => saved.toggleSaved(t.id, t.title, t)}>
               <span><Icon name="bookmark" size={18} fill={isSaved} /></span>
             </button>
           </div>
         </div>
       </section>
 
-      <p className="title-meta">{meta1}{meta2 && <><br />{meta2}</>}</p>
+      <p className="title-meta">{meta1}{by && <><br />{film ? 'Directed by' : 'Created by'} <span>{by}</span></>}{meta2 && <><br />{meta2}</>}</p>
       {ratings.length > 0 && <dl className="ratings">{ratings.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
       {t.overview && (
         <div className="overview" data-open={open || !long}>
@@ -69,7 +74,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </div>
       )}
 
-      <section className="block">
+      <section className="block" data-flash={flash ? '' : undefined}>
         <ul className="rows">
           {t.availability.map((a) => {
             const note = stale ? null : leavingNote(a.leaves_on)
@@ -106,11 +111,13 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
           <div className="row-scroll noscroll"><ul className="cast">
             {cast.map((c) => (
               <li key={c.person.id}>
-                <span className="avatar" aria-hidden="true">
-                  {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
-                </span>
-                <span className="cast-name">{c.person.name}</span>
-                {c.character && <span className="cast-role">{c.character}</span>}
+                <a href={`/person/${c.person.id}`} onClick={(e) => { e.preventDefault(); push(`/person/${c.person.id}`) }}>
+                  <span className="avatar" aria-hidden="true">
+                    {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
+                  </span>
+                  <span className="cast-name">{c.person.name}</span>
+                  {c.character && <span className="cast-role">{c.character}</span>}
+                </a>
               </li>
             ))}
           </ul></div>
@@ -134,19 +141,42 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   )
 }
 
+async function loadWall(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('start_wall')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as string[]
+}
+
+/** For a link or old notification pointing at a title or person Reelay no longer has. */
+export function Gone({ what }: { what: 'title' | 'person' }) {
+  const { setTab } = useNavActions()
+  const wall = useQuery<string[]>('wall', loadWall, { maxAge: 24 * 60 * 60 * 1000 })
+  return (
+    <div className="gone-page">
+      <div className="gone-wall" aria-hidden="true"><PosterWall posters={wall.data ?? []} dim={0.62} /></div>
+      <div className="gone-body">
+        <h1>This {what} isn’t available</h1>
+        <GlassButton onClick={() => setTab('search')}>Search</GlassButton>
+      </div>
+    </div>
+  )
+}
+
 export default function Title({ id }: { id: number }) {
   const q = useQuery(Number.isFinite(id) ? `title:${id}` : null, () => loadTitle(id), { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const missing = !Number.isFinite(id) || (q.data === null && !q.loading)
+  // above the fold: the top picture
+  const phase = useArrival(String(id), !!q.data, () => titleArt(q.data))
   return (
     <>
-    <main className="page noscroll" onTouchStart={bind.onTouchStart} onTouchEnd={bind.onTouchEnd} onTouchCancel={bind.onTouchEnd}
-      onScroll={(e) => { onScroll(e); bind.onScrollPull(e) }}>
+    <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
       <div className="page-back"><BackButton glass /></div>
       {q.error && <div className="page-center"><LoadFailed what="this title" retry={q.retry} retrying={q.retrying} /></div>}
-      {missing && <div className="page-center"><p className="gone">This title isn’t available</p></div>}
-      {q.data && <div className="rise"><Body t={q.data} stale={q.stale} /></div>}
+      {missing && <Gone what="title" />}
+      {phase !== 'there' && !q.error && !missing && <Skeleton kind="title" leaving={phase === 'in'} />}
+      {q.data && phase !== 'wait' && <div className="arrive"><Body t={q.data} stale={q.stale} /></div>}
     </main>
     {indicator}
     </>

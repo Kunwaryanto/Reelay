@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 
 export type Kind = Card['kind']
 export type SectionId = 'genres' | 'lists' | 'decades' | 'countries'
-export type Sort = 'popular' | 'rated' | 'newest'
+export type Sort = 'popular' | 'rated' | 'newest' | 'leaving'
 
 type Rule = {
   genres?: string[]
@@ -17,6 +17,8 @@ type Rule = {
   /** IMDb: at least this rating, and between these vote counts */
   rating?: number
   votes?: [number, number?]
+  /** leaving a service within 30 days */
+  leaving?: boolean
 }
 
 export type Category = {
@@ -57,6 +59,7 @@ export const CATEGORIES: Category[] = [
   g('sci-fi', 'Sci-fi', '#23395B', ['Science Fiction', 'Sci-Fi & Fantasy']),
   g('documentary', 'Documentary', '#55555E', ['Documentary']),
 
+  { id: 'leaving-soon', section: 'lists', label: 'Leaving soon', tint: '#5A3A2A', rule: { leaving: true }, list: 'leaving' },
   { id: 'highest-rated', section: 'lists', label: 'Highest rated', tint: '#4B4A32', rule: { votes: [20000] }, list: 'rated' },
   { id: 'hidden-gems', section: 'lists', label: 'Hidden gems', tint: '#1F4F6B', rule: { rating: 7.5, votes: [2000, 30000] }, list: 'rated' },
   { id: 'under-90', section: 'lists', label: 'Under 90 minutes', tint: '#2E5A3A', only: 'film', rule: { under: 90 }, list: 'popular' },
@@ -117,14 +120,16 @@ const today = () => inDays(0)
 const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
 const ART = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 
-type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean }
+type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean }
 
 /** Streaming titles in a category. `row` narrows it the way that row on the category page does. */
-export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art }: Opts = {}): Promise<Card[]> {
+export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets }: Opts = {}): Promise<Card[]> {
   const r = cat.rule
   const k = kind ?? cat.only
   const scored = sort === 'rated' || r.rating !== undefined || r.votes !== undefined
-  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? ',scores!inner(imdb_rating,imdb_votes)' : ''}`)
+  // facets: what the filter drawer checks on the phone (genre, language, length, rating)
+  const extra = facets ? `,genres,original_language,runtime_min${scored ? '' : ',scores(imdb_rating,rt_critics,letterboxd)'}` : ''
+  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? `,scores!inner(imdb_rating,imdb_votes${facets ? ',rt_critics,letterboxd' : ''})` : ''}${extra}`)
   if (k) q = q.eq('kind', k)
   if (r.genres) q = q.overlaps('genres', r.genres)
   if (r.from !== undefined) q = q.gte('year', r.from)
@@ -140,12 +145,18 @@ export async function titlesIn(cat: Category, { kind, sort = 'popular', row, lim
     q = q.gte('scores.imdb_votes', cat.section === 'genres' ? 20000 : 3000)
   }
   if (row === 'new') q = q.gte('year', thisYear - 1)
-  if (row === 'leaving') q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
+  if (row === 'leaving' || r.leaving) q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
   if (art) q = q.not('backdrop_path', 'is', null).not('logo_path', 'is', null)
 
   if (sort === 'rated') q = q.order('scores(imdb_rating)', { ascending: false })
   else if (sort === 'newest') q = q.order('year', { ascending: false, nullsFirst: false })
-  return unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]
+  const list = unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]
+  // soonest first (the most popular `limit` of those leaving; the database can't order titles by a service's date)
+  if (sort === 'leaving') {
+    const soonest = (c: Card) => c.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? '9999'
+    list.sort((a, b) => soonest(a).localeCompare(soonest(b)))
+  }
+  return list
 }
 
 export type CategoryPage = { hero: Card[]; rows: (RowDef & { items: Card[] })[] }

@@ -85,13 +85,24 @@
   /* ---------- Motion ---------- */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);        /* entering, fades, presses */
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);    /* things moving on screen */
+  /* the iOS keyboard, measured from a screen recording (iOS 26): up fast then a short settle; down a slow start then quick */
+  --dur-keyboard: 300ms; --ease-keyboard: cubic-bezier(0.15, 0.85, 0.25, 1);
+  /* down: the keyboard itself falls in about 180 ms and stops dead; following that exactly looked abrupt, so the
+     field starts with it and lands softly a little after */
+  --dur-keyboard-down: 340ms; --ease-keyboard-down: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-launch: 900ms; --ease-launch: cubic-bezier(0.22, 1, 0.36, 1);  /* Now arriving at launch: page, cog and tab bar together */
+  --dur-arrive: 400ms;  /* a page opened inside the app arriving: the same plain fade as launch, quicker */
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);      /* iOS drawer and context menu */
   --ease-camera: cubic-bezier(0.16, 1, 0.3, 1);      /* onboarding step camera */
 
   --dur-press: 160ms;          /* scale(0.97) */
-  --dur-nav-hide: 220ms;
-  --dur-nav-show: 160ms;
+  --dur-nav-hide: 320ms;  /* tab bar and top bar going faint while scrolling down */
+  --dur-nav-show: 260ms;  /* and coming back */
+  --ease-nav: cubic-bezier(0.33, 0, 0.3, 1);  /* an even fade (measured against Are.na's bars): the change is spread over the whole time, not spent in the first frames */
   --dur-sheet: 380ms;
+  --dur-toast-in: 480ms;   /* a toast arriving, on --ease-spring */
+  --dur-toast-out: 240ms;  /* and leaving */
+  --ease-spring: linear(0, 0.33 8%, 0.68 18%, 0.9 28%, 1.02 38%, 1.05 48%, 1.03 60%, 1.005 78%, 1);  /* a soft spring: 5% past, then settles */
   --dur-menu-open: 420ms;      /* long press */
   --dur-menu-close: 280ms;
   --dur-rise: 500ms;           /* late content rises 8px */

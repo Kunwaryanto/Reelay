@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom'
 // Building blocks from the Components page of the design canvas. Styles are in src/styles/app.css.
-import {
+import { useLayoutEffect,
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react'
@@ -8,9 +9,11 @@ import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
-import { SERVICE_NAME, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
-import { useRequestFailed } from '../lib/query'
+import { prefetch, useRequestFailed } from '../lib/query'
+import { notePressed } from '../lib/press'
+import { warmFacts } from '../lib/facts'
 
 // ---- Icons -----------------------------------------------------------------
 
@@ -108,23 +111,64 @@ export function ServiceMark({ service }: { service: string }) {
   return <span className="mark-text">{(SERVICE_NAME[service] ?? service).toUpperCase()}</span>
 }
 
-// A poster row near the screen (about one screen ahead) loads all its posters, so they're usually ready
+// A poster row near the screen (about a screen and a half ahead) loads all its posters, so they're usually ready
 // by the time you scroll to them. Safari's own lazy loading only starts when an image is almost on screen.
 const NearContext = createContext(false)
+
+/**
+ * True once the element is within about a screen and a half of what's showing in its page: time to load its
+ * picture, ahead of the scroll. One observer per page, shared by everything in it.
+ */
+const nearObservers = new WeakMap<Element, { io: IntersectionObserver; on: WeakMap<Element, () => void> }>()
+export function useNearScreen(ref: React.RefObject<HTMLElement | null>, skip = false) {
+  const [near, setNear] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    const page = el?.closest('.page')
+    if (!el || !page || skip || near) return
+    let o = nearObservers.get(page)
+    if (!o) {
+      const on = new WeakMap<Element, () => void>()
+      // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
+      const io = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { on.get(e.target)?.(); io.unobserve(e.target) } },
+        { root: page, rootMargin: '150% 0px' })
+      nearObservers.set(page, o = { io, on })
+    }
+    const { io, on } = o
+    on.set(el, () => setNear(true))
+    io.observe(el)
+    return () => { io.unobserve(el); on.delete(el) }
+  }, [ref, skip, near])
+  return near
+}
 
 /**
  * A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the
  * image, its edge line and the service mark fade in together.
  */
+function wasDecoded(src: string | null | undefined) { return !!src && decoded.has(src) }
+function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
+
 export function Cover({ path, service, eager, sizes = '147px' }: { path: string | null; service?: string; eager?: boolean; sizes?: string }) {
-  const near = useContext(NearContext)
-  const [ready, setReady] = useState(!path)
-  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
+  const inRow = useContext(NearContext)
+  const box = useRef<HTMLDivElement>(null)
+  // in a grid (no row to speak for it), each poster watches for itself
+  const close = useNearScreen(box, eager || inRow)
+  const near = inRow || close
+  const src = tmdbImage(path, 'w342')
+  // A picture the page waited for (or one seen before) is asked for at once and painted with the frame it is in:
+  // left lazy and decoded on the side, it would pop in a few frames after the page's fade had started.
+  const [known] = useState(() => wasDecoded(src))
+  const [ready, setReady] = useState(!path || known)
+  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => { markDecoded(src); setReady(true) }) }
+  // a picture that is already loaded (the page waited for it, or it was seen before) is there from the first frame
+  const pic = useRef<HTMLImageElement>(null)
+  useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
   return (
-    <div className="cover" data-ready={ready}>
+    <div className="cover" data-ready={ready} ref={box}>
       {path && (
-        <img src={tmdbImage(path, 'w342')} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
-          loading={eager || near ? undefined : 'lazy'} decoding="async" onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
+        <img ref={pic} src={src} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
+          loading={known || eager || near ? undefined : 'lazy'} decoding={known ? 'sync' : 'async'} onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
@@ -137,8 +181,19 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const service = card.availability[0]?.service_id
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
+  // near the screen: its long-press facts are fetched with the rest of its row
+  const box = useRef<HTMLAnchorElement>(null)
+  const near = useNearScreen(box)
+  useEffect(() => { if (near) warmFacts([card.id]) }, [near, card.id])
   return (
-    <a className="card" href={`/title/${card.id}`} {...hold.handlers}
+    <a ref={box} className="card" href={`/title/${card.id}`} {...hold.handlers}
+      onPointerDown={(e) => {
+        warmFacts([card.id], true)
+        hold.handlers.onPointerDown(e)
+        // a finger resting on the poster (not a scroll passing over it) starts loading its page
+        const el = e.currentTarget
+        setTimeout(() => { if (el.dataset.pressed) warmTitle(card.id) }, 100)
+      }}
       onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
       <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}`}>
         <Cover path={card.poster_path} service={service} eager={eager} />
@@ -171,6 +226,7 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
         start.current = [e.clientX, e.clientY]
         el.current = e.currentTarget
         const target = e.currentTarget
+        notePressed(target)
         clearTimeout(timer.current); clearTimeout(pressTimer.current)
         pressTimer.current = setTimeout(() => { if (start.current) target.dataset.pressed = 'true' }, 90)
         timer.current = setTimeout(() => {
@@ -197,11 +253,11 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
   }
 }
 
-export function SectionHeader({ title, onViewAll }: { title: string; onViewAll?: () => void }) {
+export function SectionHeader({ title, onViewAll, onViewAllPress }: { title: string; onViewAll?: () => void; onViewAllPress?: () => void }) {
   return (
     <div className="section-head">
       <h2>{title}</h2>
-      {onViewAll && <button type="button" className="view-all" aria-label={`View all in ${title}`} onClick={onViewAll}>View all</button>}
+      {onViewAll && <button type="button" className="view-all" aria-label={`View all in ${title}`} onPointerDown={onViewAllPress} onClick={onViewAll}>View all</button>}
     </div>
   )
 }
@@ -214,7 +270,7 @@ export function PosterRow({ children }: { children: ReactNode }) {
     if (!el || near) return
     // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setNear(true) },
-      { root: el.closest('.page'), rootMargin: '100% 0px' })
+      { root: el.closest('.page'), rootMargin: '150% 0px' })
     io.observe(el)
     return () => io.disconnect()
   }, [near])
@@ -248,99 +304,140 @@ export function OfflinePill() {
     window.addEventListener('online', on); window.addEventListener('offline', off)
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
-  const offline = !online || failed
+  // Shown once a request can't get through, not the moment the connection drops: until something
+  // fails to load, being offline changes nothing on screen.
+  const offline = failed
   useEffect(() => {
     if (offline) { was.current = true; setBack(false); return }
     if (!was.current) return
     was.current = false
+    // "Back online" only if the connection really is back
+    if (!navigator.onLine) return
     setBack(true)
     const t = setTimeout(() => setBack(false), 2000)
     return () => clearTimeout(t)
-  }, [offline])
-  if (!offline && !back) return null
-  return <div className="offline-pill" role="status">{offline ? 'Offline' : 'Back online'}</div>
+  }, [offline, online])
+  // It drops in from above and lifts away; the words cross-fade when they change.
+  const text = offline ? 'Offline' : back ? 'Back online' : ''
+  const [shown, setShown] = useState(text)
+  const [leaving, setLeaving] = useState(false)
+  useEffect(() => {
+    if (text) { setShown(text); setLeaving(false); return }
+    if (!shown) return
+    setLeaving(true)
+    const t = setTimeout(() => { setShown(''); setLeaving(false) }, 320)
+    return () => clearTimeout(t)
+  }, [text, shown])
+  if (!shown) return null
+  return <div className="offline-pill" role="status" data-leaving={leaving}><span key={shown}>{shown}</span></div>
 }
 
 // ---- Pull to refresh ----------------------------------------------------
 
-/** The iOS activity indicator: eight spokes that appear one by one as you pull, then spin. */
+/** The iOS activity indicator: eight thin spokes that appear one by one as you pull, then spin. */
 function Activity() {
   return (
     <svg className="activity" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
       {Array.from({ length: 8 }, (_, i) => (
-        <line key={i} x1="11" y1="2.5" x2="11" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+        <line key={i} x1="11" y1="1.5" x2="11" y2="6.75" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
           transform={`rotate(${i * 45} 11 11)`} style={{ '--i': i } as CSSProperties} />
       ))}
     </svg>
   )
 }
 
-const PULL = 80 // px past the top that triggers a refresh
+const HOLD = 48 // px below the status bar where the page waits while loading
+const SETTLE = '--pull 420ms cubic-bezier(0.22, 1, 0.36, 1)'
 
 /**
- * Pull down past the top to refresh, like Safari. The page keeps its native bounce; this reads how far it
- * bounced (iOS reports a negative scrollTop). The spinner stays put and its spokes appear as you pull; it starts
- * spinning once you've pulled far enough, and on release the page is held just below it until the refresh is done.
- * Spread `bind` on the scroll area and render `indicator` next to it, inside the same pane.
+ * Pull down from the top to refresh, like a native iOS list. A pull that starts at the top of the page is ours
+ * (not the browser's bounce): the page follows the finger with the iOS rubber-band resistance, the wheel sits in
+ * the middle of the gap that opens and fills in spoke by spoke, and it starts spinning once pulled far enough. On
+ * release the page eases to a resting place below the wheel, waits for the refresh, then eases home. Every
+ * movement is one transform on the page, so nothing fights the native bounce.
+ * Put `bind.ref` on the scroll area and render `indicator` next to it, inside the same pane.
  */
 export function usePullToRefresh(refresh: () => Promise<unknown>) {
   const ind = useRef<HTMLDivElement>(null)
-  const page = useRef<HTMLElement | null>(null)
-  const touching = useRef(false)
-  const armed = useRef(false)
-  const busy = useRef(false)
+  const latest = useRef(refresh)
+  latest.current = refresh
 
-  const setState = (state: 'idle' | 'pull' | 'armed' | 'busy' | 'done') => {
-    if (ind.current) ind.current.dataset.state = state
-  }
+  const ref = useCallback((el: HTMLElement | null) => {
+    if (!el) return
+    let start: { x: number; y: number } | null = null
+    let pulling = false
+    let busy = false
+    let dist = 0
+    let hold = 0, trigger = 0
 
-  const finish = () => {
-    const el = page.current
-    setState('done')
-    if (el) {
-      el.style.transition = 'transform 420ms var(--ease-out)'
-      el.style.transform = ''
+    const state = (v: 'idle' | 'pull' | 'armed' | 'busy' | 'done') => { if (ind.current) ind.current.dataset.state = v }
+    const place = (d: number, animate: boolean) => {
+      dist = d
+      el.style.transition = animate ? SETTLE : 'none'
+      // --pull moves what is on the page down (not the page's own box, which would cut off anything above its top
+      // edge), and the picture at the top uses it to stay at the top of the screen and grow (see app.css)
+      el.style.setProperty('--pull', `${d}px`)
+      const i = ind.current
+      if (!i) return
+      i.style.transition = animate ? SETTLE : 'none'
+      i.style.setProperty('--d', String(d))
+      i.style.setProperty('--p', String(Math.min(1, d / trigger)))
     }
-    setTimeout(() => {
-      if (el) el.style.transition = ''
-      busy.current = false
-      ind.current?.style.setProperty('--p', '0')
-      setState('idle')
-    }, 420)
-  }
+    const home = () => {
+      place(0, true)
+      setTimeout(() => { if (!pulling && !busy) { el.style.transition = ''; delete el.dataset.ptr; state('idle') } }, 430)
+    }
 
-  const bind = {
-    onTouchStart: () => { touching.current = true; armed.current = false },
-    onTouchEnd: () => {
-      touching.current = false
-      if (!armed.current || busy.current) return
-      armed.current = false
-      busy.current = true
-      setState('busy')
-      // Hold the page below the spinner. The native bounce carries it back up at the same time,
-      // so together they ease from where your finger let go to the held position.
-      const el = page.current
-      if (el) {
-        el.style.transition = 'transform 500ms cubic-bezier(0.2, 0.9, 0.3, 1)'
-        el.style.transform = 'translateY(var(--ptr-hold))'
+    const down = (e: TouchEvent) => {
+      start = !busy && e.touches.length === 1 && el.scrollTop <= 0 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
+      pulling = false
+    }
+    const move = (e: TouchEvent) => {
+      if (!start) return
+      const dx = e.touches[0].clientX - start.x, dy = e.touches[0].clientY - start.y
+      if (!pulling) {
+        // the first movement decides: straight down from the top is a pull, anything else is the page's own
+        if (!(dy > 0 && dy > Math.abs(dx) && el.scrollTop <= 0)) { start = null; return }
+        pulling = true
+        el.dataset.ptr = ''
+        hold = (ind.current ? parseFloat(getComputedStyle(ind.current).top) || 0 : 0) + HOLD
+        trigger = hold + 12
       }
-      const started = Date.now()
-      Promise.resolve(refresh()).catch(() => {}).finally(() => {
-        setTimeout(finish, Math.max(0, 800 - (Date.now() - started)))
+      if (e.cancelable) e.preventDefault()
+      // the iOS rubber band: follows the finger at about half speed, slower the further it goes
+      const h = el.clientHeight
+      const d = Math.max(0, (1 - 1 / ((dy * 0.55) / h + 1)) * h)
+      place(d, false)
+      state(d >= trigger ? 'armed' : d > 0 ? 'pull' : 'idle')
+    }
+    const up = () => {
+      if (!pulling) { start = null; return }
+      pulling = false
+      start = null
+      if (dist < trigger) { state(dist > 0 ? 'done' : 'idle'); home(); return }
+      busy = true
+      state('busy')
+      place(hold, true)
+      const began = Date.now()
+      Promise.resolve(latest.current()).catch(() => {}).finally(() => {
+        setTimeout(() => { busy = false; state('done'); home() }, Math.max(0, 900 - (Date.now() - began)))
       })
-    },
-    onScrollPull: (e: React.UIEvent<HTMLElement>) => {
-      page.current = e.currentTarget
-      if (busy.current || !ind.current) return
-      const pulled = Math.max(0, -e.currentTarget.scrollTop)
-      if (pulled >= PULL && touching.current) armed.current = true
-      ind.current.style.setProperty('--p', String(Math.min(1, pulled / PULL)))
-      setState(armed.current ? 'armed' : pulled > 0 ? 'pull' : 'idle')
-    },
-  }
+    }
+
+    el.addEventListener('touchstart', down, { passive: true })
+    el.addEventListener('touchmove', move, { passive: false })
+    el.addEventListener('touchend', up)
+    el.addEventListener('touchcancel', up)
+    return () => {
+      el.removeEventListener('touchstart', down)
+      el.removeEventListener('touchmove', move)
+      el.removeEventListener('touchend', up)
+      el.removeEventListener('touchcancel', up)
+    }
+  }, [])
 
   const indicator = <div ref={ind} className="ptr" data-state="idle" aria-hidden="true"><Activity /></div>
-  return { bind, indicator }
+  return { bind: { ref }, indicator }
 }
 
 // ---- Sheet -----------------------------------------------------------------
@@ -472,6 +569,84 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     return () => d.removeEventListener('touchstart', onTouch)
   }, [open])
 
+  // Drag the sheet down to close it, from anywhere on it: rows and buttons included (a touch that moves is a drag,
+  // not a tap). A list inside scrolls first; the sheet takes over once the list is at its top, also in the middle
+  // of a gesture. Closes past a quarter of its height or on a quick flick down; otherwise springs back. Dragged
+  // up, it gives a little and springs back. Sideways movement is left to whatever scrolls sideways.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    const d = ref.current
+    if (!open || !d) return
+    type G = { x: number; y: number; mode: 'pending' | 'scroll' | 'drag' | 'ignore'; list: HTMLElement | null; from: number; dy: number; trail: [number, number][] }
+    let g: G | null = null
+    let dragged = 0
+    const scrollerOf = (t: HTMLElement) => {
+      for (let el: HTMLElement | null = t; el && el !== d; el = el.parentElement) {
+        if (el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY)) return el
+      }
+      return null
+    }
+    const start = (e: TouchEvent) => {
+      const t = e.target as HTMLElement
+      g = null
+      if (e.touches.length !== 1 || !t.closest('.sheet-body') || t.closest('input, textarea') || d.dataset.closing) return
+      const p = e.touches[0]
+      g = { x: p.clientX, y: p.clientY, mode: 'pending', list: scrollerOf(t), from: p.clientY, dy: 0, trail: [] }
+    }
+    const move = (e: TouchEvent) => {
+      if (!g || g.mode === 'ignore') return
+      const p = e.touches[0]
+      const dx = p.clientX - g.x, dy = p.clientY - g.y
+      if (g.mode === 'pending') {
+        if (Math.hypot(dx, dy) < 8) return
+        if (Math.abs(dx) > Math.abs(dy)) { g.mode = 'ignore'; return }
+        const l = g.list
+        // Only a pull down from a list's top moves the sheet. Anything else on a list is the list's: it scrolls, with
+        // its own momentum and its bounce at the end (taking upward moves at the end made the list feel stuck).
+        g.mode = l && (dy < 0 || l.scrollTop > 0) ? 'scroll' : 'drag'
+        g.from = p.clientY
+      }
+      if (g.mode === 'scroll') {
+        // the list has reached its top and the finger keeps going down: the sheet takes over from here
+        if (g.list && g.list.scrollTop <= 0 && p.clientY > g.from) g.mode = 'drag'
+        else { g.from = p.clientY; return }
+      }
+      if (e.cancelable) e.preventDefault()
+      const raw = p.clientY - g.from
+      g.dy = raw >= 0 ? raw : -12 * (1 - Math.exp(raw / 60)) // upward: resists, 12px at most
+      g.trail.push([e.timeStamp, p.clientY])
+      if (g.trail.length > 6) g.trail.shift()
+      d.style.setProperty('--drag', `${g.dy}px`)
+    }
+    const end = () => {
+      const was = g
+      g = null
+      if (!was || was.mode !== 'drag') return
+      dragged = Date.now()
+      const [t0, y0] = was.trail[0] ?? [0, 0]
+      const [t1, y1] = was.trail[was.trail.length - 1] ?? [0, 0]
+      const speed = t1 > t0 ? (y1 - y0) / (t1 - t0) : 0 // px per ms, over the last few moves
+      const close = was.dy > d.offsetHeight * 0.25 || (speed > 0.5 && was.dy > 16)
+      // closing: straight on down from where the finger let go, not back up first
+      if (close) d.dataset.closing = 'true'
+      d.style.removeProperty('--drag')
+      if (close) closeRef.current()
+    }
+    // a drag that started on a row or button must not also press it
+    const click = (e: MouseEvent) => { if (Date.now() - dragged < 400) { e.preventDefault(); e.stopPropagation() } }
+    d.addEventListener('touchstart', start, { passive: true })
+    d.addEventListener('touchmove', move, { passive: false })
+    d.addEventListener('touchend', end)
+    d.addEventListener('touchcancel', end)
+    d.addEventListener('click', click, true)
+    return () => {
+      d.removeEventListener('touchstart', start); d.removeEventListener('touchmove', move)
+      d.removeEventListener('touchend', end); d.removeEventListener('touchcancel', end); d.removeEventListener('click', click, true)
+      d.style.removeProperty('--drag')
+    }
+  }, [open])
+
   // A non-modal dialog doesn't close on Escape by itself
   useEffect(() => {
     if (!open) return
@@ -486,10 +661,10 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     <dialog ref={ref} className="sheet"
 data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
       onCancel={(e) => { e.preventDefault(); onClose() }}
-      // drag down from anywhere on the sheet (not from a field or button) to close it
+      // with a mouse: drag down from the sheet's own surface (not a field or button) to close it. Touch is handled above.
       onPointerDown={(e) => {
         const t = e.target as HTMLElement
-        if (!t.closest('.sheet-body') || t.closest('input, textarea, button, a')) return
+        if (e.pointerType === 'touch' || !t.closest('.sheet-body') || t.closest('input, textarea, button, a')) return
         drag.current = { y: e.clientY, dy: 0 }
         e.currentTarget.setPointerCapture(e.pointerId)
       }}
@@ -520,22 +695,76 @@ type Toast = { id: number; text: string; action?: string; run?: () => void }
 const ToastCtx = createContext<(t: Omit<Toast, 'id'>) => void>(() => {})
 export const useToast = () => useContext(ToastCtx)
 
+// A plain message stays 2.2 s; one with an action (Undo) 4 s, so there's time to reach it. A finger on the toast,
+// or focus on its button, holds it. It leaves on its own, on its action, or flicked down towards the screen edge
+// it came from (the way an iOS banner is flicked back up to the top edge).
+const TOAST_MS = 2200
+const TOAST_ACTION_MS = 4000
+const TOAST_OUT_MS = 240
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null)
+  const [leaving, setLeaving] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const show = useCallback((t: Omit<Toast, 'id'>) => {
+  const dismiss = useCallback(() => {
     clearTimeout(timer.current)
-    setToast({ ...t, id: Date.now() })
-    timer.current = setTimeout(() => setToast(null), 4000)
+    setLeaving(true)
+    timer.current = setTimeout(() => { setToast(null); setLeaving(false) }, TOAST_OUT_MS)
   }, [])
+  const wait = useCallback((ms: number) => { clearTimeout(timer.current); timer.current = setTimeout(dismiss, ms) }, [dismiss])
+  const show = useCallback((t: Omit<Toast, 'id'>) => {
+    setLeaving(false)
+    setToast({ ...t, id: Date.now() })
+    wait(t.action ? TOAST_ACTION_MS : TOAST_MS)
+  }, [wait])
+
+  // Drag: follows the finger down, resists upward. Let go past 20px or on a quick flick down and it leaves from
+  // where it is; otherwise it springs back and its time starts over.
+  const drag = useRef<{ y: number; dy: number; on: boolean; trail: [number, number][] } | null>(null)
+  const draggedAt = useRef(0)
+  const down = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (leaving) return
+    drag.current = { y: e.clientY, dy: 0, on: false, trail: [] }
+    clearTimeout(timer.current) // held while touched
+  }
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = drag.current
+    if (!g) return
+    const raw = e.clientY - g.y
+    if (!g.on) {
+      if (Math.abs(raw) < 6) return
+      g.on = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+      e.currentTarget.dataset.dragging = 'true'
+    }
+    g.dy = raw >= 0 ? raw : -10 * (1 - Math.exp(raw / 50))
+    g.trail.push([e.timeStamp, e.clientY])
+    if (g.trail.length > 5) g.trail.shift()
+    e.currentTarget.style.setProperty('--drag', `${g.dy}px`)
+  }
+  const up = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = drag.current
+    drag.current = null
+    if (!g) return
+    if (g.on) draggedAt.current = Date.now()
+    delete e.currentTarget.dataset.dragging
+    const [t0, y0] = g.trail[0] ?? [0, 0]
+    const [t1, y1] = g.trail[g.trail.length - 1] ?? [0, 0]
+    const speed = t1 > t0 ? (y1 - y0) / (t1 - t0) : 0
+    if (g.on && (g.dy > 20 || (speed > 0.4 && g.dy > 6))) { dismiss(); return } // --drag stays: it leaves from there
+    e.currentTarget.style.removeProperty('--drag')
+    if (toast) wait(toast.action ? TOAST_ACTION_MS : TOAST_MS)
+  }
   return (
     <ToastCtx.Provider value={show}>
       {children}
       <div className="toasts" role="region" aria-label="Notifications" aria-live="polite">
         {toast && (
-          <div key={toast.id} className="toast" role="status">
+          <div key={toast.id} className="toast" role="status" data-leaving={leaving || undefined}
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+            onFocus={() => clearTimeout(timer.current)} onBlur={() => { if (!leaving) wait(TOAST_MS) }}>
             <span>{toast.text}</span>
-            {toast.action && <button type="button" onClick={() => { clearTimeout(timer.current); setToast(null); toast.run?.() }}>{toast.action}</button>}
+            {toast.action && <button type="button" onClick={() => { if (Date.now() - draggedAt.current < 400) return; dismiss(); toast.run?.() }}>{toast.action}</button>}
           </div>
         )}
       </div>
@@ -545,14 +774,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 // ---- Tab bar ---------------------------------------------------------------
 
-export function TabBar({ hidden }: { hidden?: boolean }) {
+export function TabBar({ hidden, arriving }: { hidden?: boolean; arriving?: boolean }) {
   const { tab, setTab, dimmed } = useNav()
   const items: [Tab, string, ReactNode][] = [
     ['now', 'Now', <HomeIcon key="i" />], ['browse', 'Browse', <Icon key="i" name="browse" />],
     ['watchlist', 'Watchlist', <Icon key="i" name="bookmark" />], ['search', 'Search', <Icon key="i" name="search" />],
   ]
   return (
-    <nav className="tabbar" aria-label="Main" data-dim={dimmed} data-hidden={hidden} inert={hidden}>
+    <nav className="tabbar" aria-label="Main" data-dim={dimmed} data-hidden={hidden} data-arriving={arriving || undefined} inert={hidden}>
       <div className="tabbar-fade" aria-hidden="true"><i /><i /><i /></div>
       <div className="tabbar-row">
         {items.map(([id, label, icon]) => (
@@ -716,4 +945,166 @@ export function PosterWall({ posters, still, dim = 0.55, onReady }: { posters: s
       <div className="wall-fade" />
     </div>
   )
+}
+
+// ---- The picture at the top of a page ----------------------------------------
+
+/**
+ * Puts the top picture behind the scrolling page instead of inside it, pinned to the top of the screen. When iOS
+ * bounces the page down, or it is pulled to refresh, the picture then simply doesn't move, so nothing has to be
+ * corrected frame by frame (which is what made it judder). Scrolling up, the picture's frame leaves with the page
+ * and the picture inside it lags a little (see .art-layer in app.css).
+ * Render it anywhere inside the page; `children` are the pictures.
+ */
+export function PinnedArt({ children }: { children: ReactNode }) {
+  const mark = useRef<HTMLSpanElement>(null)
+  const [frame, setFrame] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    const page = mark.current?.closest<HTMLElement>('main.page')
+    if (!page?.parentElement) return
+    const layer = document.createElement('div')
+    layer.className = 'art-layer'
+    layer.setAttribute('aria-hidden', 'true')
+    const drift = document.createElement('div')
+    drift.className = 'art-drift'
+    // the dark fade over the picture belongs to it (it stays put with it); the title over it moves with the page
+    const shade = document.createElement('div')
+    shade.className = 'hero-shade'
+    layer.append(drift, shade)
+    page.before(layer)
+    setFrame(drift)
+    // browsers without scroll-driven animations: move it by hand
+    let stop = () => {}
+    if (!CSS.supports('animation-timeline', 'scroll()')) {
+      const move = () => { const y = Math.max(0, Math.min(540, page.scrollTop)); layer.style.translate = `0 ${-y}px`; drift.style.translate = `0 ${y * 0.315}px` }
+      page.addEventListener('scroll', move, { passive: true })
+      stop = () => page.removeEventListener('scroll', move)
+    }
+    return () => { stop(); layer.remove() }
+  }, [])
+  return <><span ref={mark} hidden />{frame && createPortal(children, frame)}</>
+}
+
+/** The small count on a type pill. Without a number yet it takes no room; when the number lands the pill eases wider as it fades in. */
+export function PillCount({ n, off }: { n?: number; off?: boolean }) {
+  return <sup aria-hidden="true" data-on={n !== undefined || undefined} data-off={off || undefined}><i>{n}</i></sup>
+}
+
+// ---- Pages arriving ----------------------------------------------------------
+
+/** Start loading a title's page as a finger lands on its poster. */
+export const titleArt = (t: { backdrop_path?: string | null; poster_path?: string | null } | null | undefined): Picture[] =>
+  [{ src: t && (tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')) }]
+export const warmTitle = (id: number) => prefetch(`title:${id}`, () => loadTitle(id).then((t) => { warmPictures(titleArt(t)); return t }), { maxAge: 10 * 60 * 1000 })
+
+/** Start a load on a press that isn't a scroll: the finger still after 80 ms, or lifted without having moved. */
+export function usePressWarm(run: () => void) {
+  const at = useRef<[number, number] | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const stop = () => { clearTimeout(timer.current); at.current = null }
+  return {
+    onPointerDown: (e: React.PointerEvent) => { at.current = [e.clientX, e.clientY]; clearTimeout(timer.current); timer.current = setTimeout(() => { if (at.current) run() }, 80) },
+    onPointerMove: (e: React.PointerEvent) => { if (at.current && Math.hypot(e.clientX - at.current[0], e.clientY - at.current[1]) > 8) stop() },
+    onPointerUp: () => { if (at.current) run(); stop() },
+    onPointerCancel: stop,
+  }
+}
+
+export type Picture = { src: string | null | undefined; srcset?: string; sizes?: string }
+/** A poster as its card will ask for it, so the file waited for is the file shown. */
+export const posterPicture = (path: string | null): Picture => ({ src: tmdbImage(path, 'w342'), srcset: posterSrcSet(path), sizes: '147px' })
+// Pictures this session has already decoded: they can show from the first frame, with no fade of their own.
+const decoded = new Set<string>()
+// The decoded pictures themselves are held on to (the newest 80), so the browser keeps them in memory and the
+// page's own <img> gets them in the same frame instead of fetching them from its cache and decoding again.
+const held = new Map<string, HTMLImageElement>()
+const decodePicture = ({ src, srcset, sizes }: Picture) => {
+  if (!src || decoded.has(src)) return Promise.resolve()
+  const img = new Image()
+  if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
+  img.src = src
+  return img.decode().then(() => {
+    decoded.add(src)
+    held.set(src, img)
+    if (held.size > 80) held.delete(held.keys().next().value!)
+  }).catch(() => {})
+}
+/** Fetch and decode pictures ahead of the page that will show them. */
+export const warmPictures = (pictures: Picture[]) => { for (const p of pictures) void decodePicture(p) }
+const allDecoded = (pictures: Picture[]) => pictures.every((p) => !p.src || decoded.has(p.src))
+
+export type Arrival = 'wait' | 'in' | 'there'
+/**
+ * How a page arrives. Its answer saved and its pictures above the fold already decoded when it opens: 'there' at
+ * once, nothing animates. Otherwise 'wait' (placeholders) until the answer is in and those pictures are decoded,
+ * at most 2.5 s for the pictures; then 'in' while everything fades in as one piece, and 'there' after.
+ */
+export function useArrival(key: string, has: boolean, pictures: () => Picture[]): Arrival {
+  const [st, setSt] = useState<{ key: string; phase: Arrival }>(() => ({ key, phase: has && allDecoded(pictures()) ? 'there' : 'wait' }))
+  let cur = st
+  if (st.key !== key) { cur = { key, phase: has && allDecoded(pictures()) ? 'there' : 'wait' }; setSt(cur) }
+  const phase = cur.phase
+  const pics = useRef(pictures)
+  pics.current = pictures
+  useEffect(() => {
+    if (phase !== 'wait' || !has) return
+    let live = true
+    const done = () => { if (live) { live = false; setSt({ key, phase: 'in' }) } }
+    void Promise.all(pics.current().map(decodePicture)).then(done)
+    const t = setTimeout(done, 2500)
+    return () => { live = false; clearTimeout(t) }
+  }, [key, has, phase])
+  useEffect(() => {
+    if (phase !== 'in') return
+    const t = setTimeout(() => setSt((s) => (s.key === key && s.phase === 'in' ? { key, phase: 'there' } : s)), 460)
+    return () => clearTimeout(t)
+  }, [key, phase])
+  return phase
+}
+
+/** Placeholders while a page waits: 'rows' a heading and posters under the top picture, 'grid' posters three across, 'title' a title page's first lines. */
+export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title' | 'person' | 'cards'; leaving?: boolean }) {
+  return (
+    <div className="skel" data-kind={kind} data-leaving={leaving || undefined} aria-hidden="true">
+      {kind === 'rows' && <section><i /><div><span /><span /><span /></div></section>}
+      {kind === 'grid' && Array.from({ length: 12 }, (_, i) => <span key={i} />)}
+      {kind === 'title' && <><i /><i /><i /><b /><b /><b /></>}
+      {kind === 'person' && <><header><i /><div><b /><b /></div></header><div>{Array.from({ length: 9 }, (_, i) => <span key={i} />)}</div></>}
+      {kind === 'cards' && Array.from({ length: 10 }, (_, i) => <span key={i} />)}
+    </div>
+  )
+}
+
+/** True once a pill has been switched on this screen: its list is then keyed by the pill and plays the entrance (`pill-in`) on every switch, never on first showing. */
+export function useSwitched(value: string) {
+  const prev = useRef(value)
+  const switched = useRef(false)
+  if (prev.current !== value) { prev.current = value; switched.current = true }
+  return switched.current
+}
+
+// ---- A rolling number -------------------------------------------------------
+
+const TEN = Array.from({ length: 10 }, (_, i) => i)
+/**
+ * A number whose digits roll to their new value, each in its own column (1,204 to 1,198: only the digits that
+ * change move). Digits are kept by place, counted from the right, so the ones stay the ones. A place the number
+ * no longer has (1,204 to 87) closes up instead of vanishing, and a new one opens, so whatever holds the number
+ * changes width smoothly. Hidden from screen readers: give the holder the plain text as its label.
+ */
+export function Rolling({ n }: { n: number }) {
+  const s = Math.max(0, Math.round(n)).toLocaleString('en')
+  const most = useRef(0)
+  most.current = Math.max(most.current, s.length)
+  // not on first showing: the number is simply there
+  const [live, setLive] = useState(false)
+  useEffect(() => { const r = requestAnimationFrame(() => setLive(true)); return () => cancelAnimationFrame(r) }, [])
+  const cells: ReactNode[] = []
+  for (let place = most.current; place >= 1; place--) {
+    const ch = s[s.length - place]
+    cells.push(place % 4 === 0
+      ? <span key={place} className="roll-c" data-off={ch === undefined || undefined}>,</span>
+      : <span key={place} className="roll-d" data-off={ch === undefined || undefined} style={{ '--d': ch ?? 0 } as CSSProperties}><span>{TEN.map((i) => <i key={i}>{i}</i>)}</span></span>)
+  }
+  return <span className="roll" data-live={live || undefined} aria-hidden="true">{cells}</span>
 }

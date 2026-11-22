@@ -25,6 +25,38 @@ function save(key: string, data: unknown, persist: boolean) {
   try { localStorage.setItem(PREFIX + key, JSON.stringify(entry)) } catch { /* storage full or blocked: memory only */ }
 }
 
+// Screens showing a key re-render when another screen writes it (see setQueryData).
+const watchers = new Map<string, Set<() => void>>()
+
+/** Put an answer in the cache by hand, after changing it on the server: every screen showing that key updates. */
+export function setQueryData<T>(key: string, data: T, persist = true) {
+  save(key, data, persist)
+  watchers.get(key)?.forEach((f) => f())
+}
+
+/** What is saved under a key, without loading it. */
+export const readQueryData = <T,>(key: string): T | undefined => readSaved(key)?.data as T | undefined
+
+/** Change what's saved under a key from what is there now (nothing happens when nothing is saved yet). */
+export function updateQueryData<T>(key: string, change: (now: T) => T, persist = true) {
+  const entry = readSaved(key)
+  if (entry) setQueryData(key, change(entry.data as T), persist)
+}
+
+// Loads started ahead of the screen that will show them (see prefetch): that screen waits for this one answer.
+const inflight = new Map<string, Promise<void>>()
+
+/** Start loading a key before its screen opens (a finger on a card): the screen then finds the answer waiting or on its way. */
+export function prefetch<T>(key: string, load: () => Promise<T>, opts: { persist?: boolean; maxAge?: number } = {}) {
+  const { persist = true, maxAge = 60_000 } = opts
+  const entry = readSaved(key)
+  if ((entry && Date.now() - entry.at <= maxAge) || inflight.has(key)) return
+  inflight.set(key, load()
+    .then((data) => { save(key, data, persist); watchers.get(key)?.forEach((f) => f()) })
+    .catch(() => { /* the screen loads it itself and shows what went wrong */ })
+    .finally(() => { inflight.delete(key) }))
+}
+
 export function clearSavedData() {
   memory.clear()
   try {
@@ -32,7 +64,11 @@ export function clearSavedData() {
   } catch { /* ignore */ }
 }
 
-// A request has failed: the Offline pill listens to this.
+/** The last load that failed, and why (shown in Settings › Testing). */
+let lastError = ''
+export const lastLoadError = () => lastError
+
+// A request couldn't reach the server: the Offline pill listens to this.
 const failListeners = new Set<(failed: boolean) => void>()
 let lastFailed = false
 function reportFailure(failed: boolean) {
@@ -82,9 +118,14 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: { 
       attempt.current = 0
       setError(false)
       reportFailure(false)
-    } catch {
+    } catch (e) {
       setError(true)
-      reportFailure(true)
+      // Only a request that never reached the server says anything about the connection. A request the server
+      // answered with an error is our problem, not the network's: it shows where it happened, not as "Offline".
+      const message = e instanceof Error ? e.message : String(e)
+      lastError = `${key}: ${message}`.slice(0, 160)
+      if (!navigator.onLine || /failed to fetch|load failed|networkerror|network request failed|timed? ?out/i.test(message)) reportFailure(true)
+      else console.warn('Reelay: couldn’t load', lastError)
       const wait = Math.min(30_000, 1000 * 2 ** attempt.current++)
       clearTimeout(timer.current)
       timer.current = setTimeout(() => run(false), wait)
@@ -100,13 +141,24 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: { 
 
   useEffect(() => {
     if (!key) return
+    const f = () => bump((n) => n + 1)
+    const set = watchers.get(key) ?? new Set()
+    watchers.set(key, set.add(f))
+    return () => { set.delete(f) }
+  }, [key])
+
+  useEffect(() => {
+    if (!key) return
     setError(false)
     attempt.current = 0
     const entry = readSaved(key)
-    if (!entry || Date.now() - entry.at > maxAge) run(false)
+    const ahead = inflight.get(key)
+    let live = true
+    if (ahead) void ahead.then(() => { if (live && !readSaved(key)) run(false) })
+    else if (!entry || Date.now() - entry.at > maxAge) run(false)
     const online = () => run(false)
     window.addEventListener('online', online)
-    return () => { window.removeEventListener('online', online); clearTimeout(timer.current) }
+    return () => { live = false; window.removeEventListener('online', online); clearTimeout(timer.current) }
   }, [key, maxAge, run])
 
   return {

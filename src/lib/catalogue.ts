@@ -1,7 +1,8 @@
 // Reads the catalogue (titles, where they stream, scores, cast) and the user's watchlist.
 import { supabase } from './supabase'
 
-export type Avail = { service_id: string; leaves_on: string | null; type?: string; link?: string | null }
+// link: the whole link, before links were stored in two parts (kept readable until that database change is live)
+export type Avail = { service_id: string; leaves_on: string | null; type?: string; link_path?: string | null; link?: string | null; service?: { link_base?: string | null } | null }
 export type Card = {
   id: number
   kind: 'film' | 'series'
@@ -96,7 +97,7 @@ export async function loadNow(): Promise<NowData> {
     Promise.all(RATED.map(rated)),
     all(BOTH, { from: 2000, to: 2009 }, 25),
     all(BOTH, { from: 1990, to: 1999 }, 25),
-    all(MIXED, { genresAny: ['Crime', 'Thriller'] }, 15),
+    all(MIXED, { genresAll: ['Crime'] }, 15),
     all(MIXED, { genresAll: ['Comedy'] }, 15),
     all(MIXED, { genresAll: ['Drama'] }, 15),
   ])
@@ -117,7 +118,7 @@ export async function loadNow(): Promise<NowData> {
     { id: 'rated', title: 'Highest rated', items: interleave(ratedLists, seen) },
     { id: '2000s', title: '2000s', items: interleave(d2000, seen) },
     { id: '90s', title: '90s', items: interleave(d90, seen) },
-    { id: 'crime', title: 'Crime and thrillers', items: interleave(crime, seen) },
+    { id: 'crime', title: 'Crime', items: interleave(crime, seen) },
     { id: 'comedy', title: 'Comedy', items: interleave(comedy, seen) },
     { id: 'drama', title: 'Drama', items: interleave(drama, seen) },
   ]
@@ -144,7 +145,7 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
 export async function loadTitle(id: number): Promise<TitleDetail | null> {
   const title = unwrap(await supabase.from('titles').select(
     'id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
-    'availability(service_id,type,leaves_on,link,service:services(name,kind)),' +
+    'availability(*,service:services(*)),' +
     'scores(imdb_rating,rt_critics,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +
     'awards(id,award,year,short_category,won,person_name,rank)',
@@ -177,19 +178,26 @@ export type SavedTitle = {
   poster_path: string | null
   availability: Avail[]
   rating: number | null
+  /** Rotten Tomatoes critics (%), Letterboxd (0 to 5) */
+  rt?: number | null
+  lb?: number | null
   notify: boolean
   added_at: string
+  genres?: string[]
+  original_language?: string | null
+  runtime_min?: number | null
 }
 
 export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
-  type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'notify' | 'added_at'> & { scores: { imdb_rating: number | null } | { imdb_rating: number | null }[] | null }) | null }
+  type Sc = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
+  type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'rt' | 'lb' | 'notify' | 'added_at'> & { scores: Sc | Sc[] | null }) | null }
   const rows = unwrap(await supabase.from('watchlist')
-    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,availability(service_id,leaves_on),scores(imdb_rating))')
+    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
     .order('added_at', { ascending: false }) as never) as Raw[]
   return rows.filter((r) => r.title).map((r) => {
     const { scores, ...t } = r.title!
     const score = Array.isArray(scores) ? scores[0] : scores
-    return { ...t, availability: t.availability ?? [], rating: score?.imdb_rating ?? null, notify: r.notify, added_at: r.added_at }
+    return { ...t, availability: t.availability ?? [], rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, notify: r.notify, added_at: r.added_at }
   })
 }
 
@@ -261,7 +269,10 @@ const SERVICE_SEARCH: Record<string, string> = {
 }
 
 export function openLink(a: Avail, title: string): string {
-  return a.link || (SERVICE_SEARCH[a.service_id] ?? 'https://www.google.com/search?q=') + encodeURIComponent(title)
+  // the title's own part after the service's base; a whole link is kept as it is
+  const p = a.link_path ?? a.link
+  if (p) return p.startsWith('https://') ? p : (a.service?.link_base ?? '') + p
+  return (SERVICE_SEARCH[a.service_id] ?? 'https://www.google.com/search?q=') + encodeURIComponent(title)
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

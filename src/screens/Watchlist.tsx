@@ -1,5 +1,6 @@
 // Watchlist: what you've saved, grouped by whether you can watch it tonight. Empty: a wall of posters to pick from.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { warmFacts } from '../lib/facts'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
@@ -10,7 +11,9 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, GearIcon, Icon, IconButton, LoadFailed, Sheet } from '../ui'
+import { Button, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched } from '../ui'
+import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
+import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'film' | 'series'
 type Sort = 'added' | 'leaving' | 'rated' | 'az'
@@ -33,10 +36,13 @@ export default function Watchlist() {
   const q = useQuery<SavedTitle[]>(uid ? `watchlist-titles:${uid}` : null, loadWatchlistTitles)
   const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
   const [kind, setKind] = useState<Kind>('all')
-  const [sort, setSort] = useState<Sort>('added')
-  const [onlyMine, setOnlyMine] = useState(false)
+  const switched = useSwitched(kind)
+  // sort and filters, set in the Sort and filter drawer
+  const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: 'added' })
+  const sort = f.sort as Sort
   const [sheet, setSheet] = useState(false)
   const [open, setOpen] = useState<number | null>(null) // the row swiped open
+  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
 
   // Titles saved elsewhere in the app aren't in this list's data yet: fetch again when one is missing.
   const have = useMemo(() => new Set((q.data ?? []).map((t) => t.id)), [q.data])
@@ -48,6 +54,19 @@ export default function Watchlist() {
     if (missing && missing !== asked.current) { asked.current = missing; retry() }
   }, [tab, saved.ids, have, q.data, retry])
 
+  // A row that arrives while the list is showing (a slow save, or one from another device) opens up and fades in.
+  // Rows there when the list first shows, and rows added while another tab was showing, are just there.
+  const known = useRef<Set<number> | null>(null)
+  const born = useRef(new Map<number, number>())
+  if (q.data) {
+    const first = !known.current
+    known.current ??= new Set()
+    for (const t of q.data) if (!known.current.has(t.id)) { known.current.add(t.id); if (!first && tab === 'watchlist') born.current.set(t.id, Date.now()) }
+  }
+  const isNew = (id: number) => Date.now() - (born.current.get(id) ?? 0) < 600
+
+  // the long-press facts for everything saved, in one go
+  useEffect(() => { if (q.data) warmFacts(q.data.map((t) => t.id)) }, [q.data])
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hasPicked = picked.length > 0 // until Your services is set up, every service counts as yours
 
@@ -57,7 +76,15 @@ export default function Watchlist() {
     return { t: { ...t, notify: saved.isNotifying(t.id) }, service: a?.service_id ?? null, mine: !!own, leaves: own?.leaves_on ?? null }
   }), [q.data, saved, hasPicked, picked])
 
-  const shown = all.filter((r) => !onlyMine || r.mine)
+  const facets = (r: Row): Facets => ({ year: r.t.year, genres: r.t.genres, rating: r.t.rating, rt: r.t.rt, lb: r.t.lb, runtime: r.t.runtime_min, lang: r.t.original_language, services: [] })
+  // "mine" is checked against the row (which knows about the services someone has picked), the rest on the title
+  const fits = (r: Row, d: Draft) => (!d.mine || r.mine) && passesDraft(facets(r), { ...d, mine: false }, picked)
+  const shown = all.filter((r) => fits(r, f))
+  const chips = draftChips(f, setF, SORTS, 'added')
+  const countOf = (d: Draft): Count => ({
+    key: `${JSON.stringify(d)}|${kind}|${all.length}`,
+    run: async () => all.filter((r) => fits(r, d) && (kind === 'all' || r.t.kind === kind)).length,
+  })
   const counts = { all: shown.length, film: shown.filter((r) => r.t.kind === 'film').length, series: shown.filter((r) => r.t.kind === 'series').length }
   const list = shown.filter((r) => kind === 'all' || r.t.kind === kind).sort((a, b) =>
     sort === 'added' ? b.t.added_at.localeCompare(a.t.added_at)
@@ -99,25 +126,34 @@ export default function Watchlist() {
         <div role="group" aria-label="Type">
           {([['all', 'All'], ['film', 'Films'], ['series', 'Series']] as [Kind, string][]).map(([k, label]) => (
             <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} onClick={() => setKind(k)}>
-              <span>{label}<sup aria-hidden="true">{counts[k]}</sup></span>
+              <span>{label}<PillCount n={q.data ? counts[k] : undefined} /></span>
             </button>
           ))}
         </div>
-        <button type="button" className="wl-tune" aria-label="Sort and filter" onClick={() => setSheet(true)}>
+        {/* no count on it: what's on shows as chips right under it */}
+        <button type="button" className="wl-tune" aria-haspopup="dialog" aria-label={chips.length ? `Sort and filter, ${chips.length} on` : 'Sort and filter'} onClick={() => setSheet(true)}>
           <Icon name="tune" size={22} />
-          {(sort !== 'added' || onlyMine) && <i aria-hidden="true" />}
         </button>
       </div>
+      {chips.length > 0 && (
+        <div className="s-chips">
+          {chips.map((c) => <button key={c.key} type="button" aria-label={`Remove ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>)}
+        </div>
+      )}
 
       {sections.map((s) => (
         <section key={s.id} className="wl-section">
-          <div className="wl-section-head"><h2>{s.title}</h2>{s.sub && <span>{s.sub}</span>}</div>
-          <ul>
+          <div className="wl-section-head"><h2>{s.title}</h2>
+            {s.sub && (s.id === 'on'
+              ? <button type="button" className="wl-services" onClick={() => push('/settings/services')}>{s.sub}<Icon name="chevron_right" size={14} /></button>
+              : <span>{s.sub}</span>)}
+          </div>
+          <ul key={kind} className={switched ? 'pill-in' : undefined}>
             {s.rows.map((r) => (
-              <WatchRow key={r.t.id} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
+              <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
                 where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming in Sweden' : null}
-                onNotify={() => saved.toggleNotify(r.t.id)}
+                onNotify={() => saved.toggleNotify(r.t.id)} onHold={(card, cover) => { setOpen(null); setHeld({ card, cover }) }}
                 onOpen={() => push(`/title/${r.t.id}`)} onRemove={() => { setOpen(null); saved.toggleSaved(r.t.id, r.t.title) }} />
             ))}
           </ul>
@@ -125,76 +161,105 @@ export default function Watchlist() {
       ))}
       {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
+      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over the tab bar, so outside the page, but inside #root: its clip keeps iOS from scrolling the document */}
-      {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
-        <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('added'); setOnlyMine(false) }}>Reset</button></div>
-        <p className="wl-sheet-label">Sort by</p>
-        <div role="radiogroup" aria-label="Sort by">
-          {SORTS.map(([k, label]) => (
-            <button key={k} type="button" role="radio" aria-checked={sort === k} className="wl-option" onClick={() => setSort(k)}>
-              {label}<Icon name="check" size={20} style={{ opacity: sort === k ? 1 : 0 }} />
-            </button>
-          ))}
-        </div>
-        <button type="button" role="switch" aria-checked={onlyMine} className="wl-switch" onClick={() => setOnlyMine((v) => !v)}>
-          <span><b>{hasPicked ? 'Only on my services' : 'Only what’s streaming'}</b>{hasPicked && <small>{servicesLabel(picked.map(nameOf))}</small>}</span>
-          <i aria-hidden="true" />
-        </button>
-        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 title' : `${list.length} titles`}</Button></div>
-      </Sheet>, document.getElementById('root') ?? document.body)}
+      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
+        noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />,
+      document.getElementById('root') ?? document.body)}
     </main>
   )
 }
 
 /** One saved title. Swipe left to reveal Remove; a tap opens the title. */
-function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
+function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify, onHold }: {
+  fresh?: boolean
+  onHold: (card: Card, cover: HTMLElement) => void
   row: Row; group: string; showKind: boolean; note: string | null; where: string | null; onNotify: () => void
   open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
 }) {
   const { t, service } = row
-  const g = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const swiped = useRef(false)
-  const [dx, setDx] = useState<number | null>(null)
-  const base = open ? -88 : 0
-  const x = dx === null ? base : Math.max(-96, Math.min(0, base + dx))
+  const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
   const year = t.year ? String(t.year) : ''
   const meta = [showKind ? kindWord(t.kind) : '', year].filter(Boolean).join(' · ') + (group !== 'off' && service ? ` · ${nameOf(service)}` : '')
 
+  // Swipe left, like a row in iOS Mail. The row follows the finger exactly (its position is written straight to
+  // the element, not through React, and starts from where the finger was when the swipe was recognised, so it
+  // never jumps). A short swipe leaves Remove showing; a swipe past the middle stretches Remove across the row and
+  // letting go there removes it: the row slides away and the list closes up. Swiped right it gives a little.
+  const li = useRef<HTMLLIElement>(null)
+  const g = useRef<{ x: number; y: number; from: number; on: boolean; at: number; full: boolean; trail: [number, number][] } | null>(null)
+  const OPEN = -88
+  const place = (x: number) => { li.current?.style.setProperty('--x', `${x}px`); li.current?.style.setProperty('--r', String(-x)) }
+  useLayoutEffect(() => { place(open ? OPEN : 0) }, [open])
+  const remove = () => {
+    const el = li.current
+    if (!el || el.dataset.leaving) return
+    el.dataset.leaving = 'true'
+    delete el.dataset.drag
+    el.dataset.full = 'true'
+    place(-(el.offsetWidth + 24))
+    setTimeout(() => {
+      el.style.maxHeight = `${el.offsetHeight}px`
+      void el.offsetHeight
+      el.dataset.gone = 'true'
+      setTimeout(onRemove, 230)
+    }, 200)
+  }
+  const down = (e: React.PointerEvent) => { g.current = { x: e.clientX, y: e.clientY, from: 0, on: false, at: open ? OPEN : 0, full: false, trail: [] } }
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const s = g.current, el = li.current
+    if (!s || !el) return
+    const mx = e.clientX - s.x, my = e.clientY - s.y
+    if (!s.on) {
+      if (Math.abs(mx) < 8) return
+      if (Math.abs(my) > Math.abs(mx)) { g.current = null; return } // scrolling the page
+      s.on = true
+      s.from = e.clientX // from here, so the row doesn't jump the 8px it took to recognise the swipe
+      e.currentTarget.setPointerCapture(e.pointerId)
+      el.dataset.drag = 'true'
+      e.currentTarget.querySelector('[data-pressed]')?.removeAttribute('data-pressed')
+    }
+    let x = (open ? OPEN : 0) + (e.clientX - s.from)
+    if (x > 0) x = 14 * (1 - Math.exp(-x / 60)) // to the right: resists
+    s.at = x
+    s.trail.push([e.timeStamp, e.clientX])
+    if (s.trail.length > 5) s.trail.shift()
+    const full = -x > el.offsetWidth * 0.55
+    if (full !== s.full) { s.full = full; if (full) el.dataset.full = 'true'; else delete el.dataset.full }
+    place(x)
+  }
+  const up = () => {
+    const s = g.current, el = li.current
+    g.current = null
+    if (!s?.on || !el) return
+    swiped.current = true
+    delete el.dataset.drag
+    const [t0, x0] = s.trail[0] ?? [0, 0]
+    const [t1, x1] = s.trail[s.trail.length - 1] ?? [0, 0]
+    const speed = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0 // px per ms; negative is leftward
+    if (s.full || (speed < -1.2 && s.at < -120)) { remove(); return }
+    delete el.dataset.full
+    const stay = speed < -0.3 ? true : speed > 0.3 ? false : s.at < OPEN / 2
+    place(stay ? OPEN : 0)
+    setOpen(stay)
+  }
+
   return (
-    <li className="wl-row">
-      <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1}
-        style={{ opacity: open || (dx !== null && dx < -8) ? 1 : 0 }} onClick={onRemove}>
-        <Icon name="bookmark_remove" size={20} /><span>Remove</span>
+    <li ref={li} className="wl-row" data-fresh={fresh || undefined} data-open={open || undefined}>
+      <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1} onClick={remove}>
+        <span><span>Remove</span></span>
       </button>
-      <div className="wl-slide"
-        style={{ transform: `translateX(${x}px)`, transition: dx === null ? undefined : 'none' }}
-        onPointerDown={(e) => { g.current = { x: e.clientX, y: e.clientY, moved: false } }}
-        onPointerMove={(e) => {
-          const s = g.current
-          if (!s) return
-          const mx = e.clientX - s.x, my = e.clientY - s.y
-          if (!s.moved && Math.abs(mx) < 8) return
-          if (!s.moved && Math.abs(my) > Math.abs(mx)) { g.current = null; return } // scrolling the page
-          s.moved = true
-          setDx(mx)
-        }}
-        onPointerUp={() => {
-          const s = g.current
-          g.current = null
-          if (!s?.moved) return
-          swiped.current = true
-          setOpen(base + (dx ?? 0) < -44)
-          setDx(null)
-        }}
-        onPointerCancel={() => { g.current = null; setDx(null) }}>
-       <a href={`/title/${t.id}`} draggable={false} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
+      <div className="wl-slide" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+       <a href={`/title/${t.id}`} draggable={false} {...hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
         onClick={(e) => {
           e.preventDefault()
           if (swiped.current) { swiped.current = false; return }
+          if (hold.fired()) return
           if (open) { setOpen(false); return }
           onOpen()
         }}>
-        <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="sync" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{t.title}</b><small>{meta}</small>{where && <small className="wl-where">{where}</small>}</span>
         {note && <span className="wl-note">{note}</span>}
        </a>
@@ -218,7 +283,8 @@ const BX = 150, BY = 140 // how far the wall pans; past it, it pulls back like i
 const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
 const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
 
-function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: number[]) => void }) {
+/** The wall of posters to pick from. Used when the Watchlist is empty, and as a step in onboarding (`bare`: no tab bar, no hint). */
+export function PickWall({ header, onAdd, bare }: { header: React.ReactNode; onAdd: (ids: number[]) => void; bare?: boolean }) {
   const q = useQuery<Card[]>(`picks:${PICKS}`, loadPicks, { maxAge: 60 * 60 * 1000 })
   const [sel, setSel] = useState<number[]>([])
   const [pan, setPan] = useState({ x: 0, y: 0, settle: false })
@@ -227,7 +293,7 @@ function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: num
   const n = sel.length
 
   return (
-    <main className="page pick">
+    <main className="page pick" data-bare={bare}>
       <div className="pick-pan"
         onPointerDown={(e) => { d.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }; dragged.current = false }}
         onPointerMove={(e) => {
@@ -269,7 +335,7 @@ function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: num
       </div>
       <div className="pick-fade" aria-hidden="true" />
       {header}
-      <p className="pick-hint" aria-hidden={n > 0} data-hide={n > 0}>Tap what you want to watch.</p>
+      {!bare && <p className="pick-hint" aria-hidden={n > 0} data-hide={n > 0}>Tap what you want to watch.</p>}
       {q.error && <div className="page-center"><LoadFailed what="titles to pick from" retry={q.retry} retrying={q.retrying} /></div>}
       <div className="pick-add" data-show={n > 0}>
         <Button tabIndex={n ? 0 : -1} aria-label={`Add ${n === 1 ? '1 title' : `${n} titles`} to Watchlist`} onClick={() => onAdd(sel)}>Add {n} to Watchlist</Button>

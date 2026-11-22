@@ -1,6 +1,7 @@
 // Navigation: four tabs, each with its own stack of pages.
 // Pages sit side by side in a horizontal scroll-snap strip, so swiping back follows the finger like iOS
 // (the "stack drill-down" pattern from modern-web-guidance). Browser history is kept in step.
+import { settlePressed } from './press'
 import {
   createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type ReactNode, type UIEvent,
@@ -86,6 +87,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const push = useCallback((path: string) => {
+    settlePressed()
     const s = stateRef.current
     if (topPath(s) === path) return
     depth.current++
@@ -257,7 +259,7 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
   }
 
   return (
-    <div ref={strip} className="stack" data-active={active} inert={!active} onScroll={onScroll}
+    <div ref={strip} className="stack" data-tab={tab} data-active={active} inert={!active} onScroll={onScroll}
       // a finger on the strip while no slide runs: make sure it can swipe and snap
       onTouchStart={(e) => { if (!sliding.current) unlockStrip(e.currentTarget) }}>
       {/* The swipe parallax moves .pane-in, never the .pane itself: Safari snaps to the transformed box,
@@ -277,6 +279,9 @@ export function useDimOnScroll() {
   return useCallback((e: UIEvent<HTMLElement>) => {
     const el = e.currentTarget
     const y = el.scrollTop
+    // A page that was left while still gliding (another tab, a page pushed over it) keeps scrolling for a moment:
+    // that must not dim the tab bar of the page now showing.
+    if (el.closest('[inert]')) { last.current = y; return }
     // Ignore the bounce past either end, so the tab bar keeps its state while the page springs back.
     if (y < 0 || y > el.scrollHeight - el.clientHeight) return
     const d = y - last.current

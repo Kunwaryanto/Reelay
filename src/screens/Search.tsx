@@ -1,44 +1,82 @@
 // Search: the field sits at the bottom, above the keyboard. Before typing: a prompt and three ideas, with recents
 // in a drawer on the left. While typing: results with type pills, filter chips read from the words, and a sort sheet.
+import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
-import { SERVICE_NAME, kindWord, loadMyServices } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, loadMyServices, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
 import { useNav, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import {
-  addRecent, loadIdeas, loadPopular, readRecents, search, writeRecents,
-  type Found, type Hit, type Idea, type Recent,
+  addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
+  type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
-import { Button, Icon, LoadFailed, Sheet, SmallButton, useKeyboardRoom } from '../ui'
+import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
+import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
+import { HoldMenu } from './Now'
 
-type Kind = 'all' | 'series' | 'film'
-type Sort = 'best' | 'rated' | 'newest'
-const SORTS: [Sort, string][] = [['best', 'Best match'], ['rated', 'Highest rated'], ['newest', 'Newest']]
+type Kind = 'all' | 'series' | 'film' | 'people'
+
+/**
+ * What the filter drawer has set, on top of the words. A key that is present has been decided in the drawer, even
+ * when its value is "any" (null, []): it then replaces what the words say about it ("90s" typed, Released set to 80s).
+ */
+type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; rating?: number; rt?: number; lb?: number; length?: Len }
+const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
+/** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
+const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
+function toFilters(x: Extra, services: string[] | null): Filters {
+  const f: Filters = {}
+  if (typeof x.decade === 'number') { if (x.decade === 0) f.to = 1979; else { f.from = x.decade; f.to = x.decade + 9 } }
+  if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
+  if (x.lang) f.lang = x.lang
+  if (x.rating) f.minRating = x.rating
+  if (x.rt) f.minRt = x.rt
+  if (x.lb) f.minLb = x.lb
+  if (x.length) f.length = x.length
+  if (services) f.services = services
+  return f
+}
 
 const nameOf = (id: string) => SERVICE_NAME[id] ?? id
 const metaOf = (h: Hit) => [kindWord(h.kind), h.year, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden'].filter(Boolean).join(' · ')
 
+// Answers from the last few minutes, so a search made again (or one of the three ideas, fetched ahead) shows at once.
+const KEEP = 5 * 60 * 1000
+const answers = new Map<string, { at: number; found: Found }>()
+const keyOf = (text: string, removed: string[], extra: Filters = {}) => `${text.toLowerCase()}|${removed.join(',')}|${Object.keys(extra).length ? JSON.stringify(extra) : ''}`
+const kept = (key: string) => { const a = answers.get(key); return a && Date.now() - a.at < KEEP ? a.found : null }
+const keep = (key: string, found: Found) => {
+  answers.delete(key)
+  answers.set(key, { at: Date.now(), found })
+  if (answers.size > 30) answers.delete(answers.keys().next().value!)
+}
+/** Fetch a search ahead of time (the ideas on the first page). */
+const warm = (text: string) => { const key = keyOf(text, []); if (!kept(key)) search(text, []).then((found) => keep(key, found), () => {}) }
+
 /** Run the search a moment after typing stops; keep showing the last results until the new ones arrive. */
-function useSearch(typed: string, removed: string[]) {
+function useSearch(typed: string, removed: string[], extra: Filters) {
   const [state, setState] = useState<{ key: string; found: Found | null; error: boolean }>({ key: '', found: null, error: false })
   const [again, setAgain] = useState(0)
   const text = typed.replace(/\s+/g, ' ').trim()
-  const key = text.length < 2 ? '' : `${text.toLowerCase()}|${removed.join(',')}`
+  const key = text.length < 2 ? '' : keyOf(text, removed, extra)
+  const ready = key ? kept(key) : null
 
   useEffect(() => {
-    if (!key) return
+    // back to the empty field: the next search starts clean instead of dimming the old one
+    if (!key) { setState((s) => (s.found || s.error ? { key: '', found: null, error: false } : s)); return }
+    if (kept(key)) return
     let stale = false
     const t = setTimeout(() => {
-      search(text, removed).then(
-        (found) => { if (!stale) setState({ key, found, error: false }) },
+      search(text, removed, extra).then(
+        (found) => { keep(key, found); if (!stale) setState({ key, found, error: false }) },
         () => { if (!stale) setState({ key, found: null, error: true }) },
       )
     }, 220)
     return () => { stale = true; clearTimeout(t) }
-    // `key` stands for text and removed
+    // `key` stands for text, removed and extra
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, again])
 
@@ -50,20 +88,45 @@ function useSearch(typed: string, removed: string[]) {
   }, [])
 
   return {
-    found: key ? state.found : null,
-    error: !!key && state.key === key && state.error,
-    waiting: !!key && state.key !== key,
+    found: ready ?? (key ? state.found : null),
+    error: !ready && !!key && state.key === key && state.error,
+    waiting: !ready && !!key && state.key !== key,
     retry: () => setAgain((n) => n + 1),
   }
 }
 
-function Row({ h, onOpen }: { h: Hit; onOpen: () => void }) {
+const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
+
+/** True once `on` has lasted `ms`: a quick answer never flashes a loading state. */
+function useLate(on: boolean, ms: number) {
+  const [late, setLate] = useState(false)
+  useEffect(() => {
+    if (!on) { setLate(false); return }
+    const t = setTimeout(() => setLate(true), ms)
+    return () => clearTimeout(t)
+  }, [on, ms])
+  return on && late
+}
+
+/** Rows in the shape of results while the first answer is on its way; they fade out down the list. */
+const Skeleton = () => (
+  <ul className="s-results s-skel" aria-hidden="true">
+    {Array.from({ length: 7 }, (_, i) => (
+      <li key={i}><span className="s-row"><span className="wl-poster" /><span className="wl-text"><b style={{ width: `${[52, 34, 44, 28, 48, 62, 30][i]}%` }} /><small /></span></span></li>
+    ))}
+  </ul>
+)
+
+function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
+  const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
+  const li = useRef<HTMLLIElement>(null)
+  const close = useNearScreen(li, near)
+  useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
-    <li>
-      <a className="s-row press-row" href={`/title/${h.id}`} onClick={(e) => { e.preventDefault(); onOpen() }}>
-        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+    <li ref={li}>
+      <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onPointerDown={(e) => { warmFacts([h.id], true); hold.handlers.onPointerDown(e) }} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
+        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
-        {h.rating !== null && <span className="s-rating"><span>IMDb</span><b>{h.rating.toFixed(1)}</b></span>}
       </a>
     </li>
   )
@@ -80,10 +143,13 @@ export default function Search() {
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('best')
   const [onlyMine, setOnlyMine] = useState(false)
+  const [extra, setExtra] = useState<Extra>({})
   const [sheet, setSheet] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [typing, setTyping] = useState(false)
   const [recents, setRecents] = useState(readRecents)
+  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
+  const hold = (card: Card, cover: HTMLElement) => { input.current?.blur(); setHeld({ card, cover }) }
   const [online, setOnline] = useState(navigator.onLine)
   const { room, pending } = useKeyboardRoom(typing)
   const [hour] = useState(() => new Date().getHours())
@@ -92,7 +158,8 @@ export default function Search() {
   const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, { maxAge: 60 * 60 * 1000 })
   const popular = useQuery<Hit[]>('search-popular', loadPopular, { maxAge: 60 * 60 * 1000 })
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
-  const hasPicked = picked.length > 0 // until Your services is set up: "mine" means streaming anywhere
+  const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
+  const myOnly = onlyMine && hasPicked
 
   useEffect(() => {
     const set = () => setOnline(navigator.onLine)
@@ -112,39 +179,143 @@ export default function Search() {
     return () => clearTimeout(t)
   }, [tab])
 
-  const { found, error, waiting, retry } = useSearch(q, removed)
+  // chips from the words that the drawer has replaced
+  const off = useMemo(() => [...removed, ...parseQuery(q).tokens.filter((t) => { const s = slot(t.key); return s !== null && extra[s] !== undefined }).map((t) => t.key)], [q, removed, extra])
+  const xf = useMemo(() => toFilters(extra, myOnly ? picked : null), [extra, myOnly, picked])
+  const { found, error, waiting, retry } = useSearch(q, off, xf)
   const hasQ = q.trim().length > 0
-  const tokens = found?.tokens ?? []
+  // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
+  useEffect(() => { if (found?.kind) setKind(found.kind) }, [found])
+  // While waiting, the words themselves already say which chips and type apply ("90s films")
+  const early = useMemo(() => (waiting ? guess(q, off) : null), [waiting, q, off])
+  useEffect(() => { if (early?.kind) setKind(early.kind) }, [early?.kind])
+  const tokens = early?.tokens ?? found?.tokens ?? []
+  const skeleton = useLate(waiting && !found, 150)
+  // the three ideas are fetched ahead, so tapping one has nothing to wait for
+  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
 
   const all = found?.hits ?? []
-  const mine = all.filter((h) => !onlyMine || (hasPicked ? h.services.some((s) => picked.includes(s)) : h.services.length > 0))
-  const counts = { all: mine.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
-  const typed = tokens.find((t) => t.key === 'kind') // the words already chose films or series
-  const shown = mine.filter((h) => kind === 'all' || typed || h.kind === kind)
+  const mine = all
+  const folks = found?.people ?? []
+  const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
+  const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || h.kind === kind)
+  const shownPeople = kind === 'people' ? folks : kind === 'all' ? folks.slice(0, 2) : []
   const list = sort === 'best' ? shown : [...shown].sort((a, b) => (sort === 'rated' ? (b.rating ?? 0) - (a.rating ?? 0) : (b.year ?? 0) - (a.year ?? 0)))
 
   const remember = (r: Recent) => setRecents((old) => { const next = addRecent(old, r); writeRecents(next); return next })
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
-  const change = (text: string) => { setQ(text); setRemoved([]) }
+  const change = (text: string) => { setQ(text); setRemoved([]); if (!text) setExtra({}) }
   const open = (h: Hit) => {
     remember({ t: 'title', id: h.id, text: h.title, sub: [kindWord(h.kind), h.year].filter(Boolean).join(' · '), poster_path: h.poster_path })
     input.current?.blur()
     push(`/title/${h.id}`)
   }
-  const run = (text: string) => { change(text); setKind('all'); setDrawer(false) }
+  const run = (text: string) => { change(text); setExtra({}); setKind(guess(text, [])?.kind ?? 'all'); setDrawer(false) }
+
+  // ---- Sort and filter drawer ----
+  // what is on, for the chips and the count on the button (sort isn't a filter, so it doesn't count)
+  const less = (patch: Extra) => setExtra((x) => ({ ...x, ...patch }))
+  const xchips: { key: string; label: string; drop: () => void }[] = [
+    ...(typeof extra.decade === 'number' ? [{ key: 'x-decade', label: decadeName(extra.decade), drop: () => less({ decade: null }) }] : []),
+    ...(extra.genres ?? []).map((g) => ({ key: `x-genre:${g}`, label: g, drop: () => less({ genres: (extra.genres ?? []).filter((x) => x !== g) }) })),
+    ...SOURCES.filter((s) => extra[s.key]).map((s) => ({ key: `x-${s.key}`, label: `${s.short} ${s.show(extra[s.key]!)}`, drop: () => less({ [s.key]: undefined }) })),
+    ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
+    ...(extra.lang ? [{ key: 'x-lang', label: langName(extra.lang), drop: () => less({ lang: null }) }] : []),
+    ...(myOnly ? [{ key: 'x-mine', label: 'My services', drop: () => setOnlyMine(false) }] : []),
+  ]
+  const filtersOn = tokens.filter((t) => !t.key.startsWith('genre:')).length + (tokens.some((t) => t.key.startsWith('genre:')) || extra.genres?.length ? 1 : 0)
+    + xchips.filter((c) => !c.key.startsWith('x-genre:')).length
+  // the drawer opens on how things stand: what it set itself, else what the words say
+  const yearsToken = tokens.find((t) => t.key === 'years')
+  const init: Draft = {
+    sort, mine: myOnly, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
+    genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
+    decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
+    lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
+  }
+  const yearsNote = extra.decade === undefined && yearsToken && decadeOf(yearsToken) === null ? yearsToken.label : ''
+  /** How many results a draft would give: the draft stands in for what the words say about genre, years and language. */
+  const countOf = (d: Draft): Count => {
+    const keepYears = d.decade === null && yearsNote !== ''
+    const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
+    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null)
+    const k = kind === 'film' || kind === 'series' ? kind : undefined
+    return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
+  }
+  const apply = (d: Draft) => {
+    setSort(d.sort as Sort)
+    setOnlyMine(d.mine)
+    setExtra((x) => {
+      const next: Extra = { ...x, rating: d.rating || undefined, rt: d.rt || undefined, lb: d.lb || undefined, length: d.length ?? undefined }
+      if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres
+      if (d.decade !== init.decade) next.decade = d.decade
+      if (d.lang !== init.lang) next.lang = d.lang
+      return next
+    })
+    setSheet(false)
+  }
+  // A search counts as made once its results have been on screen for a moment (no need to press Search).
+  const settled = found && !waiting && found.hits.length + found.people.length > 0 ? q.trim() : ''
+  useEffect(() => {
+    if (settled.length < 2) return
+    const t = setTimeout(() => remember({ t: 'q', text: settled }), 1500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settled])
+  // Tapping the field: focus it ourselves at touch-down, without scrolling (left alone, iOS scrolls the whole app
+  // up to reveal it) and without the tap's own click. That click arrives after the field has already risen, so it
+  // lands on the empty page where the field used to be, which takes the focus away and closes the keyboard again.
+  // React's onTouchStart is passive and can't cancel the tap, so this listens on the element itself.
+  const box = useRef<HTMLDivElement>(null)
+  const focusedAt = useRef(0)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const down = (e: TouchEvent) => {
+      const field = input.current
+      if (!field || (e.target as HTMLElement).closest('button')) return
+      if (field === document.activeElement) return
+      e.preventDefault()
+      focusedAt.current = Date.now()
+      field.focus({ preventScroll: true })
+    }
+    el.addEventListener('touchstart', down, { passive: false })
+    return () => el.removeEventListener('touchstart', down)
+  }, [])
+  // How far the keyboard travels (as last measured): Search rises that far with it when it opens.
+  const kb = useMemo(() => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }, [drawer, typing])
+  // Leaving the app closes the keyboard without telling the page. Let go of the field then, and drop it back to
+  // rest at once (no animation): iOS takes its app-switcher picture right away, and coming back starts from that
+  // picture, so it must already show Search at rest, not halfway down. Animations come back once the app is shown
+  // again (after two frames), so a keyboard iOS brings back by itself still carries the field up with it.
+  useEffect(() => {
+    const page = () => input.current?.closest('main')
+    const seen = () => {
+      if (document.visibilityState === 'hidden') {
+        page()?.setAttribute('data-still', '')
+        flushSync(() => input.current?.blur())
+        return
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => page()?.removeAttribute('data-still')))
+    }
+    const gone = () => { page()?.setAttribute('data-still', ''); flushSync(() => input.current?.blur()) }
+    document.addEventListener('visibilitychange', seen)
+    window.addEventListener('pagehide', gone)
+    window.addEventListener('pageshow', seen)
+    return () => { document.removeEventListener('visibilitychange', seen); window.removeEventListener('pagehide', gone); window.removeEventListener('pageshow', seen) }
+  }, [])
+  // Recents: swipe it (or the page beside it) to the left to close
+  const swipe = useRef<{ x: number; y: number } | null>(null)
 
   // why there is nothing, and the one step that gets something back
-  const empty = hasQ && !waiting && !error && found !== null && list.length === 0
-  const other: Kind = kind === 'film' ? 'series' : 'film'
+  const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0
+  const other: 'film' | 'series' = kind === 'film' ? 'series' : 'film'
   const nothing = !empty ? null
-    : onlyMine && all.length ? {
-      title: hasPicked ? 'None on your services' : 'None streaming right now',
-      body: hasPicked
-        ? `${all.length === 1 ? '1 match streams' : `${all.length} matches stream`} on services you don’t have.`
-        : `${all.length === 1 ? '1 match isn’t' : `${all.length} matches aren’t`} on a service in Sweden right now.`,
-      action: hasPicked ? 'Show all services' : 'Show them', run: () => setOnlyMine(false), popular: false,
+    : myOnly ? {
+      title: 'None on your services', body: 'There may be matches on services you don’t have.',
+      action: 'Show all services', run: () => setOnlyMine(false), popular: false,
     }
-      : kind !== 'all' && !typed && mine.length ? {
+      : (kind === 'film' || kind === 'series') && mine.length ? {
         title: kind === 'film' ? 'No films match' : 'No series match', body: '',
         action: `Show ${other === 'film' ? 'films' : 'series'} (${counts[other]})`, run: () => setKind(other), popular: false,
       }
@@ -160,7 +331,17 @@ export default function Search() {
   const up = typing && room > 0
 
   return (
-    <main className="search" data-drawer={drawer} data-arriving={arriving} style={{ '--lift': lift } as React.CSSProperties}>
+    <main className="search" data-drawer={drawer} data-arriving={arriving} data-kb={typing ? 'up' : 'down'} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
+      onTouchStart={(e) => { swipe.current = drawer ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
+      onTouchMove={(e) => {
+        const s = swipe.current
+        if (!s) return
+        const dx = e.touches[0].clientX - s.x, dy = e.touches[0].clientY - s.y
+        if (dx < -40 && Math.abs(dx) > Math.abs(dy) * 1.5) { swipe.current = null; setDrawer(false) }
+      }}
+      onTouchEnd={() => { swipe.current = null }}
+      // a stray press on the empty page right after the field took focus must not take it away again
+      onMouseDown={(e) => { if (Date.now() - focusedAt.current < 700 && !(e.target as HTMLElement).closest('input, button, a')) e.preventDefault() }}>
       <nav className="s-recents" aria-label="Recent searches" inert={!drawer}>
         <div className="s-recents-head">
           <h2>Recents</h2>
@@ -194,8 +375,8 @@ export default function Search() {
         <div className="s-list noscroll" data-idle={!hasQ} data-pending={pending}
           // dragging the results puts the keyboard away, like iOS lists do
           onTouchMove={() => { if (typing) input.current?.blur() }}
-          // results end above the lifted field (the prompt moves with the field instead)
-          style={up && hasQ ? { bottom: `${room + 12 + 52}px` } : undefined}>
+          // results run under the field and its fade, down to the keyboard (the prompt moves with the field instead)
+          style={up && hasQ ? { bottom: lift } : undefined}>
           {!hasQ ? (
             <div className="s-idle">
               <h1>{'What are we\nwatching '}{hour >= 17 || hour < 4 ? 'tonight' : 'today'}?</h1>
@@ -214,31 +395,51 @@ export default function Search() {
             <>
               <div className="wl-filters">
                 <div role="group" aria-label="Type">
-                  {!typed && ([['all', 'All'], ['series', 'Series'], ['film', 'Films']] as [Kind, string][]).map(([k, label]) => (
-                    <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={`${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
-                      <span>{label}<sup aria-hidden="true">{counts[k]}</sup></span>
+                  {([['all', 'All'], ['series', 'Series'], ['film', 'Films'], ...(folks.length ? [['people', 'People']] : [])] as [Kind, string][]).map(([k, label]) => (
+                    <button key={k} type="button" className="wl-pill" aria-pressed={kind === k} aria-label={waiting ? label : `${label}, ${counts[k]} results`} onClick={() => setKind(k)}>
+                      <span>{label}<PillCount n={waiting && !found ? undefined : counts[k]} off={waiting} /></span>
                     </button>
                   ))}
                 </div>
-                <button type="button" className="wl-tune" aria-label="Sort and filter" onClick={() => { input.current?.blur(); setSheet(true) }}>
+                {/* no count on it: what's on shows as chips right under it; the label says it for screen readers */}
+                <button type="button" className="wl-tune" aria-haspopup="dialog" aria-label={filtersOn ? `Sort and filter, ${filtersOn} on` : 'Sort and filter'} onClick={() => { input.current?.blur(); setSheet(true) }}>
                   <Icon name="tune" size={22} />
-                  {(sort !== 'best' || onlyMine) && <i aria-hidden="true" />}
                 </button>
               </div>
-              {tokens.length > 0 && (
+              {tokens.length + xchips.length + (sort !== 'best' ? 1 : 0) > 0 && (
                 <div className="s-chips">
                   {tokens.map((t) => (
                     <button key={t.key} type="button" aria-label={`Remove filter ${t.label}`} onClick={() => setRemoved((r) => [...r, t.key])}>
                       {t.label}<Icon name="close" size={16} />
                     </button>
                   ))}
+                  {xchips.map((c) => (
+                    <button key={c.key} type="button" aria-label={`Remove filter ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>
+                  ))}
+                  {sort !== 'best' && <button type="button" aria-label="Back to best match" onClick={() => setSort('best')}>{sortName(sort)}<Icon name="close" size={16} /></button>}
                 </div>
               )}
 
               {!online && list.length === 0 && <p className="s-note">Search needs a connection for this. We’ll search again when you’re back.</p>}
               {online && error && <div className="s-failed"><LoadFailed what="results" retry={retry} retrying={waiting} compact /></div>}
-              <ul className="s-results" data-waiting={waiting}>
-                {list.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} />)}
+              {shownPeople.length > 0 && (
+                <ul className="s-results s-people">
+                  {shownPeople.map((p) => (
+                    <li key={p.id}>
+                      <a className="s-person" href={`/person/${p.id}`} onClick={(e) => { e.preventDefault(); input.current?.blur(); push(`/person/${p.id}`) }}>
+                        <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" loading="lazy" /> : p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>
+                        <span className="wl-text"><b>{p.name}</b>{p.known_for && <small>{p.known_for}</small>}</span>
+                        <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)' }} />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="sr-only" role="status">{waiting ? 'Searching' : ''}</p>
+              {skeleton && <Skeleton />}
+              {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
+              <ul className="s-results" key={kind} data-waiting={waiting}>
+                {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} onHold={hold} />)}
               </ul>
 
               {nothing && online && (
@@ -249,7 +450,7 @@ export default function Search() {
                   {nothing.popular && (popular.data ?? []).length > 0 && (
                     <>
                       <h3>Popular right now</h3>
-                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} />)}</ul>
+                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}</ul>
                     </>
                   )}
                 </section>
@@ -258,16 +459,11 @@ export default function Search() {
           )}
         </div>
 
+        {/* the same fade as under the tab bar; it rides up with the field */}
+        <div className="tabbar-fade s-fade" aria-hidden="true" data-pending={pending}><i /><i /><i /></div>
         <form className="s-field" role="search" data-pending={pending}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
-          <div className="s-input"
-            // Focus it ourselves, without scrolling: left alone, iOS scrolls the whole app up to reveal the field.
-            onTouchStart={(e) => {
-              const el = input.current
-              if (!el || el === document.activeElement || (e.target as HTMLElement).closest('button')) return
-              e.preventDefault()
-              el.focus({ preventScroll: true })
-            }}>
+          <div className="s-input" ref={box}>
             <Icon name="search" size={20} />
             <input ref={input} type="search" enterKeyHint="search" aria-label="Search films and series" placeholder="Films and series"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
@@ -284,23 +480,11 @@ export default function Search() {
         </form>
       </div>
 
+      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
-      {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
-        <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('best'); setOnlyMine(false) }}>Reset</button></div>
-        <p className="wl-sheet-label">Sort by</p>
-        <div role="radiogroup" aria-label="Sort by">
-          {SORTS.map(([k, label]) => (
-            <button key={k} type="button" role="radio" aria-checked={sort === k} className="wl-option" onClick={() => setSort(k)}>
-              {label}<Icon name="check" size={20} style={{ opacity: sort === k ? 1 : 0 }} />
-            </button>
-          ))}
-        </div>
-        <button type="button" role="switch" aria-checked={onlyMine} className="wl-switch" onClick={() => setOnlyMine((v) => !v)}>
-          <span><b>{hasPicked ? 'Only on my services' : 'Only what’s streaming'}</b>{hasPicked && <small>{picked.map(nameOf).slice(0, 3).join(', ')}</small>}</span>
-          <i aria-hidden="true" />
-        </button>
-        <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 result' : `${list.length} results`}</Button></div>
-      </Sheet>, document.getElementById('root') ?? document.body)}
+      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
+        services={picked.map(nameOf)} noun={kind === 'film' ? ['film', 'films'] : kind === 'series' ? ['series', 'series'] : ['result', 'results']}
+        countOf={countOf} apply={apply} />, document.getElementById('root') ?? document.body)}
     </main>
   )
 }
