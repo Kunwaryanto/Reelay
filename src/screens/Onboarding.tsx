@@ -20,7 +20,7 @@ const CAM: Record<Cam, string> = {
   svc: 'translate3d(0, -150px, 0) rotate(-8deg) scale(1)',
   pick: 'translate3d(0, 0, 0) rotate(-6deg) scale(1.58)',
   notify: 'translate3d(0, -90px, 0) rotate(-8deg) scale(0.9)',
-  exit: 'translate3d(0, -70px, 0) rotate(-7deg) scale(1.22)',
+  exit: 'translate3d(0, -60px, 0) rotate(-6.5deg) scale(1.2)',
 }
 const COLS = 6, PER = 6, CELL = 126.24
 // each column drifts into place when the wall first shows: a different distance and pace, alternating direction
@@ -180,8 +180,9 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
     later(() => setLocked(false), 1300)
   }
 
-  // Leaving hands off to Now: the UI and cards fade, the blur lifts as the camera pushes into the wall and the wall
-  // fades to black, then this whole layer fades away over Now, which rises with its tab bar already in place.
+  // Leaving hands off to Now, unhurried: the UI and cards fade, the blur lifts as the camera drifts into the wall
+  // (1.8 s, eased in and out) and the wall sinks to black (1.1 s); as it gets there this whole layer fades away
+  // (0.8 s) over Now, which rises with its tab bar already in place.
   const finish = async (ask: boolean) => {
     if (busy.current || locked) return
     busy.current = true
@@ -193,12 +194,12 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
       try { await update({ ...(ask ? want : {}), onboarded_at: new Date().toISOString() }) } catch { /* offline: it shows again next time */ }
     }
     setLocked(true); setUi(false); setMore(false); fadeCards(); setBlur(false)
-    setCam({ at: 'exit', tr: 'transform 900ms cubic-bezier(0.32, 0.72, 0, 1)' })
+    setCam({ at: 'exit', tr: 'transform 1800ms cubic-bezier(0.45, 0, 0.25, 1)' })
     setWallOn(false); setLeaving('wall')
     onLeave?.()
-    later(() => setView(null), 220)
-    later(() => setLeaving('out'), 360)
-    later(onDone, 800)
+    later(() => setView(null), 320)
+    later(() => setLeaving('out'), 1000)
+    later(onDone, 1850)
   }
 
   // Picking: drag to look around the wall, tap a poster to choose it.

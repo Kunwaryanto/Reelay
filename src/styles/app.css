@@ -711,13 +711,13 @@ html[data-runway] .tabbar { touch-action: none; }
 /* One wall, one camera (canvas: Onboarding v19). During a camera move only transform and opacity change. */
 /* clip, not hidden: a hidden box can still be scrolled, and iOS scrolled this one to the More sheet when it took focus */
 .ob { position: absolute; inset: 0; z-index: 20; background: #000; overflow: clip; }
-.ob[data-leaving='out'] { opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease-out); }
+.ob[data-leaving='out'] { opacity: 0; pointer-events: none; transition: opacity 800ms cubic-bezier(0.4, 0, 0.2, 1); }
 /* Now, underneath, rises as this layer fades away; its tab bar is already in place */
-.stack[data-active='true']:has(~ .ob[data-leaving='out']) .pane-in { animation: rise-in 500ms var(--ease-out) both; }
+.stack[data-active='true']:has(~ .ob[data-leaving='out']) .pane-in { animation: rise-in 900ms var(--ease-out) both; }
 .ob-wall { position: absolute; inset: 0; overflow: clip; touch-action: none; opacity: 0; transition: opacity 1600ms cubic-bezier(0.33, 1, 0.68, 1), filter 900ms var(--ease-out); }
 .ob-wall[data-on='true'] { opacity: 1; }
 .ob-wall[data-blur='true'] { filter: blur(8px) saturate(1.25); }
-.ob-wall[data-leaving] { transition: opacity 700ms var(--ease-out), filter 600ms var(--ease-out); }
+.ob-wall[data-leaving] { transition: opacity 1100ms cubic-bezier(0.4, 0, 0.6, 1) 100ms, filter 900ms var(--ease-out); }
 .ob-pan { position: absolute; inset: 0; }
 .ob-scale { position: absolute; left: 50%; top: 50%; width: 0; height: 0; scale: var(--k, 1); }
 .ob-cam { position: absolute; width: 510px; height: 818px; margin: -409px 0 0 -255px; will-change: transform; }
@@ -749,6 +749,7 @@ html[data-runway] .tabbar { touch-action: none; }
 
 /* the step's text and controls: touches pass through to the wall; only controls catch them, and only once it has settled */
 .ob-ui { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out); }
+.ob[data-leaving] .ob-ui { transition-duration: 300ms; }
 .ob-ui[data-on='true'] { opacity: 1; }
 .ob-ui[data-live] :is(button, a) { pointer-events: auto; }
 .ob-ui > section { position: absolute; inset: 0; }
@@ -782,7 +783,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .ob-card[data-phase='pre'] { transition: max-height 380ms var(--ease-out), margin 380ms var(--ease-out); }
 .ob-card:is([data-phase='shown'], [data-phase='out']) { transform: none; }
 .ob-card:is([data-phase='shown'], [data-phase='swipe']) > div, .ob-card[data-phase='shown'] .ob-under { opacity: 1; }
-.ob-card[data-phase='out'] > div { transition: opacity 200ms var(--ease-out); }
+.ob-card[data-phase='out'] > div { transition: opacity 300ms var(--ease-out); }
 .ob-card:is([data-phase='swipe'], [data-phase='gone']) { transform: translateX(-110%); transition: transform 300ms cubic-bezier(0.55, 0, 0.75, 0.3), max-height 320ms var(--ease-out) 220ms, margin 320ms var(--ease-out) 220ms; }
 .ob-card:is([data-phase='swipe'], [data-phase='gone']) > div { transition: opacity 300ms linear; }
 .ob-app { flex: none; width: 38px; height: 38px; border-radius: 10px; corner-shape: squircle; background: #000; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.28); display: flex; align-items: center; justify-content: center; }
