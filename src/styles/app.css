@@ -780,7 +780,8 @@ html[data-runway] .tabbar { touch-action: none; }
 .ob-shade[data-on='true'] { opacity: 1; }
 .ob-shade-top { top: 0; height: calc(var(--safe-top) + 250px); background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.6) 45%, rgba(0, 0, 0, 0) 100%); }
 .ob-shade-svc { bottom: 0; height: calc(360px + var(--edge-b)); background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000 40%); transition: opacity 200ms var(--ease-out); }
-.ob-shade-svc[data-on='true'] { transition: opacity 500ms var(--ease-out) 160ms; }
+/* arrives with the step's text and controls, not after them (it trailed by 160 ms and the first step looked out of step) */
+.ob-shade-svc[data-on='true'] { transition: opacity 300ms var(--ease-out); }
 .ob-shade-lock { top: 0; bottom: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.35) 46%, #000 63%); transition: opacity 900ms var(--ease-out); }
 .ob-shade-pick { bottom: 0; height: calc(160px + var(--edge-b)); background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.8) 100%); }
 

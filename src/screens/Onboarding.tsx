@@ -43,7 +43,7 @@ function Logo({ service }: { service: Service }) {
   let h = Math.sqrt(380 / logo[1]), w = h * logo[1]
   if (w > 52) { w = 52; h = w / logo[1] }
   if (h > 20) { h = 20; w = h * logo[1] }
-  return <img src={`/icons/services/logos/${logo[0]}`} alt="" width={w} height={h} style={{ width: w, height: h }} draggable={false} />
+  return <img src={`/icons/services/logos/${logo[0]}`} alt="" width={w} height={h} style={{ width: w, height: h }} draggable={false} decoding="sync" />
 }
 
 const NOTIFY: [NotifyKey, string][] = [['notify_leaving', 'Leaving soon'], ['notify_arrivals', 'Arriving on your services'], ['notify_new_seasons', 'New seasons']]
@@ -115,8 +115,9 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
     if (started || (!picks.data && !picks.error && !services.error)) return
     let live = true
     const go = () => { if (live) { live = false; setStarted(true) } }
-    void Promise.all(wall.map((c) => {
-      const src = tmdbImage(c.poster_path, 'w342')
+    // the tiles' logos are waited for too, so the tiles arrive whole with the heading and the button
+    const srcs = [...wall.map((c) => tmdbImage(c.poster_path, 'w342')), ...Object.values(LOGOS).map(([file]) => `/icons/services/logos/${file}`)]
+    void Promise.all(srcs.map((src) => {
       if (!src) return null
       const img = new Image()
       img.src = src
