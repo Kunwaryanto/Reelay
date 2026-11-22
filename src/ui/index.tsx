@@ -1098,7 +1098,7 @@ export function Rolling({ n }: { n: number }) {
   most.current = Math.max(most.current, s.length)
   // not on first showing: the number is simply there
   const [live, setLive] = useState(false)
-  useEffect(() => { setLive(true) }, [])
+  useEffect(() => { const r = requestAnimationFrame(() => setLive(true)); return () => cancelAnimationFrame(r) }, [])
   const cells: ReactNode[] = []
   for (let place = most.current; place >= 1; place--) {
     const ch = s[s.length - place]
