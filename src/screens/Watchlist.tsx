@@ -1,5 +1,5 @@
 // Watchlist: what you've saved, grouped by whether you can watch it tonight. Empty: a wall of posters to pick from.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
@@ -175,42 +175,79 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
   open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
 }) {
   const { t, service } = row
-  const g = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const swiped = useRef(false)
   const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
-  const [dx, setDx] = useState<number | null>(null)
-  const base = open ? -88 : 0
-  const x = dx === null ? base : Math.max(-96, Math.min(0, base + dx))
   const year = t.year ? String(t.year) : ''
   const meta = [showKind ? kindWord(t.kind) : '', year].filter(Boolean).join(' · ') + (group !== 'off' && service ? ` · ${nameOf(service)}` : '')
 
+  // Swipe left, like a row in iOS Mail. The row follows the finger exactly (its position is written straight to
+  // the element, not through React, and starts from where the finger was when the swipe was recognised, so it
+  // never jumps). A short swipe leaves Remove showing; a swipe past the middle stretches Remove across the row and
+  // letting go there removes it: the row slides away and the list closes up. Swiped right it gives a little.
+  const li = useRef<HTMLLIElement>(null)
+  const g = useRef<{ x: number; y: number; from: number; on: boolean; at: number; full: boolean; trail: [number, number][] } | null>(null)
+  const OPEN = -88
+  const place = (x: number) => { li.current?.style.setProperty('--x', `${x}px`); li.current?.style.setProperty('--r', String(-x)) }
+  useLayoutEffect(() => { place(open ? OPEN : 0) }, [open])
+  const remove = () => {
+    const el = li.current
+    if (!el || el.dataset.leaving) return
+    el.dataset.leaving = 'true'
+    delete el.dataset.drag
+    el.dataset.full = 'true'
+    place(-(el.offsetWidth + 24))
+    setTimeout(() => {
+      el.style.maxHeight = `${el.offsetHeight}px`
+      void el.offsetHeight
+      el.dataset.gone = 'true'
+      setTimeout(onRemove, 230)
+    }, 200)
+  }
+  const down = (e: React.PointerEvent) => { g.current = { x: e.clientX, y: e.clientY, from: 0, on: false, at: open ? OPEN : 0, full: false, trail: [] } }
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const s = g.current, el = li.current
+    if (!s || !el) return
+    const mx = e.clientX - s.x, my = e.clientY - s.y
+    if (!s.on) {
+      if (Math.abs(mx) < 8) return
+      if (Math.abs(my) > Math.abs(mx)) { g.current = null; return } // scrolling the page
+      s.on = true
+      s.from = e.clientX // from here, so the row doesn't jump the 8px it took to recognise the swipe
+      e.currentTarget.setPointerCapture(e.pointerId)
+      el.dataset.drag = 'true'
+      e.currentTarget.querySelector('[data-pressed]')?.removeAttribute('data-pressed')
+    }
+    let x = (open ? OPEN : 0) + (e.clientX - s.from)
+    if (x > 0) x = 14 * (1 - Math.exp(-x / 60)) // to the right: resists
+    s.at = x
+    s.trail.push([e.timeStamp, e.clientX])
+    if (s.trail.length > 5) s.trail.shift()
+    const full = -x > el.offsetWidth * 0.55
+    if (full !== s.full) { s.full = full; if (full) el.dataset.full = 'true'; else delete el.dataset.full }
+    place(x)
+  }
+  const up = () => {
+    const s = g.current, el = li.current
+    g.current = null
+    if (!s?.on || !el) return
+    swiped.current = true
+    delete el.dataset.drag
+    const [t0, x0] = s.trail[0] ?? [0, 0]
+    const [t1, x1] = s.trail[s.trail.length - 1] ?? [0, 0]
+    const speed = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0 // px per ms; negative is leftward
+    if (s.full || (speed < -1.2 && s.at < -120)) { remove(); return }
+    delete el.dataset.full
+    const stay = speed < -0.3 ? true : speed > 0.3 ? false : s.at < OPEN / 2
+    place(stay ? OPEN : 0)
+    setOpen(stay)
+  }
+
   return (
-    <li className="wl-row" data-fresh={fresh || undefined}>
-      <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1}
-        style={{ opacity: open || (dx !== null && dx < -8) ? 1 : 0 }} onClick={onRemove}>
-        <Icon name="bookmark_remove" size={20} /><span>Remove</span>
+    <li ref={li} className="wl-row" data-fresh={fresh || undefined} data-open={open || undefined}>
+      <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1} onClick={remove}>
+        <span><Icon name="bookmark_remove" size={20} /><span>Remove</span></span>
       </button>
-      <div className="wl-slide"
-        style={{ transform: `translateX(${x}px)`, transition: dx === null ? undefined : 'none' }}
-        onPointerDown={(e) => { g.current = { x: e.clientX, y: e.clientY, moved: false } }}
-        onPointerMove={(e) => {
-          const s = g.current
-          if (!s) return
-          const mx = e.clientX - s.x, my = e.clientY - s.y
-          if (!s.moved && Math.abs(mx) < 8) return
-          if (!s.moved && Math.abs(my) > Math.abs(mx)) { g.current = null; return } // scrolling the page
-          s.moved = true
-          setDx(mx)
-        }}
-        onPointerUp={() => {
-          const s = g.current
-          g.current = null
-          if (!s?.moved) return
-          swiped.current = true
-          setOpen(base + (dx ?? 0) < -44)
-          setDx(null)
-        }}
-        onPointerCancel={() => { g.current = null; setDx(null) }}>
+      <div className="wl-slide" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
        <a href={`/title/${t.id}`} draggable={false} {...hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
         onClick={(e) => {
           e.preventDefault()
