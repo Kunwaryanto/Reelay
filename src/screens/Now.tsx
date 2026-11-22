@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadMyServices, openLink, runtime, type Card } from '../lib/catalogue'
-import { loadHome, type HomeCard } from '../lib/home'
+import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
 import { useLetterboxd } from '../lib/letterboxd'
 import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
@@ -288,8 +288,8 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
           <a key={card.id} role="listitem" className="spot press" href={`/title/${card.id}`} onClick={(e) => { e.preventDefault(); push(`/title/${card.id}`) }}>
             {art && <img src={art} alt="" loading="lazy" draggable={false} />}
             <span className="spot-text">
-              <b>{card.title}</b>
               {card.reason && <small>{card.reason}</small>}
+              <b>{card.title}</b>
               {/* the service, unless the reason already names one ("New on Netflix") */}
               <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
             </span>
@@ -309,7 +309,7 @@ export default function Now() {
   const hide = lb.account?.hide_watched ?? true
   const svc = services.data
   const settled = svc !== undefined && lb.account !== undefined
-  const q = useQuery(settled ? `home:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
+  const q = useQuery(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
     () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)

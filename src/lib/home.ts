@@ -32,6 +32,12 @@ export type HomeAsk = {
   watched: number[]
 }
 
+/**
+ * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
+ * content is saved under on the phone, so a new build never draws an older build's saved rows.
+ */
+export const HOME_VERSION = 3
+
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
 type Res<T> = PromiseLike<{ data: T | null; error: { message: string } | null }>
