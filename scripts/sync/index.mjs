@@ -828,6 +828,9 @@ async function syncLetterboxd() {
     await new Promise((r) => setTimeout(r, 1500));
   }
   log(`Letterboxd: ${ok} of ${members.length} members read, ${entries} entries in their feeds`);
+  // imported history is kept by film name: match what has arrived in the catalogue, and drop what the feeds now cover
+  const matched = (await db.query('select public.letterboxd_resolve(null) as n')).rows[0].n;
+  if (matched) log(`Letterboxd: ${matched} imported entries matched to the catalogue`);
 }
 
 async function main() {

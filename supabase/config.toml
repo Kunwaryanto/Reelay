@@ -452,3 +452,7 @@ verify_jwt = false
 # Checks the session it is sent itself, like delete-account.
 [functions.letterboxd]
 verify_jwt = false
+
+# Checks the session it is sent itself, like delete-account.
+[functions.letterboxd-import]
+verify_jwt = false
