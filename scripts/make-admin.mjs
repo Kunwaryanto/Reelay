@@ -17,8 +17,13 @@ const summary = (line) => {
 
 const user = await db.query('select id from auth.users where lower(email) = $1', [email]);
 if (user.rowCount) {
-  await db.query('update public.profiles set is_admin = true where user_id = $1', [user.rows[0].id]);
-  summary(`${email} is now an admin. Invite friends shows up in their Settings the next time they open Reelay.`);
+  // insert as well as update: an account whose profile row is missing must not be reported as done (22 Nov)
+  const r = await db.query(
+    `insert into public.profiles (user_id, is_admin) values ($1, true)
+     on conflict (user_id) do update set is_admin = true returning (xmax = 0) as created`,
+    [user.rows[0].id],
+  );
+  summary(`${email} is now an admin${r.rows[0].created ? ' (their profile was missing and has been created)' : ''}. Invite friends shows up in their Settings the next time they open Reelay.`);
 } else {
   const inv = await db.query(
     `insert into public.invites (token, make_admin) values (public.new_invite_token(), true) returning token, expires_at`,
