@@ -181,7 +181,6 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   const armed = useRef(false)
   const [live, setLive] = useState(false)
   const [leaving, setLeaving] = useState(false)
-  const [tapped, setTapped] = useState<boolean | null>(null) // the Watchlist item was tapped: what it turned into
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>
     const up = () => { t = setTimeout(() => { armed.current = true; setLive(true) }, 350) }
@@ -252,11 +251,9 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
           {(scores.length > 0 || !d) && <dl data-in={scores.length > 0}>{scores.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           {leavesOn && <p className="hold-leaves">{leavesOn}</p>}
         </div>
-        {/* the same bookmark as everywhere: empty to add, filled when it's on the list. A tap shows it change
-            (the wording stays as it was) and then the menu closes; adding has no toast. */}
-        <button type="button" role="menuitem" className="wl-btn" data-bump={tapped === null ? undefined : tapped ? 'on' : 'off'}
-          onClick={() => { if (!armed.current || tapped !== null) return; setTapped(!isSaved); saved.toggleSaved(card.id, card.title, card); setTimeout(close, 420) }}>
-          <span>{(tapped === null ? isSaved : !tapped) ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name="bookmark" size={20} fill={tapped ?? isSaved} />
+        {/* the same bookmark as everywhere: empty to add, filled when it's on the list. Adding has no toast. */}
+        <button type="button" role="menuitem" onClick={() => { if (!armed.current) return; saved.toggleSaved(card.id, card.title, card); close() }}>
+          <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name="bookmark" size={20} fill={isSaved} />
         </button>
         {avail ? (
           <a role="menuitem" href={openLink(avail, card.title)} target="_blank" rel="noreferrer" draggable={false}

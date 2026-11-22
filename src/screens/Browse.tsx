@@ -32,7 +32,8 @@ const loadGrid = (cat: Category, def: RowDef, row: string, sort: Sort) => titles
 // what's above the fold: a category's first top picture, its title logo and the first row's first posters; a grid's first three rows
 const catFold = (d: CategoryPage | undefined): Picture[] => [...titleArt(d?.hero[0]), { src: tmdbImage(d?.hero[0]?.logo_path, 'w500') },
   ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))]
-const gridFold = (cards: Card[] | undefined): Picture[] => (cards ?? []).slice(0, 9).map((c) => posterPicture(c.poster_path))
+// four rows: a tall iPhone shows three and the top of a fourth
+const gridFold = (cards: Card[] | undefined): Picture[] => (cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path))
 /** Start loading a Browse page before it opens (a finger on its card, or Browse sitting idle). */
 export function warmBrowse(path: string) {
   const [, , a, id, c, d] = path.split('/')
