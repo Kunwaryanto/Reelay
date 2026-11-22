@@ -1,4 +1,5 @@
-# Scores only: Rotten Tomatoes (critics and audience) and Letterboxd from MDBList, for titles that have none yet
+# Scores only: Rotten Tomatoes (critics and audience) and Letterboxd from MDBList, then OMDb for films' critics'
+# scores MDBList has none of, for titles that have none yet
 # (titles on a Watchlist first, then the most popular). Started by hand while the catalogue is filling up; the
 # nightly sync does the same step every night. Nothing else in the database is touched.
 name: Scores
@@ -16,6 +17,7 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
       MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+      OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       SYNC_ONLY: scores
     steps:
       - uses: actions/checkout@v5
