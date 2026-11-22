@@ -25,6 +25,7 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
       MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+      OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       STREAMING_AVAILABILITY_KEY: ${{ secrets.STREAMING_AVAILABILITY_KEY }}
       # for notifications; without them the sync skips that step
       VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}

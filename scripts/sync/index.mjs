@@ -554,7 +554,10 @@ const saveMdbScores = async (t, ratings, missing = false) => {
   const at = missing ? `now() - interval '23 days'` : 'now()';
   await db.query(
     `insert into public.scores (title_id, rt_critics, rt_audience, letterboxd, mdblist_synced_at) values ($1,$2,$3,$4, ${at})
-     on conflict (title_id) do update set rt_critics = excluded.rt_critics, rt_audience = excluded.rt_audience, letterboxd = excluded.letterboxd, mdblist_synced_at = ${at}`,
+     on conflict (title_id) do update set
+       -- MDBList's critics' score wins; with none from it, a score OMDb filled in is kept
+       rt_critics = coalesce(excluded.rt_critics, case when scores.omdb_synced_at is not null then scores.rt_critics end),
+       rt_audience = excluded.rt_audience, letterboxd = excluded.letterboxd, mdblist_synced_at = ${at}`,
     [t.id, rt == null ? null : Math.round(rt), aud == null ? null : Math.round(aud), lb],
   );
   return { rt: rt != null, aud: aud != null };
@@ -724,6 +727,42 @@ async function reconcile(runStart) {
 }
 
 // ---------------------------------------------------------------------------
+// OMDb: a backup for the Rotten Tomatoes critics' score, for films only (it rarely has series) and only where MDBList
+// has none. Compared 22 Nov: where both have a score they match, and OMDb had some big films MDBList missed.
+// Free plan: 1,000 requests a day; each film is asked about at most once a month.
+const OMDB_PER_RUN = Number(process.env.OMDB_PER_RUN || 950);
+async function syncOmdb() {
+  const key = env('OMDB_API_KEY', false);
+  if (!key) return log('OMDb: no key, skipped');
+  const todo = (await db.query(
+    `select t.id, t.imdb_id, t.title from public.titles t join public.scores s on s.title_id = t.id
+     where t.kind = 'film' and t.imdb_id is not null and s.rt_critics is null
+       and (s.omdb_synced_at is null or s.omdb_synced_at < now() - interval '30 days')
+     order by exists (select 1 from public.watchlist w where w.title_id = t.id) desc, t.popularity desc nulls last
+     limit $1`, [OMDB_PER_RUN])).rows;
+  if (!todo.length) return log('OMDb: nothing to fetch');
+  let asked = 0, filled = 0, spent = false;
+  const sample = [];
+  await pool(todo.map((t) => ({ ...t, key: t.imdb_id })), 2, async (t) => {
+    if (spent) return;
+    await sleep(150);
+    let j = null;
+    try { j = await (await fetch(`https://www.omdbapi.com/?i=${t.imdb_id}&apikey=${key}`)).json(); } catch { return; }
+    if (j?.Response === 'False') {
+      if (/limit|invalid api key|not activated/i.test(j.Error ?? '')) { if (!spent) log('OMDb: stopped:', j.Error); spent = true; return; }
+    }
+    asked++;
+    const v = (j?.Ratings ?? []).find((x) => x.Source === 'Rotten Tomatoes')?.Value;
+    const rt = v ? Number(String(v).replace('%', '')) : null;
+    await db.query(
+      `update public.scores set omdb_synced_at = now(), rt_critics = coalesce(rt_critics, $2) where title_id = $1`,
+      [t.id, Number.isFinite(rt) ? rt : null]);
+    if (Number.isFinite(rt)) { filled++; if (sample.length < 6) sample.push(`${t.title} ${rt}%`); }
+  });
+  log(`OMDb: ${asked} films asked, ${filled} got a critics' score${spent ? ' (daily limit reached, the rest next run)' : ''}${todo.length === OMDB_PER_RUN ? ', more waiting' : ''}`);
+  if (sample.length) log('  e.g.', sample.join(' · '));
+}
+
 const COUNTS = `select (select count(*) from public.scores where rt_critics is not null) rt,
   (select count(*) from public.scores where rt_audience is not null) rt_audience,
   (select count(*) from public.scores where letterboxd is not null) letterboxd,
@@ -734,6 +773,7 @@ async function main() {
   if (ONLY === 'scores') {
     log('scores only');
     await syncMdblist();
+    await syncOmdb().catch((e) => log('OMDb failed:', e.message));
     log('scores now:', JSON.stringify((await db.query(COUNTS)).rows[0]));
     // Rotten Tomatoes: how many titles have both scores, and how many only one (with examples to check by hand)
     const rt = (await db.query(
@@ -786,6 +826,7 @@ async function main() {
   await syncLinks(Math.max(0, Math.min(SA_LINK_REQUESTS, SA_BUDGET - saUsed))).catch((e) => log('links failed:', e.message));
   await syncImdbRatings();
   await syncMdblist();
+  await syncOmdb().catch((e) => log('OMDb failed:', e.message));
   if (FULL) await reconcile(runStart);
   // after reconcile, so today's arrivals are in the events; a failure here never fails the sync
   if (FULL) await sendNotifications(db, log).catch((e) => log('notifications failed:', e.message));

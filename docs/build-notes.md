@@ -22,6 +22,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 - MDBList is asked 200 titles at a time (its batch lookup). The first batch of each run is measured (usage before and after) and the log says what it cost: one request per batch means the whole queue is worked through, one per title means as many titles as the day's allowance has left, and if batches fail the step asks one title at a time as before.
 - Queue: never fetched first, then older than 30 days; within each, titles on someone's Watchlist, then the most popular. A title that doesn't come back is saved empty and asked for again in a week, so it no longer sits at the front every night.
+- OMDb backs up the critics' score for films only, where MDBList has none (compared 22 Nov on recent films: identical where both had one; OMDb had some big films MDBList missed, and almost no series). Each film is asked about once a month at most; up to 950 a run (free plan 1,000 a day). MDBList's score wins when it has one; an OMDb score is kept while MDBList has none (`scores.omdb_synced_at`).
 - The `Scores` workflow runs just this step by hand (`SYNC_ONLY=scores`); the nightly sync still does it every night.
 
 ## Pressed, busy, disabled, focused (22 Nov)
