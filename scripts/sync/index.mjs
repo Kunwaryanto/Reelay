@@ -857,31 +857,38 @@ async function syncTrending() {
   }
 }
 
-// Home: "Because you liked …". TMDB's recommendations for the films members rated 4 or higher: asked once per
-// film, again after 60 days, the most recently watched first. One request each.
+// Home: "Because you liked …" and "Because you saved …". TMDB's recommendations for films members rated 4 or
+// higher and for everything on a watchlist (films and series): asked once per title, again after 60 days, the
+// most recent first. One request each.
 const RECS_PER_RUN = Number(process.env.RECS_PER_RUN || 400);
 async function syncRecs() {
   const todo = (await db.query(
-    `select l.tmdb_id from public.letterboxd_logs l
-     left join public.rec_sources s on s.tmdb_id = l.tmdb_id
-     where l.rating >= 4 and l.tmdb_id is not null and (s.tmdb_id is null or s.fetched_at < now() - interval '60 days')
-     group by l.tmdb_id order by max(l.watched_on) desc nulls last limit $1`, [RECS_PER_RUN])).rows.map((r) => r.tmdb_id);
+    `with wanted as (
+       select 'film' as kind, l.tmdb_id, max(l.watched_on)::timestamptz as at from public.letterboxd_logs l
+       where l.rating >= 4 and l.tmdb_id is not null group by l.tmdb_id
+       union all
+       select t.kind, t.tmdb_id, max(w.added_at) from public.watchlist w join public.titles t on t.id = w.title_id group by t.kind, t.tmdb_id
+     )
+     select w.kind, w.tmdb_id from wanted w
+     left join public.rec_sources s on s.kind = w.kind and s.tmdb_id = w.tmdb_id
+     where s.tmdb_id is null or s.fetched_at < now() - interval '60 days'
+     group by w.kind, w.tmdb_id order by max(w.at) desc nulls last limit $1`, [RECS_PER_RUN])).rows;
   if (!todo.length) return;
   let saved = 0;
-  await pool(todo.map((id) => ({ id })), 6, async ({ id }) => {
-    const r = await tmdb(`/movie/${id}/recommendations`, { page: 1 }).catch(() => undefined);
+  await pool(todo, 6, async ({ kind, tmdb_id: id }) => {
+    const r = await tmdb(`/${kind === 'film' ? 'movie' : 'tv'}/${id}/recommendations`, { page: 1 }).catch(() => undefined);
     if (r === undefined) return; // a failed request: asked again next night
     const recs = (r?.results ?? []).slice(0, 20).map((x, i) => ({ rec: x.id, rank: i + 1 }));
-    await db.query('delete from public.title_recs where source_tmdb_id = $1', [id]);
+    await db.query('delete from public.title_recs where source_kind = $1 and source_tmdb_id = $2', [kind, id]);
     if (recs.length) {
       await db.query(
-        `insert into public.title_recs (source_tmdb_id, rec_tmdb_id, rank)
-         select $1, x.rec, x.rank from jsonb_to_recordset($2::jsonb) as x(rec int, rank int) on conflict do nothing`, [id, JSON.stringify(recs)]);
+        `insert into public.title_recs (source_kind, source_tmdb_id, rec_kind, rec_tmdb_id, rank)
+         select $1, $2, $1, x.rec, x.rank from jsonb_to_recordset($3::jsonb) as x(rec int, rank int) on conflict do nothing`, [kind, id, JSON.stringify(recs)]);
     }
-    await db.query('insert into public.rec_sources (tmdb_id) values ($1) on conflict (tmdb_id) do update set fetched_at = now()', [id]);
+    await db.query('insert into public.rec_sources (kind, tmdb_id) values ($1, $2) on conflict (kind, tmdb_id) do update set fetched_at = now()', [kind, id]);
     saved++;
   });
-  log(`recommendations: ${saved} of ${todo.length} liked films asked about`);
+  log(`recommendations: ${saved} of ${todo.length} liked or saved titles asked about`);
 }
 
 async function main() {
