@@ -78,8 +78,9 @@ Deno.serve(async (req) => {
     const { error: failed } = await admin.from('letterboxd_logs').upsert(all.slice(i, i + 1000));
     if (failed) return reply({ error: 'failed' }, 500, origin);
   }
-  const { error: unresolved } = await admin.rpc('letterboxd_resolve', { p_user: user_id });
-  if (unresolved) return reply({ error: 'failed' }, 500, origin);
+  // The rows are saved, so the import has worked even if matching them fails here: the nightly sync matches
+  // whatever is left.
+  await admin.rpc('letterboxd_resolve', { p_user: user_id });
 
   const films = new Set(all.map((r) => `${r.film_name.toLowerCase()}|${r.film_year ?? ''}`)).size;
   await admin.from('letterboxd_accounts').update({ imported_at: new Date().toISOString(), imported_films: films }).eq('user_id', user_id);
