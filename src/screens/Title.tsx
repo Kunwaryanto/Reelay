@@ -30,6 +30,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const ratings: [string, string][] = []
   if (t.scores?.imdb_rating != null) ratings.push(['IMDb', Number(t.scores.imdb_rating).toFixed(1)])
   if (t.scores?.rt_critics != null) ratings.push(['Tomatometer', `${t.scores.rt_critics}%`])
+  if (t.scores?.rt_audience != null) ratings.push(['Popcornmeter', `${t.scores.rt_audience}%`])
   if (t.scores?.letterboxd != null) ratings.push(['Letterboxd', Number(t.scores.letterboxd).toFixed(1)])
   const cast = t.credits.filter((c) => c.role === 'cast')
   const details: [string, string][] = ([

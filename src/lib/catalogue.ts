@@ -136,7 +136,7 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
   original_language: string | null
   genres: string[]
   availability: (Avail & { service: { name: string; kind: string } | null })[]
-  scores: { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null } | null
+  scores: { imdb_rating: number | null; rt_critics: number | null; rt_audience?: number | null; letterboxd: number | null } | null
   credits: Credit[]
   awards: Award[]
   more: Card[]
@@ -146,7 +146,7 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
   const title = unwrap(await supabase.from('titles').select(
     'id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
     'availability(*,service:services(*)),' +
-    'scores(imdb_rating,rt_critics,letterboxd),' +
+    'scores(imdb_rating,rt_critics,rt_audience,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +
     'awards(id,award,year,short_category,won,person_name,rank)',
   ).eq('id', id).maybeSingle()) as unknown as (Omit<TitleDetail, 'more'>) | null

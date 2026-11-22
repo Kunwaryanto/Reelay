@@ -75,11 +75,11 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }
 
 /** 44px white pill: the main action of a screen or sheet. */
 export function Button({ busy, children, className = '', ...rest }: BtnProps) {
-  return <button type="button" className={`btn press ${className}`} {...rest}>{busy ? <Spinner label="Working" /> : children}</button>
+  return <button type="button" className={`btn press ${className}`} aria-busy={busy || undefined} {...rest}>{busy ? <Spinner label="Working" /> : children}</button>
 }
 /** 32px pill: a small standalone action. Grey on plain black, white with `solid`. */
 export function SmallButton({ solid, busy, children, ...rest }: BtnProps & { solid?: boolean }) {
-  return <button type="button" className="btn-small press" data-solid={solid} {...rest}>{children}{busy && <Spinner light={!solid} />}</button>
+  return <button type="button" className="btn-small press" data-solid={solid} aria-busy={busy || undefined} {...rest}>{children}{busy && <Spinner light={!solid} />}</button>
 }
 /** 44px frosted pill over artwork (Start). */
 export const GlassButton = ({ children, ...rest }: BtnProps) => <button type="button" className="btn-glass press" {...rest}>{children}</button>

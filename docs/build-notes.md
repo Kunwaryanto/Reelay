@@ -18,6 +18,13 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Notify me always saves the title. Toast: “We’ll let you know when it’s on.” with Undo, or “Notifications are off for Reelay.” with Settings. 4 s.
 • Tapping a notification opens the title's Detail page; the matching where-to-watch row lights up once in surface grey and settles (≈1.5 s), its note in white: Leaves tomorrow / New / New season.
 
+## Pressed, busy, disabled, focused (22 Nov)
+
+- Every control answers the finger. Self-contained shapes shrink (`scale`, so it never fights their own animations): icon buttons 0.9, pills and chips 0.96, Browse cards 0.97 (after 80 ms, so scrolling doesn't nudge them), tab bar icons 0.88; the white buttons and posters already did. Text actions (View all, Skip, quiet buttons) and full-width rows (Settings, drawer options) dim to 50% instead; rows wait 80 ms. Long-press menu items tint like its header.
+- Busy buttons (`aria-busy`) take no second tap. Disabled buttons are 40% and dead, except the filter drawer's Show button, which keeps its own grey.
+- Keyboard and Switch Control get one white 2px focus ring; a finger never shows it. No hover states (no pointer) and no haptics (not available to a Home Screen web app).
+- Title page ratings: Rotten Tomatoes' audience score shows as “Popcornmeter” after the Tomatometer (`scores.rt_audience`, filled by the nightly sync from the same MDBList answer; about a month to cover the catalogue).
+
 ## Watchlist feedback (22 Nov)
 
 - Adding has no toast. On the title page the bookmark button shows it: the fill flows in (260 ms) and the icon pops with a ring; removing empties it with a dip, also without a toast (the button is right there to undo). In the long-press menu the item uses the same bookmark, empty to add and filled when saved, with no animation: the menu closes at once. “Removed … Undo” stays for the long-press menu and the Watchlist's swipe, where the title leaves the screen. Reduce Motion: the fill still changes, nothing moves.
