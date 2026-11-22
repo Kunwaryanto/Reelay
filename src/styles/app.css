@@ -731,6 +731,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .ob-tile i { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease-out) var(--dd, 0ms); }
 .ob-tile[data-lit='false'] i { opacity: 0.82; }
 .ob-tile[data-lit='false'] img { filter: grayscale(1); transition: filter 0s linear calc(260ms + var(--dd, 0ms)); }
+/* the opening: the posters of the services that are on fade slowly from grey and dark to full colour (about 36 tiles, once) */
+.ob-cols[data-reveal] .ob-tile i { transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1); }
+.ob-cols[data-reveal] .ob-tile[data-lit='true'] img { transition: filter 1000ms cubic-bezier(0.4, 0, 0.2, 1); }
 .ob-tile b { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; transition: background-color 160ms var(--ease-out); }
 .ob-tile[data-shade='true'] b { background: rgba(0, 0, 0, 0.25); }
 /* the wall is drawn about 1.8× here, so this is a little over 1px on screen */

@@ -94,6 +94,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
   const [sweep, setSweep] = useState(false)
   // the wall opens all dimmed; the posters of the services that are on light up as the UI arrives
   const [revealed, setRevealed] = useState(false)
+  const [revealing, setRevealing] = useState(false) // that first lighting-up is a slow fade from grey to colour
   const [sel, setSel] = useState<number[]>([])
   const [pan, setPan] = useState({ x: 0, y: 0, tr: 'none' })
   const [cards, setCards] = useState(NO_CARDS)
@@ -127,7 +128,8 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
   useEffect(() => {
     if (!started) return
     later(() => { setWallOn(true); setCam({ at: 'svc', tr: 'transform 2700ms cubic-bezier(0.25, 1, 0.5, 1)' }) }, 40)
-    later(() => { setUi(true); setView('svc'); setRevealed(true) }, 1300)
+    later(() => { setUi(true); setView('svc'); setRevealed(true); setRevealing(true) }, 1300)
+    later(() => setRevealing(false), 2600)
     later(() => setLocked(false), 2600)
   }, [started])
 
@@ -241,7 +243,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
         <div className="ob-pan" style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`, transition: pan.tr }}>
           <div className="ob-scale">
             <div className="ob-cam" style={{ transform: CAM[cam.at], transition: cam.tr }}>
-              <div className="ob-cols">
+              <div className="ob-cols" data-reveal={revealing || undefined}>
                 {Array.from({ length: COLS }, (_, c) => {
                   const col = wall.filter((_, i) => i % COLS === c)
                   // each column holds its posters three times, so the wall has no edge wherever the camera is
