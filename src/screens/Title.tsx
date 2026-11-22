@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadTitle, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { firstName, fullDate, looseDate, times, useTitleLogs, type TitleLogs } from '../lib/letterboxd'
@@ -47,8 +46,7 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
   return (
     <section className="lb-row" aria-label="Letterboxd">
       {more ? <button type="button" onClick={() => setOpen(true)}>{inner}</button> : <div>{inner}</div>}
-      {/* on the body, like the other sheets, so it covers the tab bar */}
-      {more && createPortal(
+      {more && (
         <Sheet open={open} onClose={() => setOpen(false)} label="Letterboxd">
           <div className="lb-head">
             <h2>Letterboxd</h2>
@@ -89,7 +87,8 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
               </>
             )}
           </div>
-        </Sheet>, document.body)}
+        </Sheet>
+      )}
     </section>
   )
 }

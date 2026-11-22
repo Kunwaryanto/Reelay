@@ -1,6 +1,5 @@
 // Settings and its pages: Your services, Letterboxd, Region, Credits, Privacy, Delete account. (Invite friends has its own file.)
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
 import { connectLetterboxd, disconnectLetterboxd, refreshLetterboxd, setMarkWatched, useLetterboxd } from '../lib/letterboxd'
@@ -337,7 +336,7 @@ function Letterboxd() {
           </ul>
           <input ref={picker} type="file" accept=".zip,.csv,application/zip,text/csv" multiple hidden
             onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(files) }} />
-          {createPortal(<Sheet open={howTo} onClose={() => setHowTo(false)} label="Import your history">
+          <Sheet open={howTo} onClose={() => setHowTo(false)} label="Import your history">
             <h2 className="sheet-title">Import your history</h2>
             <p className="sheet-text">Your Letterboxd export has everything you’ve watched. Download it, then pick it here.</p>
             {/* two steps, each with its own button; the white one is the step to do next */}
@@ -351,7 +350,7 @@ function Letterboxd() {
                 <SmallButton solid={fetched} onClick={() => picker.current?.click()}>Choose file</SmallButton>
               </li>
             </ol>
-          </Sheet>, document.body)}
+          </Sheet>
           <ul className="rows set-group">
             <li><button type="button" onClick={disconnect} aria-busy={leaving}><span className="row-text"><b className="err">Disconnect</b></span>{leaving && <Spinner light />}</button></li>
           </ul>

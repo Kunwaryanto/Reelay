@@ -164,10 +164,8 @@ export default function Watchlist() {
       {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
       {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
-      {/* over the tab bar, so outside the page, but inside #root: its clip keeps iOS from scrolling the document */}
-      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
-        noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />,
-      document.getElementById('root') ?? document.body)}
+      <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
+        noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />
     </main>
   )
 }

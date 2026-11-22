@@ -201,7 +201,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - **No Your services yet:** `user_services` is empty until that screen is built, so every service counts as yours. The sections then read "Leaving soon", "Streaming now" and "Not streaming in Sweden", and the switch reads "Only what’s streaming". Once services are picked the designed names and the services label appear on their own.
 - Leaving soon = leaves within 30 days on one of your services.
 - Swipe a row left for Remove (opens past 44px); the bell on a not-streaming row turns Notify on and off.
-- The sort sheet is mounted in `#root` (not the body) so it covers the tab bar; in the body, iOS scrolled the document when the sheet took focus. A sheet without a field focuses itself, not its first button.
+- Every sheet draws itself in `#root` (the shared `Sheet` does it; screens don't portal sheets) so it covers the tab bar; on the body, iOS scrolled the document when the sheet took focus and it opened at the top. A sheet without a field focuses itself, not its first button.
 - Pick wall: 49 posters (7 × 7, so the tilted wall reaches every corner when panned) from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
 - Not built yet: long press on a row, the "New season" note, the link from the services label to Your services.
 

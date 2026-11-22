@@ -105,7 +105,7 @@ export default function Person({ id }: { id: number }) {
         )}
       </main>
       {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
-      {createPortal(<Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
+      <Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
         <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('new'); setKind('all'); setOnlyMine(false) }}>Reset</button></div>
         <p className="wl-sheet-label">Sort by</p>
         <div role="radiogroup" aria-label="Sort by">
@@ -121,7 +121,7 @@ export default function Person({ id }: { id: number }) {
           </button>
         )}
         <div className="sheet-action"><Button onClick={() => setSheet(false)}>Show {list.length === 1 ? '1 title' : `${list.length} titles`}</Button></div>
-      </Sheet>, document.getElementById('root') ?? document.body)}
+      </Sheet>
     </>
   )
 }

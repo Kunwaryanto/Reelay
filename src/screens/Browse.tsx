@@ -288,6 +288,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const start: Sort = def?.sort ?? 'popular'
   const sorts: [Sort, string][] = cat?.rule.leaving ? [['leaving', 'Leaving first'], ...SORTS] : SORTS
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: start })
+  const seen = useWatched()
   const sort = f.sort as Sort
   const [pick, setPick] = useState<Pick>('all')
   const switched = useSwitched(pick)
@@ -313,7 +314,6 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
     const sc = Array.isArray(x.scores) ? x.scores[0] : x.scores
     return { year: c.year, genres: c.genres, rating: sc?.imdb_rating ?? null, rt: sc?.rt_critics ?? null, lb: sc?.letterboxd ?? null, runtime: x.runtime_min ?? null, lang: x.original_language ?? null, services: c.availability.map((a) => a.service_id) }
   }
-  const seen = useWatched()
   const fits = (c: Card, d: Draft) => passesDraft(facets(c), d, picked) && !(d.hide && seen.has(c.id))
   const all = (q.data ?? []).filter((c) => fits(c, f))
   const r = cat.rule
@@ -367,9 +367,9 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
         {q.data && phase !== 'wait' && list.length === 0 && <p className="br-none">{chips.length ? 'Nothing here with these filters.' : 'Nothing streaming here right now.'}</p>}
       </main>
       {holdMenu(held, () => setHeld(null))}
-      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map((s) => SERVICE_NAME[s] ?? s)}
+      <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map((s) => SERVICE_NAME[s] ?? s)}
         noun={typed ? (def.kind === 'film' ? ['film', 'films'] : ['series', 'series']) : ['title', 'titles']} sorts={sorts} firstSort={start} rows={rows}
-        countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />, document.getElementById('root') ?? document.body)}
+        countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />
     </>
   )
 }

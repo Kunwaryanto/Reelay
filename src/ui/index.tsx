@@ -659,7 +659,10 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     return () => document.removeEventListener('keydown', esc)
   }, [open, onClose])
 
-  return (
+  // Every sheet is drawn in #root, wherever it is used: over the tab bar, and inside #root's clip. A sheet left
+  // in a page sits under the tab bar; one put on the body makes iOS scroll the whole document when the sheet
+  // takes focus, so it opens at the top of the screen. Callers never portal a sheet themselves.
+  return createPortal(
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
     <dialog ref={ref} className="sheet"
@@ -689,7 +692,8 @@ data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
         {children}
       </div>
     </dialog>
-    </>
+    </>,
+    document.getElementById('root') ?? document.body,
   )
 }
 

@@ -491,9 +491,9 @@ export default function Search() {
 
       {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
-      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
+      <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
         services={picked.map(nameOf)} noun={kind === 'film' ? ['film', 'films'] : kind === 'series' ? ['series', 'series'] : ['result', 'results']}
-        countOf={countOf} apply={apply} />, document.getElementById('root') ?? document.body)}
+        countOf={countOf} apply={apply} />
     </main>
   )
 }
