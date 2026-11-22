@@ -296,24 +296,23 @@ function Letterboxd() {
     try { await setMarkWatched(uid, account, !account.mark_watched) } catch { toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' }) }
   }
   const status = !account ? '' : account.synced_at
-    ? `Connected · ${account.films === 1 ? '1 film' : `${count(account.films)} films`} · last read ${readAt(account.synced_at)}`
-    : 'Connected · first read tonight'
+    ? `${account.films === 1 ? '1 film' : `${count(account.films)} films`} · read ${readAt(account.synced_at)}`
+    : 'First read tonight'
 
   return (
     <Page title="Letterboxd">
       <div className="set-text">
-        <p>Mark the films you’ve seen and see what friends thought of them. Reelay reads your public Letterboxd diary each night, and friends on Reelay see your ratings, as anyone can on Letterboxd. Nothing is posted there.</p>
+        <p>Reelay reads your public diary each night to mark the films you’ve seen and show friends on Reelay each other’s ratings.</p>
       </div>
       {account === null && (
         <form className="lb-connect" onSubmit={connect} noValidate>
-          <label htmlFor="lb-user">Letterboxd username</label>
           <div className="lb-field" data-error={!!error}>
-            <input id="lb-user" type="text" inputMode="text" enterKeyHint="go" autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} placeholder="username" maxLength={60}
+            <input id="lb-user" type="text" inputMode="text" enterKeyHint="go" autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} placeholder="Letterboxd username" aria-label="Letterboxd username" maxLength={60}
               value={name} onChange={(e) => { setName(e.target.value); setError('') }} aria-invalid={!!error} aria-describedby={error ? 'lb-error' : 'lb-hint'} />
             <SmallButton type="submit" busy={busy} disabled={busy}>{busy ? '' : 'Connect'}</SmallButton>
           </div>
           {error ? <p id="lb-error" className="field-error" role="alert">{error}</p>
-            : <p id="lb-hint" className="set-foot">Your diary needs to be public on Letterboxd. Films only: Letterboxd doesn’t log series.</p>}
+            : <p id="lb-hint" className="set-foot">Films only. Your diary must be public.</p>}
         </form>
       )}
       {account && (
@@ -324,13 +323,13 @@ function Letterboxd() {
               <span className="row-note lb-out">Profile<Icon name="north_east" size={14} /></span>
             </a></li>
             <li><button type="button" role="switch" aria-checked={account.mark_watched} className="set-switch" onClick={flip}>
-              <span className="row-text"><b>Mark watched films</b><small>A check on their posters.</small></span><i aria-hidden="true" />
+              <span className="row-text"><b>Mark watched films</b></span><i aria-hidden="true" />
             </button></li>
             <li><button type="button" onClick={() => { if (importing === null) setHowTo(true) }} aria-busy={importing !== null}>
               {importing !== null
                 ? <span className="row-text" aria-live="polite"><b>Importing your history…</b><small>{importing === 'reading' ? 'Reading the file' : `Matching ${count(importing)} films`}</small></span>
                 : <span className="row-text"><b>Import your history</b>{importError ? <small className="err" role="alert">{importError}</small>
-                  : <small>{account.imported_at ? `Imported ${new Date(account.imported_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${count(account.imported_films ?? 0)} films` : 'From your Letterboxd export. The nightly read only sees your latest entries.'}</small>}</span>}
+                  : <small>{account.imported_at ? `Imported ${new Date(account.imported_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${count(account.imported_films ?? 0)} films` : 'Everything before your latest entries'}</small>}</span>}
               {importing !== null ? <Spinner light /> : chevron}
             </button></li>
           </ul>
@@ -338,15 +337,14 @@ function Letterboxd() {
             onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(files) }} />
           <Sheet open={howTo} onClose={() => setHowTo(false)} label="Import your history">
             <h2 className="sheet-title">Import your history</h2>
-            <p className="sheet-text">Your Letterboxd export has everything you’ve watched. Download it, then pick it here.</p>
             {/* two steps, each with its own button; the white one is the step to do next */}
             <ol className="lb-steps">
               <li>
-                <span className="row-text"><b>Download your export</b><small>Letterboxd saves a ZIP to Files › Downloads. Sign in there if it asks.</small></span>
+                <span className="row-text"><b>Download your export</b><small>A ZIP, saved to Files › Downloads</small></span>
                 <a className="btn-small press" data-solid={!fetched} href="https://letterboxd.com/data/export/" target="_blank" rel="noreferrer" onClick={() => setFetched(true)}>Download<Icon name="north_east" size={14} /></a>
               </li>
               <li>
-                <span className="row-text"><b>Pick the ZIP here</b><small>Only the film list is sent. The file isn’t kept.</small></span>
+                <span className="row-text"><b>Pick the ZIP</b><small>Only the film list is sent</small></span>
                 <SmallButton solid={fetched} onClick={() => picker.current?.click()}>Choose file</SmallButton>
               </li>
             </ol>
@@ -354,7 +352,7 @@ function Letterboxd() {
           <ul className="rows set-group">
             <li><button type="button" onClick={disconnect} aria-busy={leaving}><span className="row-text"><b className="err">Disconnect</b></span>{leaving && <Spinner light />}</button></li>
           </ul>
-          <p className="set-foot lb-foot">Deletes everything Reelay has from your Letterboxd.</p>
+          <p className="set-foot lb-foot">Removes your films and ratings from Reelay.</p>
         </>
       )}
       {account === undefined && !loading && <p className="set-foot">Couldn’t load this. Check your connection and try again.</p>}
