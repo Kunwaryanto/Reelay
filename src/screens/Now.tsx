@@ -40,16 +40,54 @@ export function Hero({ items }: { items: Card[] }) {
     return () => document.removeEventListener('visibilitychange', vis)
   }, [])
 
+  // Touch: a sideways swipe changes the picture. It is read from touch events and claimed on its first sideways
+  // move, because on a page that was pushed in (a category) the whole strip of pages scrolls sideways too: the
+  // browser took the swipe for that, and the pointer events this used to rely on were cancelled. A swipe that
+  // starts at the left edge is left alone: that one goes back.
+  const stage = useRef<HTMLDivElement>(null)
+  const goRef = useRef(go)
+  goRef.current = go
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    let g: { x: number; y: number; way: 'h' | 'v' | null; dx: number } | null = null
+    const start = (e: TouchEvent) => {
+      const p = e.touches[0]
+      g = e.touches.length === 1 && p.clientX > 28 ? { x: p.clientX, y: p.clientY, way: null, dx: 0 } : null
+      swiped.current = false
+      setPaused(true)
+    }
+    const move = (e: TouchEvent) => {
+      if (!g) return
+      const p = e.touches[0]
+      const dx = p.clientX - g.x, dy = p.clientY - g.y
+      if (!g.way && Math.hypot(dx, dy) > 6) g.way = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'
+      if (g.way === 'h') { g.dx = dx; if (e.cancelable) e.preventDefault() }
+    }
+    const end = () => {
+      setPaused(false)
+      if (g?.way === 'h' && Math.abs(g.dx) > 40 && n > 1) { swiped.current = true; goRef.current(g.dx < 0 ? 1 : -1) }
+      g = null
+    }
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: false })
+    el.addEventListener('touchend', end)
+    el.addEventListener('touchcancel', end)
+    return () => { el.removeEventListener('touchstart', start); el.removeEventListener('touchmove', move); el.removeEventListener('touchend', end); el.removeEventListener('touchcancel', end) }
+  }, [n])
+
   return (
     <section className="hero" aria-label="On now" aria-roledescription="carousel">
-      <div className="hero-stage"
-        onPointerDown={(e) => { x0.current = e.clientX; swiped.current = false; setPaused(true) }}
+      <div className="hero-stage" ref={stage}
+        // with a mouse (touch is handled above)
+        onPointerDown={(e) => { if (e.pointerType === 'touch') return; x0.current = e.clientX; swiped.current = false; setPaused(true) }}
         onPointerUp={(e) => {
+          if (e.pointerType === 'touch') return
           const dx = x0.current == null ? 0 : e.clientX - x0.current
           x0.current = null; setPaused(false)
           if (Math.abs(dx) > 40 && n > 1) { swiped.current = true; go(dx < 0 ? 1 : -1) }
         }}
-        onPointerCancel={() => { x0.current = null; setPaused(false) }}>
+        onPointerCancel={(e) => { if (e.pointerType === 'touch') return; x0.current = null; setPaused(false) }}>
         {items.map((h, i) => {
           const on = i === index
           return (
