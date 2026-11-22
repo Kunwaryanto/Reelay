@@ -161,7 +161,8 @@ button { font: inherit; color: inherit; }
 .hold-head b + p { margin-top: 10px; } /* the name stands off from the facts as the scores do */
 .hold-head dl { margin: 10px 0 0; height: 16px; display: flex; gap: 14px; font: var(--type-meta); }
 .hold-head dl div { display: flex; gap: 4px; } .hold-head dt { color: var(--text-faint); } .hold-head dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-.hold-head [data-in] { transition: opacity 200ms var(--ease-out); } .hold-head [data-in='false'] { opacity: 0; }
+.hold-head [data-in] { transition: opacity 240ms var(--ease-out); } .hold-head [data-in='false'] { opacity: 0; }
+.hold-head .hold-in { animation: fade-in 240ms var(--ease-out); }
 .hold-head .hold-leaves { margin-top: 8px; }
 .hold-menu > button, .hold-menu > a { width: 100%; height: var(--menu-row); padding: 0 16px; border: 0; background: transparent; font: 400 16px/21px var(--font); color: #fff; display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.12); }
 @media (prefers-reduced-motion: reduce) { .hold-poster { transition: none; } .hold-menu { transform: none; } }
@@ -246,7 +247,9 @@ button.pill-open { padding: 0 12px 0 10px; }
 .sheet[data-entering] { transform: translateY(110%); transition: none; }
 /* the sheet is dragged, not scrolled; a list inside scrolls without Safari's bounce, so at its top a pull down moves only the sheet */
 .sheet-body { touch-action: none; }
-.sheet-body :is(.fd-list, .ob-more) { overscroll-behavior: none; }
+/* lists in a sheet scroll natively, momentum and bounce included; the bounce stays inside the list (contain), and at
+   the top a pull down is taken by the sheet's drag (see Sheet), so the two never fight */
+.sheet-body :is(.fd-list, .ob-more) { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 /* Where iOS doesn't draw the page (under Safari's floating address bar, past the bottom of the viewport),
    it shows the page background. While a sheet is open, make that the sheet's grey so it never shows as black. */
 html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); }

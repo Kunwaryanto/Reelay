@@ -34,6 +34,9 @@ export function setQueryData<T>(key: string, data: T, persist = true) {
   watchers.get(key)?.forEach((f) => f())
 }
 
+/** What is saved under a key, without loading it. */
+export const readQueryData = <T,>(key: string): T | undefined => readSaved(key)?.data as T | undefined
+
 /** Change what's saved under a key from what is there now (nothing happens when nothing is saved yet). */
 export function updateQueryData<T>(key: string, change: (now: T) => T, persist = true) {
   const entry = readSaved(key)

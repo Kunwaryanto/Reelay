@@ -13,6 +13,7 @@ import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { prefetch, useRequestFailed } from '../lib/query'
 import { notePressed } from '../lib/press'
+import { warmFacts } from '../lib/facts'
 
 // ---- Icons -----------------------------------------------------------------
 
@@ -177,9 +178,14 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const service = card.availability[0]?.service_id
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
+  // near the screen: its long-press facts are fetched with the rest of its row
+  const box = useRef<HTMLAnchorElement>(null)
+  const near = useNearScreen(box)
+  useEffect(() => { if (near) warmFacts([card.id]) }, [near, card.id])
   return (
-    <a className="card" href={`/title/${card.id}`} {...hold.handlers}
+    <a ref={box} className="card" href={`/title/${card.id}`} {...hold.handlers}
       onPointerDown={(e) => {
+        warmFacts([card.id], true)
         hold.handlers.onPointerDown(e)
         // a finger resting on the poster (not a scroll passing over it) starts loading its page
         const el = e.currentTarget
@@ -593,8 +599,9 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
         if (Math.hypot(dx, dy) < 8) return
         if (Math.abs(dx) > Math.abs(dy)) { g.mode = 'ignore'; return }
         const l = g.list
-        const scrolls = l && (dy > 0 ? l.scrollTop > 0 : l.scrollTop + l.clientHeight < l.scrollHeight - 1)
-        g.mode = scrolls ? 'scroll' : 'drag'
+        // Only a pull down from a list's top moves the sheet. Anything else on a list is the list's: it scrolls, with
+        // its own momentum and its bounce at the end (taking upward moves at the end made the list feel stuck).
+        g.mode = l && (dy < 0 || l.scrollTop > 0) ? 'scroll' : 'drag'
         g.from = p.clientY
       }
       if (g.mode === 'scroll') {

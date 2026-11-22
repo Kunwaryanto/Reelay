@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { SERVICE_NAME, kindWord, leavingNote, loadNow, loadTitle, openLink, runtime, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, runtime, type Card } from '../lib/catalogue'
+import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { warmBrowse } from './Browse'
@@ -198,18 +199,19 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
 
   const { card } = held
   // The facts under the name: kind and year are known at once; length, genres, who made it and the scores come
-  // with the title's own data, which started loading when the finger landed (usually there by the time the menu
-  // opens). The header is as tall as its lines; `headH` is the tallest it gets, for placing the menu.
-  const d = useQuery(`title:${card.id}`, () => loadTitle(card.id), { maxAge: 10 * 60 * 1000 }).data
+  // with its facts (lib/facts.ts), fetched as the poster came near the screen or at the latest when the finger
+  // landed, so they are nearly always there when the menu opens. Until they are, room is kept for their lines and
+  // they fade in. The header is as tall as its lines; `headH` is the tallest it gets, for placing the menu.
+  const d = useFacts(card.id)
   const film = card.kind === 'film'
   const years = film || !card.year ? card.year : d?.end_year && d.end_year !== card.year ? `${card.year}–${d.end_year}` : card.year
   const facts = [kindWord(card.kind), years, d && (film ? runtime(d.runtime_min) : d.seasons ? (d.seasons === 1 ? '1 season' : `${d.seasons} seasons`) : null),
     d?.genres.slice(0, 2).join(', ')].filter(Boolean).join(' · ')
-  const by = d?.credits.filter((c) => c.role === (film ? 'director' : 'creator')).slice(0, 2).map((c) => c.person.name).join(', ')
+  const by = d?.by.slice(0, 2).join(', ')
   const scores: [string, string][] = []
-  if (d?.scores?.imdb_rating != null) scores.push(['IMDb', Number(d.scores.imdb_rating).toFixed(1)])
-  if (d?.scores?.rt_critics != null) scores.push(['RT', `${d.scores.rt_critics}%`])
-  if (d?.scores?.letterboxd != null) scores.push(['Letterboxd', Number(d.scores.letterboxd).toFixed(1)])
+  if (d?.imdb != null) scores.push(['IMDb', Number(d.imdb).toFixed(1)])
+  if (d?.rt != null) scores.push(['RT', `${d.rt}%`])
+  if (d?.lb != null) scores.push(['Letterboxd', Number(d.lb).toFixed(1)])
   const leaves = card.availability[0] && leavingNote(card.availability[0].leaves_on)
   const leavesOn = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
   const headH = 26 + 20 + 26 + 18 + 26 + (leavesOn ? 24 : 0)
@@ -242,7 +244,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
         <div className="hold-head" role="menuitem" tabIndex={0} aria-label={`Open ${card.title}`}
           onClick={openTitle} onKeyDown={(e) => { if (e.key === 'Enter') openTitle() }}>
           <b>{card.title}</b>
-          <p>{facts}</p>
+          <p key={d ? 'full' : 'short'} className={d ? 'hold-in' : undefined}>{facts}</p>
           {/* room is kept for these two while the title's data loads; a line the title turns out not to have is then
               dropped, so the space under the last line is always the same */}
           {(by || !d) && <p data-in={!!by}>{by ? <>{film ? 'Directed by' : 'Created by'} <span>{by}</span></> : '\u00a0'}</p>}

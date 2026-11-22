@@ -1,5 +1,6 @@
 // Search: the field sits at the bottom, above the keyboard. Before typing: a prompt and three ideas, with recents
 // in a drawer on the left. While typing: results with type pills, filter chips read from the words, and a sort sheet.
+import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
@@ -120,9 +121,10 @@ function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () =
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   const li = useRef<HTMLLIElement>(null)
   const close = useNearScreen(li, near)
+  useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
     <li ref={li}>
-      <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
+      <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onPointerDown={(e) => { warmFacts([h.id], true); hold.handlers.onPointerDown(e) }} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
         <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
       </a>
