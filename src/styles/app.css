@@ -179,6 +179,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .pill-open[data-on='true'] { background: var(--fill); color: #fff; }
 .title-meta { margin: 2px var(--margin) 0; font: var(--type-meta); color: var(--text-muted); }
 .title-meta span { color: var(--text-secondary); }
+.title-meta i { font-style: normal; color: var(--text-faint); } /* a label, like IMDb beside its number */
 .ratings { margin: 18px var(--margin) 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font: var(--type-meta); }
 .ratings div { display: flex; gap: 5px; } .ratings dt { color: var(--text-faint); } .ratings dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .overview { position: relative; margin: 18px var(--margin) 0; }
