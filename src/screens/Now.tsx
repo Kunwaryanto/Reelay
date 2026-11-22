@@ -1,25 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, runtime, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingNote, loadMyServices, openLink, runtime, type Card } from '../lib/catalogue'
+import { loadHome, type HomeCard } from '../lib/home'
+import { useLetterboxd } from '../lib/letterboxd'
+import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { warmBrowse } from './Browse'
-import { useQuery } from '../lib/query'
+import { readQueryData, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
 import { PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
-function heroMeta(c: Card): string {
+function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
-  const parts = [service ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
+  // the service is left out when the line above already names one ("New on Netflix")
+  const parts = [service && !c.reason?.startsWith('New on') ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
   if (c.kind === 'series' && c.seasons) parts.push(c.seasons === 1 ? '1 season' : `${c.seasons} seasons`)
   else if (c.genres?.[0]) parts.push(c.genres[0])
   return parts.filter(Boolean).join(' · ')
 }
 
-export function Hero({ items }: { items: Card[] }) {
+export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
   const { push } = useNavActions()
   const [index, setIndex] = useState(0)
   const [dir, setDir] = useState(1)
@@ -92,11 +96,13 @@ export function Hero({ items }: { items: Card[] }) {
         {items.map((h, i) => {
           const on = i === index
           return (
-            <a key={h.id} className="hero-slide" data-on={on} href={`/title/${h.id}`} aria-label={`${h.title}, ${heroMeta(h)}`}
+            <a key={h.id} className="hero-slide" data-on={on} href={`/title/${h.id}`} aria-label={`${h.title}, ${h.reason ? `${h.reason}, ` : ''}${heroMeta(h)}`}
               aria-hidden={!on} tabIndex={on ? 0 : -1} style={{ '--from': `${8 * dir}%` } as CSSProperties}
               onClick={(e) => { e.preventDefault(); if (!swiped.current) push(`/title/${h.id}`) }}>
-              <div className="hero-text">
+              <div className="hero-text" data-reason={h.reason ? '' : undefined}>
                 {h.logo_path ? <img className="hero-logo" src={tmdbImage(h.logo_path, 'w500')} alt="" draggable={false} /> : <span className="hero-name">{h.title}</span>}
+                {/* why it is here: new on a service, leaving, on the watchlist, trending, liked by a friend */}
+                {h.reason && <span className="hero-reason">{h.reason}</span>}
                 <span className="hero-meta">{heroMeta(h)}</span>
               </div>
             </a>
@@ -270,15 +276,35 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   )
 }
 
-// Where each row's "View all" goes: the Browse page for the same thing
-const MORE: Record<string, string> = {
-  leaving: '/browse/g/leaving-soon/list', rated: '/browse/g/highest-rated/list',
-  '2000s': '/browse/c/2000s', '90s': '/browse/c/90s', crime: '/browse/c/crime', comedy: '/browse/c/comedy', drama: '/browse/c/drama',
+/** One title given room between the rows: its wide picture, why it is here, and where it plays. */
+function Spotlight({ card }: { card: HomeCard }) {
+  const { push } = useNavActions()
+  const art = tmdbImage(card.backdrop_path, 'w780')
+  const service = card.availability[0]?.service_id
+  return (
+    <a className="spot press" href={`/title/${card.id}`} onClick={(e) => { e.preventDefault(); push(`/title/${card.id}`) }}>
+      {art && <img src={art} alt="" loading="lazy" draggable={false} />}
+      <span className="spot-text">
+        {card.reason && <small>{card.reason}</small>}
+        <b>{card.title}</b>
+        {/* the service, unless the reason already names one ("New on Netflix") */}
+        <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
+      </span>
+    </a>
+  )
 }
 
 export default function Now() {
   const { push } = useNavActions()
-  const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
+  // Home is built for this member: their services, and whether films they have logged are left out
+  const uid = useAuth().session?.user.id
+  const services = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
+  const lb = useLetterboxd()
+  const hide = lb.account?.hide_watched ?? true
+  const svc = services.data
+  const settled = svc !== undefined && lb.account !== undefined
+  const q = useQuery(settled ? `home:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), { maxAge: 10 * 60 * 1000 })
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const fresh = useNewVersion()
@@ -364,11 +390,12 @@ export default function Now() {
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.rows.map((row, r) => (
+            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><Spotlight card={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
-              <SectionHeader title={row.title} onViewAll={MORE[row.id] ? () => push(MORE[row.id]) : undefined} onViewAllPress={MORE[row.id] ? () => warmBrowse(MORE[row.id]) : undefined} />
+              <SectionHeader title={row.title} onViewAll={row.more ? () => push(row.more!) : undefined} onViewAllPress={row.more ? () => warmBrowse(row.more!) : undefined} />
               <PosterRow>
                 {row.items.map((card) => {
-                  const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined
+                  const note = card.note ?? (row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined)
                   return <TitleCard key={card.id} card={card} note={note} eager={r === 0} onHold={(c, cover) => setHeld({ card: c, cover })} />
                 })}
               </PosterRow>

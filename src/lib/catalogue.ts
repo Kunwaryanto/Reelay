@@ -16,10 +16,8 @@ export type Card = {
   availability: Avail[]
 }
 export type Row = { id: string; title: string; items: Card[]; notes?: 'leaving' }
-export type NowData = { hero: Card[]; rows: Row[] }
 
 const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
-const HERO = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -27,7 +25,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+
 
 // Now mixes films and series, and recent titles with classics, so popularity alone (which favours
 // long-running series) doesn't fill the page. A title is shown once: rows skip anything already above them.
@@ -37,7 +35,7 @@ const CLASSIC_TO = YEAR - 15 // fifteen years and older
 
 type Kind = Card['kind']
 type Bucket = { kind: Kind; from?: number; to?: number }
-const BOTH: Bucket[] = [{ kind: 'film' }, { kind: 'series' }]
+
 const MIXED: Bucket[] = [
   { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM },
   { kind: 'film', to: CLASSIC_TO }, { kind: 'series', to: CLASSIC_TO },
@@ -72,57 +70,6 @@ async function cards(b: Bucket, f: Filter, limit: number): Promise<Card[]> {
   if (f.genresAny) q = q.overlaps('genres', f.genresAny)
   if (f.genresAll) q = q.contains('genres', f.genresAll)
   return unwrap((await q.order('popularity', { ascending: false }).limit(limit)) as never)
-}
-
-async function rated(b: Bucket): Promise<Card[]> {
-  const recent = b.from !== undefined
-  let q = supabase.from('titles').select(`${CARD},scores!inner(imdb_rating,imdb_votes)`).eq('kind', b.kind)
-    .gte('scores.imdb_votes', recent ? 20000 : 50000)
-  q = recent ? q.gte('year', RECENT_FROM) : q.lt('year', RECENT_FROM)
-  return unwrap((await q.order('scores(imdb_rating)', { ascending: false }).limit(15)) as never)
-}
-
-const RATED: Bucket[] = [
-  { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM }, { kind: 'film' }, { kind: 'series' },
-]
-
-export async function loadNow(): Promise<NowData> {
-  const heroQ = (kind: Kind) => supabase.from('titles').select(HERO).eq('kind', kind)
-    .not('backdrop_path', 'is', null).not('logo_path', 'is', null).order('popularity', { ascending: false }).limit(6)
-  const all = (buckets: Bucket[], f: Filter, limit: number) => Promise.all(buckets.map((b) => cards(b, f, limit)))
-
-  const [heroFilm, heroSeries, leaving, ratedLists, d2000, d90, crime, comedy, drama] = await Promise.all([
-    heroQ('film'), heroQ('series'),
-    supabase.from('availability').select(`leaves_on,title:titles!inner(${CARD})`).gte('leaves_on', today()).lte('leaves_on', inDays(30)).order('leaves_on').limit(40),
-    Promise.all(RATED.map(rated)),
-    all(BOTH, { from: 2000, to: 2009 }, 25),
-    all(BOTH, { from: 1990, to: 1999 }, 25),
-    all(MIXED, { genresAll: ['Crime'] }, 15),
-    all(MIXED, { genresAll: ['Comedy'] }, 15),
-    all(MIXED, { genresAll: ['Drama'] }, 15),
-  ])
-
-  const seen = new Set<number>()
-  const hero = interleave([unwrap(heroFilm as never), unwrap(heroSeries as never)], seen, 5)
-
-  // Leaving soon is a list of facts, so it keeps every title, and marks them as shown for the rows below.
-  const inLeaving = new Set<number>()
-  const leavingCards = (unwrap(leaving as never) as { title: Card }[])
-    .map((r) => r.title)
-    .filter((t) => t && !inLeaving.has(t.id) && inLeaving.add(t.id))
-    .slice(0, 20)
-  leavingCards.forEach((t) => seen.add(t.id))
-
-  const rows: Row[] = [
-    { id: 'leaving', title: 'Leaving soon', items: leavingCards, notes: 'leaving' },
-    { id: 'rated', title: 'Highest rated', items: interleave(ratedLists, seen) },
-    { id: '2000s', title: '2000s', items: interleave(d2000, seen) },
-    { id: '90s', title: '90s', items: interleave(d90, seen) },
-    { id: 'crime', title: 'Crime', items: interleave(crime, seen) },
-    { id: 'comedy', title: 'Comedy', items: interleave(comedy, seen) },
-    { id: 'drama', title: 'Drama', items: interleave(drama, seen) },
-  ]
-  return { hero, rows: rows.filter((r) => r.items.length >= 3) }
 }
 
 export type Person = { id: number; name: string; profile_path: string | null }

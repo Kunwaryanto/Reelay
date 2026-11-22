@@ -5,7 +5,7 @@ import { useAuth } from './auth'
 import { setQueryData, useQuery } from './query'
 import { supabase } from './supabase'
 
-export type LbAccount = { username: string; display_name: string | null; mark_watched: boolean; synced_at: string | null; sync_error: string | null; films: number; imported_at: string | null; imported_films: number | null }
+export type LbAccount = { username: string; display_name: string | null; mark_watched: boolean; hide_watched: boolean; synced_at: string | null; sync_error: string | null; films: number; imported_at: string | null; imported_films: number | null }
 export type LbLog = { me: boolean; name: string; username: string; entry_id: string; watched_on: string | null; rating: number | null; rewatch: boolean }
 
 const meKey = (uid: string) => `lb-me:${uid}`
@@ -66,9 +66,10 @@ export async function disconnectLetterboxd(uid: string) {
   setQueryData(watchedKey(uid), [])
 }
 
-export async function setMarkWatched(uid: string, account: LbAccount, on: boolean) {
-  setQueryData(meKey(uid), { ...account, mark_watched: on })
-  const { error } = await supabase.from('letterboxd_accounts').update({ mark_watched: on }).eq('user_id', uid)
+/** Flip one of the member's two switches: the check on posters, or leaving watched films out of Home's recommendations. */
+export async function setLetterboxdSwitch(uid: string, account: LbAccount, key: 'mark_watched' | 'hide_watched', on: boolean) {
+  setQueryData(meKey(uid), { ...account, [key]: on })
+  const { error } = await supabase.from('letterboxd_accounts').update({ [key]: on }).eq('user_id', uid)
   if (error) { setQueryData(meKey(uid), account); throw new Error(error.message) }
 }
 

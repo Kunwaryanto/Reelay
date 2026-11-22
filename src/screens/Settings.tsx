@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '../lib/auth'
 import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
-import { connectLetterboxd, disconnectLetterboxd, refreshLetterboxd, setMarkWatched, useLetterboxd } from '../lib/letterboxd'
+import { connectLetterboxd, disconnectLetterboxd, refreshLetterboxd, setLetterboxdSwitch, useLetterboxd } from '../lib/letterboxd'
 import { readExport, sendImport } from '../lib/letterboxdImport'
 import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
@@ -291,9 +291,9 @@ function Letterboxd() {
     setLeaving(true)
     try { await disconnectLetterboxd(uid) } catch { toast({ text: navigator.onLine ? 'Couldn’t disconnect. Try again.' : 'You’re offline. Connect to change this.' }) } finally { setLeaving(false) }
   }
-  const flip = async () => {
+  const flip = async (key: 'mark_watched' | 'hide_watched') => {
     if (!uid || !account) return
-    try { await setMarkWatched(uid, account, !account.mark_watched) } catch { toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' }) }
+    try { await setLetterboxdSwitch(uid, account, key, !account[key]) } catch { toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' }) }
   }
   const status = !account ? '' : account.synced_at
     ? `${account.films === 1 ? '1 film' : `${count(account.films)} films`} · read ${readAt(account.synced_at)}`
@@ -322,8 +322,11 @@ function Letterboxd() {
               <span className="row-text"><b>{account.username}</b><small>{status}</small></span>
               <span className="row-note lb-out">Profile<Icon name="north_east" size={14} /></span>
             </a></li>
-            <li><button type="button" role="switch" aria-checked={account.mark_watched} className="set-switch" onClick={flip}>
+            <li><button type="button" role="switch" aria-checked={account.mark_watched} className="set-switch" onClick={() => flip('mark_watched')}>
               <span className="row-text"><b>Mark watched films</b></span><i aria-hidden="true" />
+            </button></li>
+            <li><button type="button" role="switch" aria-checked={account.hide_watched} className="set-switch" onClick={() => flip('hide_watched')}>
+              <span className="row-text"><b>Hide watched films on Home</b><small>In recommendations</small></span><i aria-hidden="true" />
             </button></li>
             <li><button type="button" onClick={() => { if (importing === null) setHowTo(true) }} aria-busy={importing !== null}>
               {importing !== null

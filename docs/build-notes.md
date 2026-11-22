@@ -383,3 +383,14 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - **Hide watched**: a switch in the Sort and filter drawer (Search, Browse lists, Watchlist), only when connected with something logged.
 - **Import your history**: a third row on the connected page. It opens a sheet with two steps, each with its own small button on the right: Download (opens letterboxd.com/data/export/, which downloads the ZIP) and Choose file. The white button is the step to do next: Download first, Choose file once Download has been tapped. While it runs the row reads "Importing your history…" with "Reading the file" then "Matching N films"; after, "Imported 22 Nov · N films". A wrong file shows an error on the row. The ZIP is opened on the phone; only the film rows are sent.
 - Friends are everyone on Reelay who has connected.
+
+## Home (22 Nov, staging; the first tab, renamed from Now)
+
+A mix of what is happening on the member's services and what is theirs. Everything is limited to their services when they have picked some. A title is shown once (a row skips what a row above has); a row needs three titles; a row that fails to load is left out.
+
+- **Hero**, up to 7 slides, each with a reason line above the meta: "New on Netflix", "On your watchlist" or "Leaves in 3 days", "Trending film this week", "Trending series this week", "Because you liked Heat", "Anna rated it 4.5", "Leaves tomorrow". With a reason line the logo sits 16px higher. A thin day is filled from trending up to 5.
+- **Rows, in order**: New on your services (arrivals of the last 30 days, newest first) · Trending films · Trending series (TMDB's weekly lists; not numbered, they aren't Swedish viewing figures) · Leaving soon · From your watchlist (what can be played, leaving first) · Because you liked X (a different X each day, from films rated 4+) · the spotlight card · Friends liked (films other members rated 4+; the line under the poster is "Anna 4.5") · New films · New series (released this year or last) · Award winners or Hidden gems (alternate days) · two genres (the member's best-rated genres take turns; without ratings every genre does) · one decade (80s to 2010s in turn).
+- **Spotlight**: one 16:10 card with the wide picture, a reason line, the title, and kind · year · service. Picked from Because, then Friends, then New, then Trending, never a hero title.
+- **Hide watched films on Home** (Settings › Letterboxd, on by default): leaves logged films out of the recommendation rows (Because, Friends, the theme, genre and decade rows). New, Trending, Leaving soon and the watchlist row show everything.
+- Without services, a watchlist or Letterboxd: New this month, both Trending rows, Leaving soon, the spotlight, New films and series, and the rotating rows across every service.
+
