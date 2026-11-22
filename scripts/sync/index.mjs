@@ -27,8 +27,11 @@ const env = (k, required = true) => {
 const LIMIT = Number(process.env.SYNC_LIMIT || 0);
 const FULL = LIMIT === 0;
 const MDBLIST_PER_RUN = Number(process.env.MDBLIST_PER_RUN || 900);
-const SA_PAGES = Number(process.env.SA_PAGES || 10);
-// Requests for links to the services' apps each night. The free plan allows 100 a day; leaving dates use up to SA_PAGES.
+// Streaming Availability's free plan allows 100 requests a day. Leaving dates come first and read the whole list
+// (up to SA_PAGES pages, 25 changes each); links to the services' apps get what is left of SA_BUDGET, at most
+// SA_LINK_REQUESTS. The 5 spare are for a retry or a test run the same day.
+const SA_PAGES = Number(process.env.SA_PAGES || 30);
+const SA_BUDGET = Number(process.env.SA_BUDGET || 95);
 const SA_LINK_REQUESTS = Number(process.env.SA_LINK_REQUESTS || 70);
 const REFRESH_ALL = process.env.SYNC_REFRESH === 'all';
 const REFRESH_PER_RUN = Number(process.env.SYNC_REFRESH_PER_RUN || 2500);
@@ -386,13 +389,13 @@ const setState = (key, value) => db.query(
   `insert into public.sync_state (key, value, updated_at) values ($1, $2, now())
    on conflict (key) do update set value = excluded.value, updated_at = now()`, [key, JSON.stringify(value)]);
 
-async function syncLinks() {
+async function syncLinks(budget = SA_LINK_REQUESTS) {
   const key = env('STREAMING_AVAILABILITY_KEY', false);
   if (!key) return log('links: no key, skipped');
   const headers = { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': SA_HOST };
   const services = (await db.query('select id, sa_service_id from public.services where sa_service_id is not null order by sort_order')).rows;
   const svcBySa = Object.fromEntries(services.map((r) => [r.sa_service_id, r.id]));
-  let left = SA_LINK_REQUESTS;
+  let left = budget;
   let stopped = false;
   // One request; null when the day's allowance is used up (then nothing more is asked tonight).
   const ask = async (path) => {
@@ -449,7 +452,7 @@ async function syncLinks() {
   }
   await setState('links:fill', fill);
   const missing = (await db.query('select count(*)::int n from public.availability where link_path is null')).rows[0].n;
-  log(`links: ${added} from new arrivals (${pages} pages), ${filled} from catalogues; ${SA_LINK_REQUESTS - left} requests; ${missing} offers still without a link`);
+  log(`links: ${added} from new arrivals (${pages} pages), ${filled} from catalogues; ${budget - left} of ${budget} requests; ${missing} offers still without a link`);
 }
 
 // ---------------------------------------------------------------------------
@@ -457,18 +460,19 @@ async function syncLinks() {
 // ---------------------------------------------------------------------------
 async function syncLeavingDates() {
   const key = env('STREAMING_AVAILABILITY_KEY', false);
-  if (!key) return log('leaving dates: no key, skipped');
+  if (!key) { log('leaving dates: no key, skipped'); return 0; }
   const host = 'streaming-availability.p.rapidapi.com';
   const headers = { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host };
   const svc = Object.fromEntries((await db.query('select id, sa_service_id from public.services where sa_service_id is not null')).rows.map((r) => [r.sa_service_id, r.id]));
   let cursor = '';
-  let matched = 0, seen = 0;
+  let matched = 0, seen = 0, pages = 0, more = false;
   const found = new Map(); // "titleId|service" -> date
   for (let page = 0; page < SA_PAGES; page++) {
     const q = new URLSearchParams({ country: 'se', change_type: 'expiring', item_type: 'show', output_language: 'en' });
     if (cursor) q.set('cursor', cursor);
     const r = await getJson(`https://${host}/changes?${q}`, headers);
     if (!r) break;
+    pages++;
     for (const show of Object.values(r.shows ?? {})) harvestLinks(show, svc);
     for (const c of r.changes ?? []) {
       seen++;
@@ -482,7 +486,8 @@ async function syncLeavingDates() {
       const day = new Date(c.timestamp * 1000).toISOString().slice(0, 10);
       found.set(`${t.rows[0].id}|${ours}`, day);
     }
-    if (!r.hasMore) break;
+    more = !!r.hasMore;
+    if (!more) break;
     cursor = r.nextCursor;
   }
   for (const [k, day] of found) {
@@ -492,7 +497,8 @@ async function syncLeavingDates() {
   }
   // Dates that have passed are no longer "leaving".
   await db.query('update public.availability set leaves_on = null where leaves_on < current_date');
-  log(`leaving dates: ${seen} changes read, ${matched} matched to our titles`);
+  log(`leaving dates: ${seen} changes read in ${pages} pages${more ? ' (more remained: raise SA_PAGES)' : ''}, ${matched} matched to our titles`);
+  return pages;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,10 +643,10 @@ async function main() {
   });
   log(`title details saved: ${results.filter(Boolean).length} of ${todo.length}`);
   await saveAvailability(found, keys);
-  await syncLeavingDates();
+  const saUsed = await syncLeavingDates();
   await saveLinks(); // what the leaving-dates list carried
   // a failure here never fails the sync: the app falls back to the service's search
-  await syncLinks().catch((e) => log('links failed:', e.message));
+  await syncLinks(Math.max(0, Math.min(SA_LINK_REQUESTS, SA_BUDGET - saUsed))).catch((e) => log('links failed:', e.message));
   await syncImdbRatings();
   await syncMdblist();
   if (FULL) await reconcile(runStart);
