@@ -160,7 +160,7 @@ button { font: inherit; color: inherit; }
 .hold-head p span { color: var(--text-secondary); }
 .hold-head b + p { margin-top: 10px; } /* the name stands off from the facts as the scores do */
 .hold-head dl { margin: 10px 0 0; height: 16px; display: flex; gap: 14px; font: var(--type-meta); }
-.hold-head dl div { display: flex; gap: 4px; } .hold-head dt { color: var(--text-faint); } .hold-head dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hold-head dl div { display: flex; gap: 4px; } .hold-head dt { color: var(--text-faint); } .hold-head dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .hold-head [data-in] { transition: opacity 200ms var(--ease-out); } .hold-head [data-in='false'] { opacity: 0; }
 .hold-head .hold-leaves { margin-top: 8px; }
 .hold-menu > button, .hold-menu > a { width: 100%; height: var(--menu-row); padding: 0 16px; border: 0; background: transparent; font: 400 16px/21px var(--font); color: #fff; display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.12); }
@@ -180,7 +180,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .title-meta { margin: 2px var(--margin) 0; font: var(--type-meta); color: var(--text-muted); }
 .title-meta span { color: var(--text-secondary); }
 .ratings { margin: 18px var(--margin) 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font: var(--type-meta); }
-.ratings div { display: flex; gap: 5px; } .ratings dt { color: var(--text-faint); } .ratings dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ratings div { display: flex; gap: 5px; } .ratings dt { color: var(--text-faint); } .ratings dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .overview { position: relative; margin: 18px var(--margin) 0; }
 .overview p { margin: 0; font: var(--type-body); color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .overview[data-open='true'] p { display: block; }
