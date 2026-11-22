@@ -230,7 +230,11 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
         <div className="fd-fade" aria-hidden="true"><i /><i /><i /></div>
         <div className="sheet-action fd-action">
           <Button disabled={none} aria-label={said} onClick={() => { if (!none) apply(d) }}>
-            {none || typeof n !== 'number' ? said : <>Show <Rolling n={n} /> {n === 1 ? noun[0] : noun[1]}</>}
+            <span className="fd-show">
+              {/* never narrower than a three-digit count: an unseen "Show 000 films" sits in the same place */}
+              <span aria-hidden="true">Show 000 {noun[1]}</span>
+              <span>{none || typeof n !== 'number' ? said : <>Show <Rolling n={n} /> {n === 1 ? noun[0] : noun[1]}</>}</span>
+            </span>
           </Button>
         </div>
       </div>
