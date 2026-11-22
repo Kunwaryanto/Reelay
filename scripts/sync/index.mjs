@@ -8,7 +8,8 @@
 //    every two weeks. SYNC_REFRESH=all refetches every title (slow: hours).
 // 4. Leaving dates: Streaming Availability's list of titles leaving in Sweden.
 // 5. Scores: IMDb's daily ratings file, then MDBList for Rotten Tomatoes and Letterboxd.
-// 6. Full runs only: offers that are gone lose their rows, "added"/"left" events are written by
+// 6. Letterboxd: the diary feeds of connected members (full runs only).
+// 7. Full runs only: offers that are gone lose their rows, "added"/"left" events are written by
 //    comparing with the night before, and old rows are cleaned up.
 //
 // SYNC_LIMIT > 0 runs a test on that many titles (no deletions, no events).
@@ -773,6 +774,62 @@ const COUNTS = `select (select count(*) from public.scores where rt_critics is n
   (select count(*) from public.scores where mdblist_synced_at is not null) asked,
   (select count(*) from public.titles where imdb_id is not null) with_imdb_id`;
 
+// Letterboxd: the public diary feed of every connected member (their latest entries; the app reads it once
+// when they connect). Members are few, so one at a time with a pause. A member that fails keeps their films
+// and is tried again the next night.
+function parseLetterboxd(xml) {
+  const name = /<channel>[\s\S]*?<title>Letterboxd - ([^<]*)<\/title>/.exec(xml)?.[1];
+  const text = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, '&').trim();
+  const logs = [];
+  for (const item of xml.split('<item>').slice(1)) {
+    const tmdb = /<tmdb:movieId>(\d+)</.exec(item)?.[1];
+    const guid = /<guid[^>]*>([^<]+)</.exec(item)?.[1]?.trim();
+    if (!tmdb || !guid || guid.startsWith('letterboxd-list')) continue;
+    const rating = Number(/<letterboxd:memberRating>([\d.]+)</.exec(item)?.[1]);
+    logs.push({
+      entry_id: guid.slice(0, 80), tmdb_id: Number(tmdb),
+      watched_on: /<letterboxd:watchedDate>(\d{4}-\d\d-\d\d)</.exec(item)?.[1] ?? null,
+      rating: rating >= 0.5 && rating <= 5 ? rating : null,
+      rewatch: /<letterboxd:rewatch>Yes</.test(item),
+    });
+  }
+  return { name: name ? text(name).slice(0, 80) : null, logs };
+}
+
+async function syncLetterboxd() {
+  const members = (await db.query('select user_id, username from public.letterboxd_accounts order by synced_at nulls first')).rows;
+  if (!members.length) return;
+  let ok = 0, entries = 0;
+  for (const m of members) {
+    try {
+      const res = await fetch(`https://letterboxd.com/${m.username}/rss/`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Reelay/1.0; +https://usereelay.vercel.app)', Accept: 'application/rss+xml, application/xml' },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) throw new Error(res.status === 404 ? 'no such member' : `Letterboxd answered ${res.status}`);
+      const xml = await res.text();
+      if (!xml.includes('<rss')) throw new Error('not a feed');
+      const { name, logs } = parseLetterboxd(xml);
+      const rows = [...new Map(logs.map((l) => [l.entry_id, l])).values()];
+      if (rows.length) {
+        await db.query(
+          `insert into public.letterboxd_logs (user_id, entry_id, tmdb_id, watched_on, rating, rewatch)
+           select $1, x.entry_id, x.tmdb_id, x.watched_on, x.rating, x.rewatch
+           from jsonb_to_recordset($2::jsonb) as x(entry_id text, tmdb_id int, watched_on date, rating numeric, rewatch boolean)
+           on conflict (user_id, entry_id) do update set tmdb_id = excluded.tmdb_id, watched_on = excluded.watched_on, rating = excluded.rating, rewatch = excluded.rewatch`,
+          [m.user_id, JSON.stringify(rows)]);
+      }
+      await db.query('update public.letterboxd_accounts set synced_at = now(), sync_error = null, display_name = coalesce($2, display_name) where user_id = $1', [m.user_id, name]);
+      ok++; entries += rows.length;
+    } catch (e) {
+      await db.query('update public.letterboxd_accounts set sync_error = $2 where user_id = $1', [m.user_id, String(e.message).slice(0, 200)]);
+      log(`  Letterboxd: ${m.username} failed: ${e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  log(`Letterboxd: ${ok} of ${members.length} members read, ${entries} entries in their feeds`);
+}
+
 async function main() {
   if (ONLY === 'scores') {
     log('scores only');
@@ -831,6 +888,8 @@ async function main() {
   await syncImdbRatings();
   await syncMdblist();
   await syncOmdb().catch((e) => log('OMDb failed:', e.message));
+  // a failure here never fails the sync
+  if (FULL) await syncLetterboxd().catch((e) => log('Letterboxd failed:', e.message));
   if (FULL) await reconcile(runStart);
   // after reconcile, so today's arrivals are in the events; a failure here never fails the sync
   if (FULL) await sendNotifications(db, log).catch((e) => log('notifications failed:', e.message));

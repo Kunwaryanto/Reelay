@@ -448,3 +448,7 @@ verify_jwt = false
 # Checks the session it is sent itself (the gateway's check doesn't accept the publishable key).
 [functions.delete-account]
 verify_jwt = false
+
+# Checks the session it is sent itself, like delete-account.
+[functions.letterboxd]
+verify_jwt = false
