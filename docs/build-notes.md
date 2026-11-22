@@ -372,3 +372,13 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Browse lists: sorts Highest rated / Newest / Most popular (the list's own first); a list that already is a genre, decade or length doesn't offer that filter. Filters apply to the list as loaded (up to 90 titles); changing the sort loads the list again, so its count shows after.
 - Watchlist: sorts Recently added / Leaving soonest / Highest rated / A–Z; all filters.
 - "Only on my services" is hidden while no services are picked, as in Search.
+
+## Letterboxd (22 Nov, staging)
+
+- **Settings › Letterboxd**: a username field with a small grey Connect pill inside it. Unknown member: an inline error under the field. Connected: the username with "Connected · N films · last read HH:MM" and a Profile link, one switch (Mark watched films), and Disconnect, which deletes everything Reelay has from that diary. No switch for sharing ratings: they are public on Letterboxd, and the page says friends on Reelay see them.
+- **Posters**: a film the person has logged gets a bare white check top left (the service mark stays top right) and its picture at 45%. Off with the switch.
+- **Title page, scores**: IMDb · Critics · Audience · Letterboxd, so four fit on one line (Critics and Audience are Rotten Tomatoes).
+- **Title page, who watched it** (films only): one 44px row under the scores with up to three initials (yours white, first). "You and 7 friends have watched it" / "You and Anna have watched it" / "3 friends have watched it" / "Anna and Erik have watched it" / "You’ve watched it twice" / "You watched it 12 Mar 2025". Second line: "You 4.0 · Friends 3.7"; with one friend their own rating instead of an average. No row when nobody has.
+- **The sheet**: opens from the row when someone else has watched it or you have more than one log. Everyone and Friends averages, your logs (date, stars as a number; "Rewatch"/"First watch" only when there are several), then friends, most recent first ("3 days ago", "12 Mar", "Feb 2024"; "Watched twice · last …"; "no rating"). Open goes to the film on Letterboxd.
+- **Hide watched**: a switch in the Sort and filter drawer (Search, Browse lists, Watchlist), only when connected with something logged.
+- Friends are everyone on Reelay who has connected. Not built yet: importing older history from a Letterboxd export.

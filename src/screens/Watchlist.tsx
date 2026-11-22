@@ -12,6 +12,7 @@ import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { Button, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched } from '../ui'
+import { useWatched } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { HoldMenu } from './Now'
 
@@ -78,7 +79,8 @@ export default function Watchlist() {
 
   const facets = (r: Row): Facets => ({ year: r.t.year, genres: r.t.genres, rating: r.t.rating, rt: r.t.rt, lb: r.t.lb, runtime: r.t.runtime_min, lang: r.t.original_language, services: [] })
   // "mine" is checked against the row (which knows about the services someone has picked), the rest on the title
-  const fits = (r: Row, d: Draft) => (!d.mine || r.mine) && passesDraft(facets(r), { ...d, mine: false }, picked)
+  const seen = useWatched()
+  const fits = (r: Row, d: Draft) => (!d.mine || r.mine) && !(d.hide && seen.has(r.t.id)) && passesDraft(facets(r), { ...d, mine: false }, picked)
   const shown = all.filter((r) => fits(r, f))
   const chips = draftChips(f, setF, SORTS, 'added')
   const countOf = (d: Draft): Count => ({

@@ -9,6 +9,7 @@ import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
+import { useWatchedMark } from '../lib/letterboxd'
 import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { prefetch, useRequestFailed } from '../lib/query'
@@ -149,7 +150,7 @@ export function useNearScreen(ref: React.RefObject<HTMLElement | null>, skip = f
 function wasDecoded(src: string | null | undefined) { return !!src && decoded.has(src) }
 function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
 
-export function Cover({ path, service, eager, sizes = '147px' }: { path: string | null; service?: string; eager?: boolean; sizes?: string }) {
+export function Cover({ path, service, eager, sizes = '147px', watched }: { path: string | null; service?: string; eager?: boolean; sizes?: string; watched?: boolean }) {
   const inRow = useContext(NearContext)
   const box = useRef<HTMLDivElement>(null)
   // in a grid (no row to speak for it), each poster watches for itself
@@ -165,13 +166,15 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
   const pic = useRef<HTMLImageElement>(null)
   useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
   return (
-    <div className="cover" data-ready={ready} ref={box}>
+    <div className="cover" data-ready={ready} data-watched={watched || undefined} ref={box}>
       {path && (
         <img ref={pic} src={src} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
           loading={known || eager || near ? undefined : 'lazy'} decoding={known ? 'sync' : 'async'} onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
+      {/* logged on Letterboxd: a check in the other corner from the service */}
+      {watched && <span className="cover-seen" aria-hidden="true"><Icon name="check" size={14} /></span>}
     </div>
   )
 }
@@ -181,6 +184,7 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const service = card.availability[0]?.service_id
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
+  const watched = useWatchedMark(card.id)
   // near the screen: its long-press facts are fetched with the rest of its row
   const box = useRef<HTMLAnchorElement>(null)
   const near = useNearScreen(box)
@@ -195,8 +199,8 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
         setTimeout(() => { if (el.dataset.pressed) warmTitle(card.id) }, 100)
       }}
       onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
-      <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}`}>
-        <Cover path={card.poster_path} service={service} eager={eager} />
+      <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}${watched ? ', watched' : ''}`}>
+        <Cover path={card.poster_path} service={service} eager={eager} watched={watched} />
       </div>
       <span className="card-title">{card.title}</span>
       <span className="card-meta">{meta}</span>

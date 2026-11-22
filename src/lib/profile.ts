@@ -85,15 +85,19 @@ export function servicesLabel(names: string[]): string {
 
 /** Everything Reelay keeps about the signed-in person, for "Get a copy of my data". */
 export async function exportMyData(userId: string, email: string | null) {
-  const [profile, services, watchlist] = await Promise.all([
+  const [profile, services, watchlist, lbAccount, lbLogs] = await Promise.all([
     supabase.from('profiles').select('region,language,notify_leaving,notify_arrivals,notify_new_seasons,created_at').eq('user_id', userId).single(),
     supabase.from('user_services').select('service:services(name)'),
     supabase.from('watchlist').select('notify,added_at,title:titles(title,year,kind)').order('added_at'),
+    supabase.from('letterboxd_accounts').select('username,display_name,mark_watched,connected_at,synced_at').eq('user_id', userId).maybeSingle(),
+    supabase.from('letterboxd_logs').select('tmdb_id,watched_on,rating,rewatch').eq('user_id', userId).order('watched_on'),
   ])
   return {
     exported_at: new Date().toISOString(), email,
     settings: unwrap(profile), services: (unwrap(services as never) as { service: { name: string } | null }[]).map((s) => s.service?.name),
     watchlist: unwrap(watchlist as never),
+    // only when Letterboxd is connected
+    ...(lbAccount.data ? { letterboxd: { ...lbAccount.data, diary: lbLogs.data ?? [] } } : {}),
   }
 }
 

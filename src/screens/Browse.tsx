@@ -9,6 +9,7 @@ import {
 import { SERVICE_NAME, leavingNote, loadMyServices, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
+import { useWatched } from '../lib/letterboxd'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { prefetch, useQuery } from '../lib/query'
 import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, titleArt, useArrival, usePressWarm, useSwitched, warmPictures, type Picture } from '../ui'
@@ -312,15 +313,17 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
     const sc = Array.isArray(x.scores) ? x.scores[0] : x.scores
     return { year: c.year, genres: c.genres, rating: sc?.imdb_rating ?? null, rt: sc?.rt_critics ?? null, lb: sc?.letterboxd ?? null, runtime: x.runtime_min ?? null, lang: x.original_language ?? null, services: c.availability.map((a) => a.service_id) }
   }
-  const all = (q.data ?? []).filter((c) => passesDraft(facets(c), f, picked))
+  const seen = useWatched()
+  const fits = (c: Card, d: Draft) => passesDraft(facets(c), d, picked) && !(d.hide && seen.has(c.id))
+  const all = (q.data ?? []).filter((c) => fits(c, f))
   const r = cat.rule
   // a list that already is one genre, decade or length doesn't offer that filter
   const rows = ALL_ROWS.filter((k) => !(k === 'genres' && r.genres) && !(k === 'decade' && (r.from !== undefined || r.to !== undefined)) && !(k === 'length' && r.under))
   const chips = draftChips(f, setF, sorts, start)
   const countOf = (d: Draft): Count => ({
-    key: `${JSON.stringify(d)}|${pick}|${q.data?.length ?? 0}`,
+    key: `${JSON.stringify(d)}|${pick}|${q.data?.length ?? 0}|${seen.size}`,
     // a different sort loads a different list: the count for it is known once it's shown
-    run: async () => (d.sort !== sort ? null : (q.data ?? []).filter((c) => passesDraft(facets(c), d, picked) && (typed || pick === 'all' || c.kind === pick)).length),
+    run: async () => (d.sort !== sort ? null : (q.data ?? []).filter((c) => fits(c, d) && (typed || pick === 'all' || c.kind === pick)).length),
   })
   const counts = { all: all.length, film: all.filter((c) => c.kind === 'film').length, series: all.filter((c) => c.kind === 'series').length }
   const list = typed || pick === 'all' ? all : all.filter((c) => c.kind === pick)

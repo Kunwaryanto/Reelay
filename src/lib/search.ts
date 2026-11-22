@@ -33,6 +33,8 @@ export type Filters = {
   minLb?: number // Letterboxd, 0 to 5
   length?: 'short' | 'mid' | 'long' // under 90 min, up to 2 h, over 2 h
   services?: string[]
+  /** titles to leave out (Hide watched) */
+  hide?: number[]
 }
 
 /** A word in the query that became a filter chip. */
@@ -154,6 +156,7 @@ function toHit(r: Raw): Hit {
 }
 
 function passes(h: Hit, f: Filters): boolean {
+  if (f.hide?.includes(h.id)) return false
   if (f.kind && h.kind !== f.kind) return false
   if (f.service && !h.services.includes(f.service)) return false
   if (f.from !== undefined && (h.year === null || h.year < f.from)) return false
@@ -188,6 +191,7 @@ function narrow<Q>(query: Q, f: Filters): Q {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = query as any
   if (f.kind) q = q.eq('kind', f.kind)
+  if (f.hide?.length) q = q.not('id', 'in', `(${f.hide.join(',')})`)
   if (f.service) q = q.eq('availability.service_id', f.service)
   if (f.services) q = q.in('availability.service_id', f.services)
   if (f.leaving) q = q.not('availability.leaves_on', 'is', null).lte('availability.leaves_on', inDays(30))

@@ -1,16 +1,98 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadTitle, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
+import { firstName, fullDate, looseDate, times, useTitleLogs, type TitleLogs } from '../lib/letterboxd'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
-import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Skeleton, TitleCard, titleArt, useArrival, usePullToRefresh } from '../ui'
+import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Sheet, Skeleton, TitleCard, titleArt, useArrival, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
 const names = (t: TitleDetail, role: string) => t.credits.filter((c) => c.role === role).map((c) => c.person.name).join(', ')
+
+const score = (n: number) => n.toFixed(1)
+
+/**
+ * Who has watched the film, from Letterboxd: one line under the scores (you and the other people on Reelay),
+ * opening a sheet with every log. Ratings are numbers out of 5, like the Letterboxd average beside the other scores.
+ */
+function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number; everyone: number | null }) {
+  const [open, setOpen] = useState(false)
+  const { mine, friends, myRating, friendsAvg } = logs
+  const you = mine.length > 0
+  const n = friends.length
+  const who = friends.map((f) => firstName(f.name))
+  const line = you
+    ? n === 0 ? (mine.length > 1 ? `You’ve watched it ${times(mine.length)}` : mine[0].watched_on ? `You watched it ${fullDate(mine[0].watched_on)}` : 'You’ve watched it')
+      : n === 1 ? `You and ${who[0]} have watched it` : `You and ${n} friends have watched it`
+    : n === 1 ? `${who[0]} has watched it` : n === 2 ? `${who[0]} and ${who[1]} have watched it` : `${n} friends have watched it`
+  const bits: [string, string][] = []
+  if (myRating !== null) bits.push(['You', score(myRating)])
+  if (n === 1 && friends[0].rating !== null) bits.push([who[0], score(friends[0].rating)])
+  else if (n > 1 && friendsAvg !== null) bits.push(['Friends', score(friendsAvg)])
+  const faces = [...(you ? [{ key: 'me', letter: mine[0].name[0], me: true }] : []), ...friends.slice(0, you ? 2 : 3).map((f) => ({ key: f.username, letter: f.name[0], me: false }))]
+  // one log of your own and nobody else: the line already says it all
+  const more = n > 0 || mine.length > 1
+  const inner = (
+    <>
+      <span className="lb-faces" aria-hidden="true">{faces.map((f) => <i key={f.key} data-me={f.me || undefined}>{f.letter.toUpperCase()}</i>)}</span>
+      <span className="row-text"><b>{line}</b>{bits.length > 0 && <small>{bits.map(([k, v], i) => <span key={k}>{i > 0 && ' · '}{k} <em>{v}</em></span>)}</small>}</span>
+      {more && <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)' }} />}
+    </>
+  )
+  return (
+    <section className="lb-row" aria-label="Letterboxd">
+      {more ? <button type="button" onClick={() => setOpen(true)}>{inner}</button> : <div>{inner}</div>}
+      {/* on the body, like the other sheets, so it covers the tab bar */}
+      {more && createPortal(
+        <Sheet open={open} onClose={() => setOpen(false)} label="Letterboxd">
+          <div className="lb-head">
+            <h2>Letterboxd</h2>
+            <a href={`https://letterboxd.com/tmdb/${tmdbId}`} target="_blank" rel="noreferrer">Open<Icon name="north_east" size={15} /></a>
+          </div>
+          <div className="lb-list noscroll">
+            {(everyone !== null || (n > 1 && friendsAvg !== null)) && (
+              <dl className="ratings lb-avgs">
+                {everyone !== null && <div><dt>Everyone</dt><dd>{score(Number(everyone))}</dd></div>}
+                {n > 1 && friendsAvg !== null && <div><dt>Friends</dt><dd>{score(friendsAvg)}</dd></div>}
+              </dl>
+            )}
+            {you && (
+              <>
+                <h3>You</h3>
+                <ul className="rows">
+                  {mine.map((l) => (
+                    <li key={l.entry_id} className="row-plain">
+                      <span className="row-text"><b>{fullDate(l.watched_on)}</b>{mine.length > 1 && <small>{l.rewatch ? 'Rewatch' : 'First watch'}</small>}</span>
+                      {l.rating !== null && <span className="lb-score">{score(l.rating)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {n > 0 && (
+              <>
+                <h3>Friends</h3>
+                <ul className="rows">
+                  {friends.map((f) => (
+                    <li key={f.username} className="row-plain">
+                      <span className="lb-faces" aria-hidden="true"><i>{f.name[0].toUpperCase()}</i></span>
+                      <span className="row-text"><b>{f.name}</b><small>{f.logs.length > 1 ? `Watched ${times(f.logs.length)} · last ${looseDate(f.last)}` : looseDate(f.last)}{f.rating === null && ' · no rating'}</small></span>
+                      {f.rating !== null && <span className="lb-score">{score(f.rating)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </Sheet>, document.body)}
+    </section>
+  )
+}
 
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
@@ -29,9 +111,10 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const by = t.credits.filter((c) => c.role === (film ? 'director' : 'creator')).slice(0, 2).map((c) => c.person.name).join(', ')
   const ratings: [string, string][] = []
   if (t.scores?.imdb_rating != null) ratings.push(['IMDb', Number(t.scores.imdb_rating).toFixed(1)])
-  if (t.scores?.rt_critics != null) ratings.push(['Tomatometer', `${t.scores.rt_critics}%`])
-  if (t.scores?.rt_audience != null) ratings.push(['Popcornmeter', `${t.scores.rt_audience}%`])
+  if (t.scores?.rt_critics != null) ratings.push(['Critics', `${t.scores.rt_critics}%`])
+  if (t.scores?.rt_audience != null) ratings.push(['Audience', `${t.scores.rt_audience}%`])
   if (t.scores?.letterboxd != null) ratings.push(['Letterboxd', Number(t.scores.letterboxd).toFixed(1)])
+  const lb = useTitleLogs(t.id, film)
   const cast = t.credits.filter((c) => c.role === 'cast')
   const details: [string, string][] = ([
     [film ? 'Directed by' : 'Created by', names(t, film ? 'director' : 'creator')],
@@ -71,6 +154,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
 
       <p className="title-meta">{meta1}{by && <><br />{film ? 'Directed by' : 'Created by'} <span>{by}</span></>}{meta2 && <><br />{meta2}</>}</p>
       {ratings.length > 0 && <dl className="ratings">{ratings.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
+      {lb && <Watchers logs={lb} tmdbId={t.tmdb_id} everyone={t.scores?.letterboxd ?? null} />}
       {t.overview && (
         <div className="overview" data-open={open || !long}>
           <p>{t.overview}</p>

@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { SERVICE_NAME, kindWord, loadMyServices, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
+import { useWatched } from '../lib/letterboxd'
 import { useNav, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import {
@@ -27,8 +28,9 @@ type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; 
 const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
 /** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
 const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
-function toFilters(x: Extra, services: string[] | null): Filters {
+function toFilters(x: Extra, services: string[] | null, hide: number[] | null = null): Filters {
   const f: Filters = {}
+  if (hide?.length) f.hide = hide
   if (typeof x.decade === 'number') { if (x.decade === 0) f.to = 1979; else { f.from = x.decade; f.to = x.decade + 9 } }
   if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
   if (x.lang) f.lang = x.lang
@@ -143,6 +145,7 @@ export default function Search() {
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('best')
   const [onlyMine, setOnlyMine] = useState(false)
+  const [hideSeen, setHideSeen] = useState(false)
   const [extra, setExtra] = useState<Extra>({})
   const [sheet, setSheet] = useState(false)
   const [drawer, setDrawer] = useState(false)
@@ -160,6 +163,10 @@ export default function Search() {
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
+  // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
+  const seen = useWatched()
+  const seenIds = useMemo(() => [...seen].sort((a, b) => a - b).slice(0, 400), [seen])
+  const hiding = hideSeen && seen.size > 0
 
   useEffect(() => {
     const set = () => setOnline(navigator.onLine)
@@ -181,7 +188,7 @@ export default function Search() {
 
   // chips from the words that the drawer has replaced
   const off = useMemo(() => [...removed, ...parseQuery(q).tokens.filter((t) => { const s = slot(t.key); return s !== null && extra[s] !== undefined }).map((t) => t.key)], [q, removed, extra])
-  const xf = useMemo(() => toFilters(extra, myOnly ? picked : null), [extra, myOnly, picked])
+  const xf = useMemo(() => toFilters(extra, myOnly ? picked : null, hiding ? seenIds : null), [extra, myOnly, picked, hiding, seenIds])
   const { found, error, waiting, retry } = useSearch(q, off, xf)
   const hasQ = q.trim().length > 0
   // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
@@ -194,7 +201,7 @@ export default function Search() {
   // the three ideas are fetched ahead, so tapping one has nothing to wait for
   useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
 
-  const all = found?.hits ?? []
+  const all = useMemo(() => (hiding ? (found?.hits ?? []).filter((h) => !seen.has(h.id)) : found?.hits ?? []), [found, hiding, seen])
   const mine = all
   const folks = found?.people ?? []
   const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
@@ -222,13 +229,14 @@ export default function Search() {
     ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
     ...(extra.lang ? [{ key: 'x-lang', label: langName(extra.lang), drop: () => less({ lang: null }) }] : []),
     ...(myOnly ? [{ key: 'x-mine', label: 'My services', drop: () => setOnlyMine(false) }] : []),
+    ...(hiding ? [{ key: 'x-hide', label: 'Hide watched', drop: () => setHideSeen(false) }] : []),
   ]
   const filtersOn = tokens.filter((t) => !t.key.startsWith('genre:')).length + (tokens.some((t) => t.key.startsWith('genre:')) || extra.genres?.length ? 1 : 0)
     + xchips.filter((c) => !c.key.startsWith('x-genre:')).length
   // the drawer opens on how things stand: what it set itself, else what the words say
   const yearsToken = tokens.find((t) => t.key === 'years')
   const init: Draft = {
-    sort, mine: myOnly, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
+    sort, mine: myOnly, hide: hiding, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
     genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
     decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
     lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
@@ -238,13 +246,14 @@ export default function Search() {
   const countOf = (d: Draft): Count => {
     const keepYears = d.decade === null && yearsNote !== ''
     const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
-    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null)
+    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null, d.hide ? seenIds : null)
     const k = kind === 'film' || kind === 'series' ? kind : undefined
     return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
   }
   const apply = (d: Draft) => {
     setSort(d.sort as Sort)
     setOnlyMine(d.mine)
+    setHideSeen(d.hide)
     setExtra((x) => {
       const next: Extra = { ...x, rating: d.rating || undefined, rt: d.rt || undefined, lb: d.lb || undefined, length: d.length ?? undefined }
       if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres

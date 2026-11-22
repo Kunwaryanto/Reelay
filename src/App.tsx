@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { NavProvider, TabStack, useNav, type Tab } from './lib/nav'
 import { SavedProvider } from './lib/saved'
+import { useWatchedSync } from './lib/letterboxd'
 import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
 import Browse, { browsePage } from './screens/Browse'
@@ -64,6 +65,7 @@ function Shell() {
   const { path, push, setTab } = useNav()
   // at launch the tab bar waits for Now, then arrives last: its fade eases in and the icons rise
   const launched = useLaunched()
+  useWatchedSync()
   const [arriving, setArriving] = useState(!launched)
   useEffect(() => { if (!launched) return; const t = setTimeout(() => setArriving(false), 1100); return () => clearTimeout(t) }, [launched])
   // keep this device's notification address fresh, and open what a tapped notification points at

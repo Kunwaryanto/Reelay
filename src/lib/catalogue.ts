@@ -129,6 +129,7 @@ export type Person = { id: number; name: string; profile_path: string | null }
 export type Credit = { role: 'cast' | 'director' | 'creator' | 'writer'; character: string | null; sort_order: number; person: Person }
 export type Award = { id: number; award: string; year: number; short_category: string; won: boolean; person_name: string | null; rank: number }
 export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
+  tmdb_id: number
   original_title: string | null
   end_year: number | null
   runtime_min: number | null
@@ -144,7 +145,7 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
 
 export async function loadTitle(id: number): Promise<TitleDetail | null> {
   const title = unwrap(await supabase.from('titles').select(
-    'id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
+    'id,tmdb_id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
     'availability(*,service:services(*)),' +
     'scores(imdb_rating,rt_critics,rt_audience,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +

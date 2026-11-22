@@ -5,14 +5,14 @@ import { BackButton, Icon } from '../ui'
 const MAIL = 'lukas.kunwaryanto@gmail.com'
 const mail = <a href={`mailto:${MAIL}`}>{MAIL}</a>
 
-function Doc({ title, signedIn, children }: { title: string; signedIn: boolean; children: ReactNode }) {
+function Doc({ title, signedIn, updated = '20 Nov 2026', children }: { title: string; signedIn: boolean; updated?: string; children: ReactNode }) {
   return (
     <main className="page page-plain noscroll legal">
       <div className="page-bar">
         {signedIn ? <BackButton /> : <a className="icon-btn" href="/" aria-label="Back"><span><Icon name="chevron_left" size={20} /></span></a>}
       </div>
       <h1 className="page-title">{title}</h1>
-      <p className="legal-date">Updated 20 Nov 2026</p>
+      <p className="legal-date">Updated {updated}</p>
       {children}
     </main>
   )
@@ -21,6 +21,7 @@ function Doc({ title, signedIn, children }: { title: string; signedIn: boolean; 
 const KEEPS: [string, string, string][] = [
   ['Your email address', 'For your account and sign-in codes', 'Contract (GDPR art. 6(1)(b)) · until you delete your account'],
   ['Your services, watchlist and Notify me titles', 'To show what’s on your services and remind you', 'Contract · until you remove them or delete your account'],
+  ['Your Letterboxd diary', 'Only if you connect Letterboxd: your username and the films, dates and ratings in your public diary, shown to you and to the other people on Reelay', 'Consent (art. 6(1)(a)) · until you disconnect or delete your account'],
   ['Your settings', 'Region, language and which notifications you want', 'Contract · until you delete your account'],
   ['A notification address per device', 'Only if you turn notifications on', 'Contract · until you turn them off, remove the device or delete your account'],
   ['Invite details', 'The person who invited you sees your email once you join', 'Legitimate interest (art. 6(1)(f)) · 30 days after you join'],
@@ -33,7 +34,7 @@ const HANDLERS: [string, string][] = [
 
 export function PrivacyPolicy({ signedIn = true }: { signedIn?: boolean }) {
   return (
-    <Doc title="Privacy policy" signedIn={signedIn}>
+    <Doc title="Privacy policy" signedIn={signedIn} updated="22 Nov 2026">
       <p>Reelay keeps only what it needs to show you where films and series stream and to remind you about them. No ads, no tracking, no analytics, and your data is never sold.</p>
       <h2>Who is responsible</h2>
       <p>Reelay is a free personal project run by Lukas K. in Sweden, who is the controller of your personal data. Questions or requests: {mail}.</p>

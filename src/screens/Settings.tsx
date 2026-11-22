@@ -1,7 +1,8 @@
-// Settings and its pages: Your services, Region, Credits, Privacy, Delete account. (Invite friends has its own file.)
+// Settings and its pages: Your services, Letterboxd, Region, Credits, Privacy, Delete account. (Invite friends has its own file.)
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '../lib/auth'
 import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
+import { connectLetterboxd, disconnectLetterboxd, setMarkWatched, useLetterboxd } from '../lib/letterboxd'
 import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
@@ -86,6 +87,7 @@ export default function Settings() {
   const { email, signOut, isAdmin, session } = useAuth()
   const { push } = useNavActions()
   const { mine } = useMyServices()
+  const lb = useLetterboxd()
   const services = useQuery<Service[]>('services', loadServices, { maxAge: DAY })
   const invites = useQuery<Invite[]>(isAdmin && session ? `invites:${session.user.id}` : null, loadInvites, { persist: false, maxAge: 0 })
   const waiting = (invites.data ?? []).filter((i) => inviteState(i) === 'waiting').length
@@ -111,6 +113,7 @@ export default function Settings() {
       <section className="settings-block set-first">
         <ul className="rows">
           <Link label="Your services" note={services.data ? servicesLabel(names) : ''} to="/settings/services" />
+          <Link label="Letterboxd" note={lb.account ? lb.account.username : ''} to="/settings/letterboxd" />
           {isAdmin && <Link label="Invite friends" note={waiting > 0 ? `${waiting} waiting` : ''} to="/settings/invites" />}
         </ul>
       </section>
@@ -231,6 +234,88 @@ function Version() {
   )
 }
 
+/** When the diary was last read: "03:17" today, "yesterday", else the date. */
+function readAt(iso: string): string {
+  const d = new Date(iso), now = new Date()
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / DAY)
+  if (days <= 0) return d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+  return days === 1 ? 'yesterday' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function Letterboxd() {
+  const { session } = useAuth()
+  const uid = session?.user.id
+  const { account, loading } = useLetterboxd()
+  const toast = useToast()
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [leaving, setLeaving] = useState(false)
+
+  const connect = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (busy || !uid) return
+    if (!name.trim()) { setError('Type your Letterboxd username.'); return }
+    if (!navigator.onLine) { setError('You’re offline. Connect to do this.'); return }
+    setBusy(true); setError('')
+    try {
+      const r = await connectLetterboxd(uid, name)
+      if ('error' in r) setError(r.error === 'not_found' ? 'Letterboxd has no member with that username.' : r.error === 'invalid' ? 'That doesn’t look like a Letterboxd username.' : 'Couldn’t connect. Try again.')
+      else setName('')
+    } catch { setError('Couldn’t connect. Try again.') } finally { setBusy(false) }
+  }
+  const disconnect = async () => {
+    if (leaving || !uid) return
+    setLeaving(true)
+    try { await disconnectLetterboxd(uid) } catch { toast({ text: navigator.onLine ? 'Couldn’t disconnect. Try again.' : 'You’re offline. Connect to change this.' }) } finally { setLeaving(false) }
+  }
+  const flip = async () => {
+    if (!uid || !account) return
+    try { await setMarkWatched(uid, account, !account.mark_watched) } catch { toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' }) }
+  }
+  const status = !account ? '' : account.synced_at
+    ? `Connected · ${account.films === 1 ? '1 film' : `${account.films} films`} · last read ${readAt(account.synced_at)}`
+    : 'Connected · first read tonight'
+
+  return (
+    <Page title="Letterboxd">
+      <div className="set-text">
+        <p>Mark the films you’ve seen and see what friends thought of them. Reelay reads your public Letterboxd diary each night, and friends on Reelay see your ratings, as anyone can on Letterboxd. Nothing is posted there.</p>
+      </div>
+      {account === null && (
+        <form className="lb-connect" onSubmit={connect} noValidate>
+          <label htmlFor="lb-user">Letterboxd username</label>
+          <div className="lb-field" data-error={!!error}>
+            <input id="lb-user" type="text" inputMode="text" enterKeyHint="go" autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} placeholder="username" maxLength={60}
+              value={name} onChange={(e) => { setName(e.target.value); setError('') }} aria-invalid={!!error} aria-describedby={error ? 'lb-error' : 'lb-hint'} />
+            <SmallButton type="submit" busy={busy} disabled={busy}>{busy ? '' : 'Connect'}</SmallButton>
+          </div>
+          {error ? <p id="lb-error" className="field-error" role="alert">{error}</p>
+            : <p id="lb-hint" className="set-foot">Your diary needs to be public on Letterboxd. Films only: Letterboxd doesn’t log series.</p>}
+        </form>
+      )}
+      {account && (
+        <>
+          <ul className="rows set-solo">
+            <li><a href={`https://letterboxd.com/${account.username}/`} target="_blank" rel="noreferrer">
+              <span className="row-text"><b>{account.username}</b><small>{status}</small></span>
+              <span className="row-note lb-out">Profile<Icon name="north_east" size={14} /></span>
+            </a></li>
+            <li><button type="button" role="switch" aria-checked={account.mark_watched} className="set-switch" onClick={flip}>
+              <span className="row-text"><b>Mark watched films</b><small>A check on their posters.</small></span><i aria-hidden="true" />
+            </button></li>
+          </ul>
+          <ul className="rows set-group">
+            <li><button type="button" onClick={disconnect} aria-busy={leaving}><span className="row-text"><b className="err">Disconnect</b></span>{leaving && <Spinner light />}</button></li>
+          </ul>
+          <p className="set-foot lb-foot">Deletes everything Reelay has from your Letterboxd.</p>
+        </>
+      )}
+      {account === undefined && !loading && <p className="set-foot">Couldn’t load this. Check your connection and try again.</p>}
+    </Page>
+  )
+}
+
 function Region() {
   return (
     <Page title="Region">
@@ -241,7 +326,7 @@ function Region() {
 }
 
 const CREDITS: [string, [string, string][]][] = [
-  ['Data', [['TMDB', 'Titles, posters and cast'], ['JustWatch', 'Where to watch'], ['Streaming Availability', 'Leaving dates'], ['IMDb', 'IMDb rating'], ['MDBList', 'Rotten Tomatoes and Letterboxd scores'], ['Wikidata', 'Awards']]],
+  ['Data', [['TMDB', 'Titles, posters and cast'], ['JustWatch', 'Where to watch'], ['Streaming Availability', 'Leaving dates'], ['IMDb', 'IMDb rating'], ['MDBList', 'Rotten Tomatoes and Letterboxd scores'], ['Letterboxd', 'Your and your friends’ diaries, when connected'], ['Wikidata', 'Awards']]],
   ['Design', [['Inter', 'Typeface by Rasmus Andersson · SIL Open Font License'], ['Material Symbols', 'Icons by Google · Apache License 2.0']]],
 ]
 function Credits() {
@@ -288,7 +373,7 @@ function Privacy() {
   return (
     <Page title="Privacy">
       <div className="set-text">
-        <p>Reelay keeps your email, the services you pick, your watchlist and your notification settings, so they follow you to other devices. If someone invited you, they see your email once you join.</p>
+        <p>Reelay keeps your email, the services you pick, your watchlist and your notification settings, so they follow you to other devices. If you connect Letterboxd, it also keeps your username and the films, dates and ratings in your public diary, and the other people on Reelay can see them. If someone invited you, they see your email once you join.</p>
         <p>No ads, no tracking, and your data is never sold.</p>
       </div>
       <ul className="rows set-solo">
@@ -343,6 +428,7 @@ function Delete() {
 export function settingsPage(path: string): ReactNode | null {
   switch (path) {
     case '/settings/services': return <Services />
+    case '/settings/letterboxd': return <Letterboxd />
     case '/settings/region': return <Region />
     case '/settings/version': return <Version />
     case '/settings/credits': return <Credits />
