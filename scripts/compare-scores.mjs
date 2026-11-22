@@ -20,17 +20,17 @@ const omdb = async (imdb) => {
   return { rt: rt ? Number(String(rt.Value).replace('%', '')) : null };
 };
 
+// recent films (2025 on): where scores still move, so freshness shows
 const groups = [
-  ['audience only (the gap)', 'rt_critics is null and rt_audience is not null', 100],
-  ['critics only', 'rt_critics is not null and rt_audience is null', 30],
-  ['both scores (agreement check)', 'rt_critics is not null and rt_audience is not null', 70],
+  ['recent films with a critics\' score', "t.kind = 'film' and t.year >= 2025 and rt_critics is not null", 70],
+  ['recent films without one', "t.kind = 'film' and t.year >= 2025 and rt_critics is null", 30],
 ];
 
 let used = 0;
 for (const [name, cond, n] of groups) {
   const rows = await group(cond, n);
   let fills = 0, same = 0, near = 0, differ = 0, omdbMissing = 0, errors = 0;
-  const examples = [];
+  const examples = [], all = [];
   for (const t of rows) {
     await sleep(150);
     used++;
@@ -43,15 +43,17 @@ for (const [name, cond, n] of groups) {
     }
     const label = `${t.title} (${t.year}, ${t.kind}) ours ${t.rt_critics ?? '–'}% / OMDb ${o.rt ?? '–'}%`;
     if (o.rt == null) { omdbMissing++; continue; }
-    if (t.rt_critics == null) { fills++; if (examples.length < 12) examples.push(label); continue; }
+    if (t.rt_critics == null) { fills++; if (examples.length < 40) examples.push(label); continue; }
     const d = Math.abs(o.rt - t.rt_critics);
-    if (d === 0) same++; else if (d <= 3) near++; else { differ++; if (examples.length < 12) examples.push(label); }
+    if (d === 0) same++; else if (d <= 3) near++; else { differ++; if (examples.length < 40) examples.push(label); }
+    if (d <= 3 && all.length < 25) all.push(label);
   }
   console.log(`\n== ${name}: ${rows.length} titles`);
   console.log(`   OMDb fills a missing critics' score: ${fills}`);
   console.log(`   same score: ${same}, within 3 points: ${near}, differs by more: ${differ}`);
   console.log(`   OMDb has no Rotten Tomatoes score either: ${omdbMissing}${errors ? `, errors: ${errors}` : ''}`);
-  if (examples.length) console.log('   examples:\n     ' + examples.join('\n     '));
+  if (examples.length) console.log('   filled or different:\n     ' + examples.join('\n     '));
+  if (all.length) console.log('   same or close:\n     ' + all.join('\n     '));
 }
 console.log(`\nOMDb lookups used: ${used} of 1,000 today`);
 await db.end();
