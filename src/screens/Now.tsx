@@ -251,8 +251,9 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
           {(scores.length > 0 || !d) && <dl data-in={scores.length > 0}>{scores.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           {leavesOn && <p className="hold-leaves">{leavesOn}</p>}
         </div>
+        {/* the same bookmark as everywhere: empty to add, filled when it's on the list. Adding has no toast. */}
         <button type="button" role="menuitem" onClick={() => { if (!armed.current) return; saved.toggleSaved(card.id, card.title, card); close() }}>
-          <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name={isSaved ? 'bookmark_remove' : 'bookmark_add'} size={20} />
+          <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name="bookmark" size={20} fill={isSaved} />
         </button>
         {avail ? (
           <a role="menuitem" href={openLink(avail, card.title)} target="_blank" rel="noreferrer" draggable={false}

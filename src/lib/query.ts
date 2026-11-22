@@ -64,7 +64,7 @@ export function clearSavedData() {
   } catch { /* ignore */ }
 }
 
-/** The last load that failed, and why (shown in Settings › Testing). */
+/** The last load that failed, and why (shown on Settings › Version). */
 let lastError = ''
 export const lastLoadError = () => lastError
 

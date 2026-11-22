@@ -6,7 +6,7 @@ import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
 import { clearSavedData, lastLoadError, useQuery } from '../lib/query'
-import { BUILD, checkVersion, layoutReadout, reloadApp, useNewVersion } from '../lib/update'
+import { BUILD, checkVersion, reloadApp, useNewVersion } from '../lib/update'
 import { BackButton, Button, Icon, SmallButton, Spinner, useToast } from '../ui'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -93,15 +93,6 @@ export default function Settings() {
   const [error, setError] = useState('')
   const fresh = useNewVersion()
   const [reloading, setReloading] = useState(false)
-  const [check, setCheck] = useState<'idle' | 'busy' | 'none'>('idle')
-  const look = async () => {
-    if (fresh || check === 'busy') return
-    setCheck('busy')
-    const [found] = await Promise.all([checkVersion(), new Promise((r) => setTimeout(r, 600))])
-    setCheck(found ? 'idle' : 'none')
-  }
-  const [readout, setReadout] = useState('')
-  useEffect(() => { const t = setTimeout(() => setReadout(layoutReadout()), 600); return () => clearTimeout(t) }, [])
   const names = (services.data ?? []).filter((s) => mine.includes(s.id)).map((s) => s.name)
 
   const out = async () => {
@@ -138,22 +129,18 @@ export default function Settings() {
           <Link label="Region" note="Sweden" to="/settings/region" />
           <Link label="Credits" to="/settings/credits" />
           <Link label="Privacy" to="/settings/privacy" />
-          <li><button type="button" onClick={look} aria-live="polite">
-            <span className="row-text"><b>Version</b><small>{BUILD}</small></span>
-            <span className="row-note">{check === 'busy' ? <Spinner light label="Checking" /> : fresh ? 'Update ready' : check === 'none' ? 'Up to date' : 'Check for update'}</span>
-          </button></li>
+<Link label="Version" note={fresh ? 'Update ready' : BUILD} to="/settings/version" />
         </ul>
       </section>
-      {/* Temporary while testing */}
-      <section className="settings-block">
-        <h2 className="block-title">Testing</h2>
-        <ul className="rows">
-          <li><button type="button" onClick={() => push('/onboarding')}><span className="row-text"><b>Show onboarding again</b></span></button></li>
-          <li><button type="button" onClick={() => push('/settings/app-links')}><span className="row-text"><b>App links</b></span></button></li>
-        </ul>
-        <p className="version">{readout}</p>
-        {lastLoadError() && <p className="version">Last failed load: {lastLoadError()}</p>}
-      </section>
+      {/* admins only: tools for trying things out */}
+      {isAdmin && (
+        <section className="settings-block">
+          <h2 className="block-title">Testing</h2>
+          <ul className="rows">
+            <li><button type="button" onClick={() => push('/onboarding')}><span className="row-text"><b>Show onboarding again</b></span></button></li>
+          </ul>
+        </section>
+      )}
 
       {asking && (
         <div className="action-sheet" role="alertdialog" aria-label="Sign out">
@@ -204,6 +191,46 @@ function Services() {
   )
 }
 
+/** The version this phone runs, a check for a newer one, and the update itself (the card on Settings does the same when one is out). */
+function Version() {
+  const fresh = useNewVersion()
+  const [reloading, setReloading] = useState(false)
+  const [check, setCheck] = useState<'busy' | 'none' | 'offline' | 'idle'>('idle')
+  const [problem] = useState(lastLoadError)
+  const look = async () => {
+    if (check === 'busy') return
+    if (!navigator.onLine) { setCheck('offline'); return }
+    setCheck('busy')
+    // the answer often comes at once: hold the spinner a moment so the check is seen to happen
+    const [found] = await Promise.all([checkVersion(), new Promise((r) => setTimeout(r, 600))])
+    setCheck(found ? 'idle' : navigator.onLine ? 'none' : 'offline')
+  }
+  // opening the page checks once
+  useEffect(() => { void look() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const status = fresh ? 'A new version is ready' : check === 'busy' ? 'Checking…' : check === 'none' ? 'Up to date' : check === 'offline' ? 'You’re offline' : ''
+  return (
+    <Page title="Version">
+      <ul className="rows set-solo">
+        <li className="row-plain"><span className="row-text"><b>Installed</b></span><span className="row-note">{BUILD}</span></li>
+        <li className="row-plain" aria-live="polite"><span className="row-text"><b>Status</b></span><span className="row-note">{status}</span></li>
+      </ul>
+      <div className="set-action">
+        {fresh
+          ? <Button busy={reloading} onClick={() => { if (reloading) return; setReloading(true); void reloadApp() }}>Update</Button>
+          : <Button busy={check === 'busy'} onClick={look}>Check for update</Button>}
+      </div>
+      <p className="set-foot">{fresh ? 'Updating takes a few seconds. You stay signed in.' : 'Reelay also checks by itself when you open it, and shows a dot by the Settings cog when a new version is out.'}</p>
+      {/* the most recent thing the app failed to fetch since it opened: what to send along when something looks wrong */}
+      {problem && (
+        <section className="settings-block">
+          <h2 className="block-title">Last problem</h2>
+          <p className="set-foot set-problem">{problem}</p>
+        </section>
+      )}
+    </Page>
+  )
+}
+
 function Region() {
   return (
     <Page title="Region">
@@ -217,53 +244,6 @@ const CREDITS: [string, [string, string][]][] = [
   ['Data', [['TMDB', 'Titles, posters and cast'], ['JustWatch', 'Where to watch'], ['Streaming Availability', 'Leaving dates'], ['IMDb', 'IMDb rating'], ['MDBList', 'Rotten Tomatoes and Letterboxd scores'], ['Wikidata', 'Awards']]],
   ['Design', [['Inter', 'Typeface by Rasmus Andersson · SIL Open Font License'], ['Material Symbols', 'Icons by Google · Apache License 2.0']]],
 ]
-// Testing: which kind of link opens the service's app from the Home Screen app. Two known titles, each linked
-// several ways; tap each and note what opens.
-const APP_LINKS: [string, [string, string, boolean][]][] = [
-  ['Netflix', [
-    ['Stranger Things', 'https://www.netflix.com/title/80057281', true],
-    ['Stranger Things, play', 'https://www.netflix.com/watch/80057281', true],
-  ]],
-  ['HBO Max', [
-    ['House of the Dragon', 'https://play.hbomax.com/show/c68e69d7-9317-428a-a615-cdf8fe5a2e06', true],
-    ['One Battle After Another', 'https://play.hbomax.com/movie/711f5d63-3baa-4dd2-8eec-a73a91e48536', true],
-  ]],
-  ['Disney+', [
-    ['Zootopia 2', 'https://www.disneyplus.com/browse/entity-0818ff05-d4fd-4419-92ed-4f907f09bacb', true],
-    ['Zootopia 2, play', 'https://www.disneyplus.com/play/0818ff05-d4fd-4419-92ed-4f907f09bacb', true],
-  ]],
-  ['Prime Video', [
-    ['The Last Viking', 'https://app.primevideo.com/detail?gti=amzn1.dv.gti.b26bf046-04ec-4178-9488-6b6e723be619', true],
-  ]],
-  ['SkyShowtime', [
-    ['Dexter: Resurrection', 'https://www.skyshowtime.com/se/stream/tv/dexter-resurrection/d9292b0d-1d79-3b83-958a-459c953305e9', true],
-    ['Dexter: Resurrection, play', 'https://www.skyshowtime.com/watch/asset/tv/dexter-resurrection/d9292b0d-1d79-3b83-958a-459c953305e9', true],
-  ]],
-  ['Apple TV', [
-    ['Project Hail Mary', 'https://tv.apple.com/se/movie/project-hail-mary/umc.cmc.7jxdlxvz304lj3iwhtrhbe8fv', true],
-  ]],
-  ['Others', [
-    ['Mubi · The Mastermind', 'https://mubi.com/films/the-mastermind', true],
-    ['Crunchyroll · Solo Leveling', 'https://www.crunchyroll.com/series/GDKHZEJ0K/solo-leveling', true],
-  ]],
-]
-
-function AppLinks() {
-  return (
-    <Page title="App links">
-      <div className="set-small"><p>Links from Streaming Availability. Tap each and note whether it opens the app on the title, the app’s start, Safari, or nothing. Apps you don’t have open in Safari.</p></div>
-      {APP_LINKS.map(([title, rows]) => (
-        <section key={title} className="settings-block set-list">
-          <h2 className="block-title">{title}</h2>
-          <ul className="rows">{rows.map(([label, href, blank], i) => (
-            <li key={i}><a href={href} {...(blank ? { target: '_blank', rel: 'noreferrer' } : {})}><span className="row-text"><b>{label}</b><small>{href.replace(/^https:\/\//, '').slice(0, 60)}</small></span></a></li>
-          ))}</ul>
-        </section>
-      ))}
-    </Page>
-  )
-}
-
 function Credits() {
   return (
     <Page title="Credits">
@@ -364,8 +344,8 @@ export function settingsPage(path: string): ReactNode | null {
   switch (path) {
     case '/settings/services': return <Services />
     case '/settings/region': return <Region />
+    case '/settings/version': return <Version />
     case '/settings/credits': return <Credits />
-    case '/settings/app-links': return <AppLinks />
     case '/settings/privacy': return <Privacy />
     case '/settings/delete': return <Delete />
     default: return null

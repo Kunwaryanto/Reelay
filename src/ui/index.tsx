@@ -75,11 +75,11 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }
 
 /** 44px white pill: the main action of a screen or sheet. */
 export function Button({ busy, children, className = '', ...rest }: BtnProps) {
-  return <button type="button" className={`btn press ${className}`} {...rest}>{busy ? <Spinner label="Working" /> : children}</button>
+  return <button type="button" className={`btn press ${className}`} aria-busy={busy || undefined} {...rest}>{busy ? <Spinner label="Working" /> : children}</button>
 }
 /** 32px pill: a small standalone action. Grey on plain black, white with `solid`. */
 export function SmallButton({ solid, busy, children, ...rest }: BtnProps & { solid?: boolean }) {
-  return <button type="button" className="btn-small press" data-solid={solid} {...rest}>{children}{busy && <Spinner light={!solid} />}</button>
+  return <button type="button" className="btn-small press" data-solid={solid} aria-busy={busy || undefined} {...rest}>{children}{busy && <Spinner light={!solid} />}</button>
 }
 /** 44px frosted pill over artwork (Start). */
 export const GlassButton = ({ children, ...rest }: BtnProps) => <button type="button" className="btn-glass press" {...rest}>{children}</button>
@@ -1018,16 +1018,31 @@ const decoded = new Set<string>()
 // The decoded pictures themselves are held on to (the newest 80), so the browser keeps them in memory and the
 // page's own <img> gets them in the same frame instead of fetching them from its cache and decoding again.
 const held = new Map<string, HTMLImageElement>()
-const decodePicture = ({ src, srcset, sizes }: Picture) => {
+// One request per picture, however many ask (a list warmed while Browse sits idle, then opened): the page's wait
+// joins the one under way instead of starting a second.
+const decoding = new Map<string, Promise<void>>()
+const decodePicture = ({ src, srcset, sizes }: Picture): Promise<void> => {
   if (!src || decoded.has(src)) return Promise.resolve()
+  const going = decoding.get(src)
+  if (going) return going
   const img = new Image()
   if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
   img.src = src
-  return img.decode().then(() => {
+  const keep = () => {
     decoded.add(src)
     held.set(src, img)
-    if (held.size > 80) held.delete(held.keys().next().value!)
-  }).catch(() => {})
+    if (held.size > 120) held.delete(held.keys().next().value!)
+  }
+  // Safari sometimes refuses decode() on a picture that is still arriving. That must not count as ready (the page
+  // then faded in with posters still painting, 22 Nov): wait for it to load instead, and only a broken picture gives up.
+  const loaded = () => new Promise<void>((done) => {
+    if (img.complete) { if (img.naturalWidth > 0) keep(); done(); return }
+    img.addEventListener('load', () => { keep(); done() }, { once: true })
+    img.addEventListener('error', () => done(), { once: true })
+  })
+  const p = img.decode().then(keep, loaded).finally(() => decoding.delete(src))
+  decoding.set(src, p)
+  return p
 }
 /** Fetch and decode pictures ahead of the page that will show them. */
 export const warmPictures = (pictures: Picture[]) => { for (const p of pictures) void decodePicture(p) }

@@ -21,6 +21,8 @@ type Nav = {
   push: (path: string) => void
   back: () => void
   setTab: (tab: Tab) => void
+  /** straight to Now's first page, dropping the pages open on the current tab */
+  home: () => void
   /** the tab bar dims while a page scrolls down */
   dimmed: boolean
   setDimmed: (dimmed: boolean) => void
@@ -129,9 +131,22 @@ export function NavProvider({ children }: { children: ReactNode }) {
     history.replaceState({ depth: depth.current }, '', topPath(next))
   }, [])
 
+  const home = useCallback(() => {
+    const s = stateRef.current
+    setState({ ...s, tab: 'now', stacks: { ...s.stacks, [s.tab]: [], now: [] } })
+    setDimmed(false)
+    const fix = () => history.replaceState({ depth: 0 }, '', TAB_PATH.now)
+    if (depth.current > 0) {
+      // step history back to where the pages began, without the stack reacting, then make sure it says Now
+      ignorePop.current++
+      window.addEventListener('popstate', fix, { once: true })
+      history.go(-depth.current)
+    } else fix()
+  }, [])
+
   const nav = useMemo<Nav>(
-    () => ({ tab: state.tab, path: topPath(state), push, back, setTab, dimmed, setDimmed }),
-    [state, push, back, setTab, dimmed],
+    () => ({ tab: state.tab, path: topPath(state), push, back, setTab, home, dimmed, setDimmed }),
+    [state, push, back, setTab, home, dimmed],
   )
   const stack = useMemo(() => ({ state, popTo }), [state, popTo])
   const actions = useMemo<NavActions>(() => ({ push, back, setTab, setDimmed }), [push, back, setTab])

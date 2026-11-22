@@ -18,6 +18,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   // opened from a notification: where it streams lights up once, then settles
   const [flash] = useState(() => takeOpenedFrom(`/title/${t.id}`))
   const [open, setOpen] = useState(false)
+  const [bump, setBump] = useState<'on' | 'off' | null>(null)
   const film = t.kind === 'film'
   const first = t.availability[0]
   const notifying = saved.isNotifying(t.id)
@@ -29,6 +30,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const ratings: [string, string][] = []
   if (t.scores?.imdb_rating != null) ratings.push(['IMDb', Number(t.scores.imdb_rating).toFixed(1)])
   if (t.scores?.rt_critics != null) ratings.push(['Tomatometer', `${t.scores.rt_critics}%`])
+  if (t.scores?.rt_audience != null) ratings.push(['Popcornmeter', `${t.scores.rt_audience}%`])
   if (t.scores?.letterboxd != null) ratings.push(['Letterboxd', Number(t.scores.letterboxd).toFixed(1)])
   const cast = t.credits.filter((c) => c.role === 'cast')
   const details: [string, string][] = ([
@@ -58,7 +60,9 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
                 <Icon name="notifications" size={16} fill={notifying} />{notifying ? 'Notifying' : 'Notify me'}
               </button>
             )}
-            <button type="button" className="icon-btn" aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'} onClick={() => saved.toggleSaved(t.id, t.title, t)}>
+            {/* the change shows on the button itself: the bookmark fills with a pop and a ring, or empties with a dip */}
+            <button type="button" className="icon-btn wl-btn" data-bump={bump ?? undefined} aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'}
+              onClick={() => { setBump(isSaved ? 'off' : 'on'); saved.toggleSaved(t.id, t.title, t, true) }} onAnimationEnd={(e) => { if (e.target === e.currentTarget.querySelector('.ms')) setBump(null) }}>
               <span><Icon name="bookmark" size={18} fill={isSaved} /></span>
             </button>
           </div>
