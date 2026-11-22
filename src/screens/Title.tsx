@@ -25,6 +25,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const years = film || !t.year ? t.year : t.end_year && t.end_year !== t.year ? `${t.year}–${t.end_year}` : `${t.year}–`
   const meta1 = [kindWord(t.kind), years, film ? runtime(t.runtime_min) : t.seasons ? (t.seasons === 1 ? '1 season' : `${t.seasons} seasons`) : null].filter(Boolean).join(' · ')
   const meta2 = [film ? null : runtime(t.runtime_min), t.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ')
+  const by = t.credits.filter((c) => c.role === (film ? 'director' : 'creator')).slice(0, 2).map((c) => c.person.name).join(', ')
   const ratings: [string, string][] = []
   if (t.scores?.imdb_rating != null) ratings.push(['IMDb', Number(t.scores.imdb_rating).toFixed(1)])
   if (t.scores?.rt_critics != null) ratings.push(['Tomatometer', `${t.scores.rt_critics}%`])
@@ -64,7 +65,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </div>
       </section>
 
-      <p className="title-meta">{meta1}{meta2 && <><br />{meta2}</>}</p>
+      <p className="title-meta">{meta1}{meta2 && <><br />{meta2}</>}{by && <><br />{film ? 'Directed by' : 'Created by'} <span>{by}</span></>}</p>
       {ratings.length > 0 && <dl className="ratings">{ratings.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
       {t.overview && (
         <div className="overview" data-open={open || !long}>

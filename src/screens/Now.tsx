@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingNote, loadNow, loadTitle, openLink, runtime, type Card } from '../lib/catalogue'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { warmBrowse } from './Browse'
@@ -123,14 +123,30 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   }, [])
 
   const { card } = held
+  // The facts under the name: kind and year are known at once; length, genres, who made it and the scores come
+  // with the title's own data, which started loading when the finger landed. Their room is kept from the start,
+  // so the actions never move.
+  const d = useQuery(`title:${card.id}`, () => loadTitle(card.id), { maxAge: 10 * 60 * 1000 }).data
+  const film = card.kind === 'film'
+  const years = film || !card.year ? card.year : d?.end_year && d.end_year !== card.year ? `${card.year}–${d.end_year}` : card.year
+  const facts = [kindWord(card.kind), years, d && (film ? runtime(d.runtime_min) : d.seasons ? (d.seasons === 1 ? '1 season' : `${d.seasons} seasons`) : null),
+    d?.genres.slice(0, 2).join(', ')].filter(Boolean).join(' · ')
+  const by = d?.credits.filter((c) => c.role === (film ? 'director' : 'creator')).slice(0, 2).map((c) => c.person.name).join(', ')
+  const scores: [string, string][] = []
+  if (d?.scores?.imdb_rating != null) scores.push(['IMDb', Number(d.scores.imdb_rating).toFixed(1)])
+  if (d?.scores?.rt_critics != null) scores.push(['RT', `${d.scores.rt_critics}%`])
+  if (d?.scores?.letterboxd != null) scores.push(['Letterboxd', Number(d.scores.letterboxd).toFixed(1)])
+  const leaves = card.availability[0] && leavingNote(card.availability[0].leaves_on)
+  const leaving = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
+  const headH = 26 + 20 + 18 + 18 + 26 + (leaving ? 24 : 0)
   const vw = window.innerWidth, vh = window.innerHeight
   // small posters (list rows) lift to a size worth looking at
   const scale = Math.max(1.25, Math.min(3, 150 / rect.width))
   const w = rect.width * scale, h = rect.height * scale
-  const menuH = 34 + 44 * 2
+  const menuH = headH + 44 * 2
   const left = Math.min(Math.max(16, rect.left + rect.width / 2 - w / 2), vw - w - 16)
   const top = Math.min(Math.max(60, rect.top + rect.height / 2 - h / 2), vh - h - menuH - 40)
-  const menuLeft = Math.min(Math.max(16, left), vw - 250 - 16)
+  const menuLeft = Math.min(Math.max(16, rect.left + rect.width / 2 - 145), vw - 290 - 16)
   const avail = card.availability[0]
   const isSaved = saved.isSaved(card.id)
 
@@ -147,7 +163,14 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
             : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
       }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
-        <div className="hold-title">{card.title}</div>
+        <div className="hold-head" style={{ minHeight: headH }}>
+          <b>{card.title}</b>
+          <p>{facts}</p>
+          {/* a line the title turns out not to have gives its room to the bottom of the header, not a gap in the middle */}
+          {(by || !d) && <p data-in={!!by}>{by ? <>{film ? 'Directed by' : 'Created by'} <span>{by}</span></> : '\u00a0'}</p>}
+          {(scores.length > 0 || !d) && <dl data-in={scores.length > 0}>{scores.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
+          {leaving && <p className="hold-leaves">{leaving}</p>}
+        </div>
         <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title); close() }}>
           <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name={isSaved ? 'bookmark_remove' : 'bookmark_add'} size={20} />
         </button>
