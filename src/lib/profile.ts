@@ -90,7 +90,7 @@ export async function exportMyData(userId: string, email: string | null) {
     supabase.from('user_services').select('service:services(name)'),
     supabase.from('watchlist').select('notify,added_at,title:titles(title,year,kind)').order('added_at'),
     supabase.from('letterboxd_accounts').select('username,display_name,mark_watched,connected_at,synced_at').eq('user_id', userId).maybeSingle(),
-    supabase.from('letterboxd_logs').select('tmdb_id,watched_on,rating,rewatch').eq('user_id', userId).order('watched_on'),
+    supabase.from('letterboxd_logs').select('tmdb_id,film_name,film_year,watched_on,rating,rewatch').eq('user_id', userId).order('watched_on'),
   ])
   return {
     exported_at: new Date().toISOString(), email,

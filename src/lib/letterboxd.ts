@@ -5,7 +5,7 @@ import { useAuth } from './auth'
 import { setQueryData, useQuery } from './query'
 import { supabase } from './supabase'
 
-export type LbAccount = { username: string; display_name: string | null; mark_watched: boolean; synced_at: string | null; sync_error: string | null; films: number }
+export type LbAccount = { username: string; display_name: string | null; mark_watched: boolean; synced_at: string | null; sync_error: string | null; films: number; imported_at: string | null; imported_films: number | null }
 export type LbLog = { me: boolean; name: string; username: string; entry_id: string; watched_on: string | null; rating: number | null; rewatch: boolean }
 
 const meKey = (uid: string) => `lb-me:${uid}`
@@ -34,7 +34,8 @@ export function useLetterboxd() {
   return { account: q.data, loading: q.loading, error: q.error }
 }
 
-async function refresh(uid: string) {
+/** Load the connection and the watched films afresh (after connecting or importing). */
+export async function refreshLetterboxd(uid: string) {
   const [me, watched] = await Promise.all([loadMe(), loadWatched()])
   setQueryData(meKey(uid), me)
   setQueryData(watchedKey(uid), watched)
@@ -52,7 +53,7 @@ export async function connectLetterboxd(uid: string, username?: string): Promise
     body: JSON.stringify(username ? { username } : {}),
   })
   const body = await res.json().catch(() => ({})) as { status?: 'connected' | 'pending'; error?: string }
-  if (body.status) { await refresh(uid); return { status: body.status } }
+  if (body.status) { await refreshLetterboxd(uid); return { status: body.status } }
   if (body.error === 'not_found' || body.error === 'invalid') return { error: body.error }
   return { error: 'failed' }
 }

@@ -1,14 +1,16 @@
 // Settings and its pages: Your services, Letterboxd, Region, Credits, Privacy, Delete account. (Invite friends has its own file.)
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
-import { connectLetterboxd, disconnectLetterboxd, setMarkWatched, useLetterboxd } from '../lib/letterboxd'
+import { connectLetterboxd, disconnectLetterboxd, refreshLetterboxd, setMarkWatched, useLetterboxd } from '../lib/letterboxd'
+import { readExport, sendImport } from '../lib/letterboxdImport'
 import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
 import { clearSavedData, lastLoadError, useQuery } from '../lib/query'
 import { BUILD, checkVersion, reloadApp, useNewVersion } from '../lib/update'
-import { BackButton, Button, Icon, SmallButton, Spinner, useToast } from '../ui'
+import { BackButton, Button, Icon, Sheet, SmallButton, Spinner, useToast } from '../ui'
 
 const DAY = 24 * 60 * 60 * 1000
 const chevron = <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)', marginLeft: -10 }} />
@@ -251,6 +253,26 @@ function Letterboxd() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [leaving, setLeaving] = useState(false)
+  // Import your history: the sheet explains where the export comes from; the file is read on the phone
+  const [howTo, setHowTo] = useState(false)
+  const [importing, setImporting] = useState<null | 'reading' | number>(null)
+  const [importError, setImportError] = useState('')
+  const picker = useRef<HTMLInputElement>(null)
+  const importFiles = async (files: File[]) => {
+    if (!files.length || !uid || importing !== null) return
+    setHowTo(false); setImportError(''); setImporting('reading')
+    try {
+      const rows = await readExport(files)
+      if (!rows.length) { setImportError('That doesn’t look like a Letterboxd export. Pick the ZIP from Letterboxd.'); return }
+      setImporting(new Set(rows.map((r) => `${r.n}|${r.y}`)).size)
+      const r = await sendImport(rows)
+      if ('error' in r) setImportError(r.error === 'too_many' ? 'That export is too large to import.' : r.error === 'empty' ? 'That export has no films in it.' : 'Couldn’t import. Try again.')
+      else await refreshLetterboxd(uid)
+    } catch {
+      setImportError(navigator.onLine ? 'Couldn’t read that file. Pick the ZIP from Letterboxd.' : 'You’re offline. Connect to import.')
+    } finally { setImporting(null) }
+  }
+  const count = (n: number) => n.toLocaleString('en-US')
 
   const connect = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -274,7 +296,7 @@ function Letterboxd() {
     try { await setMarkWatched(uid, account, !account.mark_watched) } catch { toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' }) }
   }
   const status = !account ? '' : account.synced_at
-    ? `Connected · ${account.films === 1 ? '1 film' : `${account.films} films`} · last read ${readAt(account.synced_at)}`
+    ? `Connected · ${account.films === 1 ? '1 film' : `${count(account.films)} films`} · last read ${readAt(account.synced_at)}`
     : 'Connected · first read tonight'
 
   return (
@@ -304,7 +326,28 @@ function Letterboxd() {
             <li><button type="button" role="switch" aria-checked={account.mark_watched} className="set-switch" onClick={flip}>
               <span className="row-text"><b>Mark watched films</b><small>A check on their posters.</small></span><i aria-hidden="true" />
             </button></li>
+            <li><button type="button" onClick={() => { if (importing === null) setHowTo(true) }} aria-busy={importing !== null}>
+              {importing !== null
+                ? <span className="row-text" aria-live="polite"><b>Importing your history…</b><small>{importing === 'reading' ? 'Reading the file' : `Matching ${count(importing)} films`}</small></span>
+                : <span className="row-text"><b>Import your history</b>{importError ? <small className="err" role="alert">{importError}</small>
+                  : <small>{account.imported_at ? `Imported ${new Date(account.imported_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${count(account.imported_films ?? 0)} films` : 'From your Letterboxd export. The nightly read only sees your latest entries.'}</small>}</span>}
+              {importing !== null ? <Spinner light /> : chevron}
+            </button></li>
           </ul>
+          <input ref={picker} type="file" accept=".zip,.csv,application/zip,text/csv" multiple hidden
+            onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(files) }} />
+          {createPortal(<Sheet open={howTo} onClose={() => setHowTo(false)} label="Import your history">
+            <h2 className="sheet-title">Import your history</h2>
+            <p className="sheet-text">The nightly read only sees your latest entries. Your Letterboxd export has everything you’ve watched.</p>
+            <ol className="lb-steps">
+              <li><span className="row-text"><b>Export from Letterboxd</b><small>Settings › Data › Export your data, on letterboxd.com</small></span></li>
+              <li><span className="row-text"><b>Pick the ZIP here</b><small>It’s in Files › Downloads. Only the film list is sent; the file isn’t kept.</small></span></li>
+            </ol>
+            <div className="sheet-action lb-import-actions">
+              <Button onClick={() => picker.current?.click()}>Choose file</Button>
+              <a href="https://letterboxd.com/settings/data/" target="_blank" rel="noreferrer">Open Letterboxd settings<Icon name="north_east" size={15} /></a>
+            </div>
+          </Sheet>, document.body)}
           <ul className="rows set-group">
             <li><button type="button" onClick={disconnect} aria-busy={leaving}><span className="row-text"><b className="err">Disconnect</b></span>{leaving && <Spinner light />}</button></li>
           </ul>
