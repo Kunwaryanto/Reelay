@@ -542,7 +542,7 @@ async function syncMdblist() {
      order by s.mdblist_synced_at nulls first, t.popularity desc limit $1`,
     [MDBLIST_PER_RUN],
   )).rows;
-  let ok = 0, sample = null, spent = false, slowed = 0;
+  let ok = 0, sample = null, spent = false, slowed = 0, withAudience = 0;
   // Two at a time with a short pause: four at once got a quarter of the lookups refused as "too many requests"
   // (22 Nov). That refusal is about pace and is waited out; the daily limit is not, and ends the step.
   await pool(todo.map((t) => ({ ...t, key: t.imdb_id })), 2, async (t) => {
@@ -562,19 +562,24 @@ async function syncMdblist() {
       throw new Error(`${res.status} mdblist ${t.imdb_id}: ${body.slice(0, 80)}`);
     }
     if (!r) return;
-    sample ??= r.ratings;
+    if (!sample && (r.ratings ?? []).some((x) => x.source === 'tomatoes' && x.value != null)) sample = r.ratings;
     const by = Object.fromEntries((r.ratings ?? []).map((x) => [x.source, x.value]));
     const rt = by.tomatoes ?? null;
+    // the audience score: MDBList calls it "popcorn" (other spellings accepted in case it is renamed)
+    const aud = by.popcorn ?? by.tomatoesaudience ?? by.audience ?? null;
     const lb = t.kind === 'film' ? by.letterboxd ?? null : null;
+    if (aud != null) withAudience++;
     await db.query(
-      `insert into public.scores (title_id, rt_critics, letterboxd, mdblist_synced_at) values ($1,$2,$3, now())
-       on conflict (title_id) do update set rt_critics = excluded.rt_critics, letterboxd = excluded.letterboxd, mdblist_synced_at = now()`,
-      [t.id, rt == null ? null : Math.round(rt), lb],
+      `insert into public.scores (title_id, rt_critics, rt_audience, letterboxd, mdblist_synced_at) values ($1,$2,$3,$4, now())
+       on conflict (title_id) do update set rt_critics = excluded.rt_critics, rt_audience = excluded.rt_audience, letterboxd = excluded.letterboxd, mdblist_synced_at = now()`,
+      [t.id, rt == null ? null : Math.round(rt), aud == null ? null : Math.round(aud), lb],
     );
     ok++;
   });
   log(`MDBList: ${ok} of ${todo.length} titles updated${spent ? ' (daily limit reached, the rest next run)' : ''}${slowed ? `, waited out ${slowed} “too many requests”` : ''}`);
-  if (sample) log('  sample ratings:', JSON.stringify(sample).slice(0, 400));
+  log(`  with an RT audience score: ${withAudience}`);
+  // every source name with its value, from a title that has a Tomatometer
+  if (sample) log('  sample ratings:', sample.map((x) => `${x.source}=${x.value}`).join(' '));
 }
 
 // ---------------------------------------------------------------------------
@@ -671,6 +676,7 @@ async function main() {
             (select count(*) from public.availability where leaves_on is not null) leaving,
             (select count(*) from public.scores where imdb_rating is not null) imdb,
             (select count(*) from public.scores where rt_critics is not null) rt,
+            (select count(*) from public.scores where rt_audience is not null) rt_audience,
             (select count(*) from public.scores where letterboxd is not null) letterboxd,
             pg_size_pretty(pg_database_size(current_database())) db_size`,
   )).rows[0];
