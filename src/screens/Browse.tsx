@@ -85,7 +85,7 @@ function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: strin
     <a className="br-card press" href={href} data-ready={ready} {...warm}
       // on the Browse tab each card has a name, so switching type moves it to its new place (see setPick there)
       data-flip={named ? cat.id : undefined} onClick={(e) => { e.preventDefault(); push(href) }}>
-      {cover && <img {...coverSrc(cover)} alt="" decoding="async" draggable={false}
+      {cover && <img {...coverSrc(cover)} alt="" decoding="sync" draggable={false}
         ref={(el) => { if (el?.complete && el.naturalWidth && !ready) show(el) }}
         onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
       <span className="br-tint" aria-hidden="true" style={{ background: tintOf(cat.tint) }} />

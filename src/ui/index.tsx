@@ -156,7 +156,10 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
   const close = useNearScreen(box, eager || inRow)
   const near = inRow || close
   const src = tmdbImage(path, 'w342')
-  const [ready, setReady] = useState(!path || wasDecoded(src))
+  // A picture the page waited for (or one seen before) is asked for at once and painted with the frame it is in:
+  // left lazy and decoded on the side, it would pop in a few frames after the page's fade had started.
+  const [known] = useState(() => wasDecoded(src))
+  const [ready, setReady] = useState(!path || known)
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => { markDecoded(src); setReady(true) }) }
   // a picture that is already loaded (the page waited for it, or it was seen before) is there from the first frame
   const pic = useRef<HTMLImageElement>(null)
@@ -165,7 +168,7 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
     <div className="cover" data-ready={ready} ref={box}>
       {path && (
         <img ref={pic} src={src} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
-          loading={eager || near ? undefined : 'lazy'} decoding="async" onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
+          loading={known || eager || near ? undefined : 'lazy'} decoding={known ? 'sync' : 'async'} onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
@@ -1012,12 +1015,19 @@ export type Picture = { src: string | null | undefined; srcset?: string; sizes?:
 export const posterPicture = (path: string | null): Picture => ({ src: tmdbImage(path, 'w342'), srcset: posterSrcSet(path), sizes: '147px' })
 // Pictures this session has already decoded: they can show from the first frame, with no fade of their own.
 const decoded = new Set<string>()
+// The decoded pictures themselves are held on to (the newest 80), so the browser keeps them in memory and the
+// page's own <img> gets them in the same frame instead of fetching them from its cache and decoding again.
+const held = new Map<string, HTMLImageElement>()
 const decodePicture = ({ src, srcset, sizes }: Picture) => {
   if (!src || decoded.has(src)) return Promise.resolve()
   const img = new Image()
   if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
   img.src = src
-  return img.decode().then(() => { decoded.add(src) }).catch(() => {})
+  return img.decode().then(() => {
+    decoded.add(src)
+    held.set(src, img)
+    if (held.size > 80) held.delete(held.keys().next().value!)
+  }).catch(() => {})
 }
 /** Fetch and decode pictures ahead of the page that will show them. */
 export const warmPictures = (pictures: Picture[]) => { for (const p of pictures) void decodePicture(p) }
