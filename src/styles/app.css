@@ -277,7 +277,17 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 /* ---- Toast ---- */
 .toasts { position: absolute; z-index: 40; left: var(--margin); right: var(--margin); bottom: calc(92px + var(--edge-b)); pointer-events: none; }
 @media (min-width: 500px) { .toasts { left: 50%; right: auto; width: 350px; margin-left: -175px; } }
-.toast { min-height: 48px; padding: 0 8px 0 16px; border-radius: 14px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; animation: rise-in 250ms var(--ease-out); }
+/* The Search field's glass. Arrives on a small spring from below (its fade doesn't overshoot), leaves by easing
+   back down and fading; dragged, it follows the finger (--drag) and leaves from where it was let go. */
+.toast { min-height: 48px; padding: 0 8px 0 16px; border-radius: 14px; corner-shape: squircle; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: auto; touch-action: none;
+  background: linear-gradient(var(--fill), var(--fill)), var(--glass); -webkit-backdrop-filter: var(--blur-glass); backdrop-filter: var(--blur-glass);
+  transform: translateY(var(--drag, 0px)); transition: transform 320ms var(--ease-sheet), opacity var(--dur-toast-out) ease-in;
+  animation: toast-move var(--dur-toast-in) var(--ease-spring) backwards, toast-fade 200ms var(--ease-out) backwards; }
+.toast[data-dragging] { transition: none; }
+.toast[data-leaving] { opacity: 0; transform: translateY(calc(var(--drag, 0px) + 24px)) scale(0.96); transition: transform var(--dur-toast-out) ease-in, opacity var(--dur-toast-out) ease-in; }
+@keyframes toast-move { from { transform: translateY(28px) scale(0.94); } }
+@keyframes toast-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: toast-fade 200ms var(--ease-out) backwards; } .toast[data-leaving] { transform: translateY(var(--drag, 0px)); } }
 .toast span { font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast button { flex: none; height: var(--hit); padding: 0 8px; border: 0; background: none; font: var(--type-text); font-weight: 500; color: #fff; cursor: pointer; }
 

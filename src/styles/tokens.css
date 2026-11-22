@@ -100,6 +100,9 @@
   --dur-nav-show: 260ms;  /* and coming back */
   --ease-nav: cubic-bezier(0.33, 0, 0.3, 1);  /* an even fade (measured against Are.na's bars): the change is spread over the whole time, not spent in the first frames */
   --dur-sheet: 380ms;
+  --dur-toast-in: 480ms;   /* a toast arriving, on --ease-spring */
+  --dur-toast-out: 240ms;  /* and leaving */
+  --ease-spring: linear(0, 0.33 8%, 0.68 18%, 0.9 28%, 1.02 38%, 1.05 48%, 1.03 60%, 1.005 78%, 1);  /* a soft spring: 5% past, then settles */
   --dur-menu-open: 420ms;      /* long press */
   --dur-menu-close: 280ms;
   --dur-rise: 500ms;           /* late content rises 8px */

@@ -683,22 +683,76 @@ type Toast = { id: number; text: string; action?: string; run?: () => void }
 const ToastCtx = createContext<(t: Omit<Toast, 'id'>) => void>(() => {})
 export const useToast = () => useContext(ToastCtx)
 
+// A plain message stays 2.2 s; one with an action (Undo) 4 s, so there's time to reach it. A finger on the toast,
+// or focus on its button, holds it. It leaves on its own, on its action, or flicked down towards the screen edge
+// it came from (the way an iOS banner is flicked back up to the top edge).
+const TOAST_MS = 2200
+const TOAST_ACTION_MS = 4000
+const TOAST_OUT_MS = 240
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null)
+  const [leaving, setLeaving] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const show = useCallback((t: Omit<Toast, 'id'>) => {
+  const dismiss = useCallback(() => {
     clearTimeout(timer.current)
-    setToast({ ...t, id: Date.now() })
-    timer.current = setTimeout(() => setToast(null), 4000)
+    setLeaving(true)
+    timer.current = setTimeout(() => { setToast(null); setLeaving(false) }, TOAST_OUT_MS)
   }, [])
+  const wait = useCallback((ms: number) => { clearTimeout(timer.current); timer.current = setTimeout(dismiss, ms) }, [dismiss])
+  const show = useCallback((t: Omit<Toast, 'id'>) => {
+    setLeaving(false)
+    setToast({ ...t, id: Date.now() })
+    wait(t.action ? TOAST_ACTION_MS : TOAST_MS)
+  }, [wait])
+
+  // Drag: follows the finger down, resists upward. Let go past 20px or on a quick flick down and it leaves from
+  // where it is; otherwise it springs back and its time starts over.
+  const drag = useRef<{ y: number; dy: number; on: boolean; trail: [number, number][] } | null>(null)
+  const draggedAt = useRef(0)
+  const down = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (leaving) return
+    drag.current = { y: e.clientY, dy: 0, on: false, trail: [] }
+    clearTimeout(timer.current) // held while touched
+  }
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = drag.current
+    if (!g) return
+    const raw = e.clientY - g.y
+    if (!g.on) {
+      if (Math.abs(raw) < 6) return
+      g.on = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+      e.currentTarget.dataset.dragging = 'true'
+    }
+    g.dy = raw >= 0 ? raw : -10 * (1 - Math.exp(raw / 50))
+    g.trail.push([e.timeStamp, e.clientY])
+    if (g.trail.length > 5) g.trail.shift()
+    e.currentTarget.style.setProperty('--drag', `${g.dy}px`)
+  }
+  const up = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = drag.current
+    drag.current = null
+    if (!g) return
+    if (g.on) draggedAt.current = Date.now()
+    delete e.currentTarget.dataset.dragging
+    const [t0, y0] = g.trail[0] ?? [0, 0]
+    const [t1, y1] = g.trail[g.trail.length - 1] ?? [0, 0]
+    const speed = t1 > t0 ? (y1 - y0) / (t1 - t0) : 0
+    if (g.on && (g.dy > 20 || (speed > 0.4 && g.dy > 6))) { dismiss(); return } // --drag stays: it leaves from there
+    e.currentTarget.style.removeProperty('--drag')
+    if (toast) wait(toast.action ? TOAST_ACTION_MS : TOAST_MS)
+  }
   return (
     <ToastCtx.Provider value={show}>
       {children}
       <div className="toasts" role="region" aria-label="Notifications" aria-live="polite">
         {toast && (
-          <div key={toast.id} className="toast" role="status">
+          <div key={toast.id} className="toast" role="status" data-leaving={leaving || undefined}
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+            onFocus={() => clearTimeout(timer.current)} onBlur={() => { if (!leaving) wait(TOAST_MS) }}>
             <span>{toast.text}</span>
-            {toast.action && <button type="button" onClick={() => { clearTimeout(timer.current); setToast(null); toast.run?.() }}>{toast.action}</button>}
+            {toast.action && <button type="button" onClick={() => { if (Date.now() - draggedAt.current < 400) return; dismiss(); toast.run?.() }}>{toast.action}</button>}
           </div>
         )}
       </div>
