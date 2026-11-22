@@ -567,7 +567,9 @@ async function syncMdblist() {
   // then the most popular.
   const todo = (await db.query(
     `select t.id, t.kind, t.imdb_id from public.titles t left join public.scores s on s.title_id = t.id
-     where t.imdb_id is not null and (s.mdblist_synced_at is null or s.mdblist_synced_at < now() - interval '30 days')
+     where t.imdb_id is not null and (s.mdblist_synced_at is null or s.mdblist_synced_at < now() - interval '30 days'
+       -- once: titles fetched before the audience score was stored (22 Nov, 16:50 UTC) are fetched again for it
+       or (s.rt_audience is null and s.mdblist_synced_at < '2026-11-22T16:50:00Z'))
      order by (s.mdblist_synced_at is null) desc,
               exists (select 1 from public.watchlist w where w.title_id = t.id) desc,
               t.popularity desc nulls last`,
