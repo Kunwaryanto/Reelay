@@ -697,36 +697,97 @@ html[data-runway] .tabbar { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .desk-wall, .desk-body { transition: none; transform: none; } }
 
 /* ---- Onboarding ---- */
-.ob { position: absolute; inset: 0; z-index: 20; background: var(--bg); overflow: hidden; }
-.ob-step { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 0 var(--margin) calc(34px + var(--edge-b)); animation: rise-in var(--dur-rise) var(--ease-out) both; }
-.ob-head { flex: none; margin: calc(var(--safe-top) + 15px) -14px 0; height: var(--hit); display: flex; align-items: center; justify-content: space-between; }
-.ob-skip { height: var(--hit); padding: 0 14px; border: 0; background: none; font: var(--type-text); font-weight: 500; color: var(--text-muted); cursor: pointer; }
-.ob h1 { margin: 20px 0 0; font: 600 28px/32px var(--font); letter-spacing: -0.02em; white-space: pre-line; }
-.ob-tiles { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; overflow-y: auto; }
-.ob-tiles button { width: 100%; height: 60px; padding: 0 12px; border: 0; border-radius: var(--radius-media); corner-shape: squircle; background: var(--fill); color: var(--text-secondary); font: var(--type-text); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out), transform var(--dur-press) var(--ease-out); }
-.ob-tiles button:active { transform: scale(0.97); }
-.ob-tiles button[aria-checked='true'], .ob-tiles button[data-on='true'] { background: #fff; color: #000; }
-.ob-next { flex: none; margin-top: auto; padding-top: 16px; display: flex; justify-content: center; }
+/* One wall, one camera (canvas: Onboarding v19). During a camera move only transform and opacity change. */
+.ob { position: absolute; inset: 0; z-index: 20; background: #000; overflow: hidden; }
+.ob[data-leaving='out'] { opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease-out); }
+/* Now, underneath, rises as this layer fades away; its tab bar is already in place */
+.stack[data-active='true']:has(~ .ob[data-leaving='out']) .pane-in { animation: rise-in 500ms var(--ease-out) both; }
+.ob-wall { position: absolute; inset: 0; overflow: hidden; touch-action: none; opacity: 0; transition: opacity 1600ms cubic-bezier(0.33, 1, 0.68, 1), filter 900ms var(--ease-out); }
+.ob-wall[data-on='true'] { opacity: 1; }
+.ob-wall[data-blur='true'] { filter: blur(8px) saturate(1.25); }
+.ob-wall[data-leaving] { transition: opacity 700ms var(--ease-out), filter 600ms var(--ease-out); }
+.ob-pan { position: absolute; inset: 0; }
+.ob-scale { position: absolute; left: 50%; top: 50%; width: 0; height: 0; scale: var(--k, 1); }
+.ob-cam { position: absolute; width: 510px; height: 818px; margin: -409px 0 0 -255px; will-change: transform; }
+.ob-cols { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5.05px; align-items: start; }
+.ob-col { display: flex; flex-direction: column; gap: 5.05px; }
+@keyframes ob-drift { from { transform: translate3d(0, var(--S), 0); } }
+@media (prefers-reduced-motion: no-preference) { .ob-col[data-drift] { animation: ob-drift 2500ms cubic-bezier(0.25, 1, 0.5, 1) both; } }
+.ob-tile { position: relative; flex: none; width: 100%; height: 121.19px; padding: 0; border: 0; border-radius: 6.3px; corner-shape: squircle; overflow: hidden; background: var(--surface); cursor: pointer; }
+.ob-tile img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+/* dimming is one opacity fade on an overlay; grey flips once, hidden under the dim, so nothing repaints per frame */
+.ob-tile i { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease-out) var(--dd, 0ms); }
+.ob-tile[data-lit='false'] i { opacity: 0.82; }
+.ob-tile[data-lit='false'] img { filter: grayscale(1); transition: filter 0s linear calc(260ms + var(--dd, 0ms)); }
+.ob-tile b { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; transition: background-color 160ms var(--ease-out); }
+.ob-tile[data-shade='true'] b { background: rgba(0, 0, 0, 0.25); }
+.ob-tile[aria-pressed='true'] b { box-shadow: inset 0 0 0 1.5px #fff; }
+
+.ob-shade { position: absolute; left: 0; right: 0; pointer-events: none; opacity: 0; transition: opacity 600ms var(--ease-out); }
+.ob-shade[data-on='true'] { opacity: 1; }
+.ob-shade-top { top: 0; height: calc(var(--safe-top) + 250px); background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.6) 45%, rgba(0, 0, 0, 0) 100%); }
+.ob-shade-svc { bottom: 0; height: calc(360px + var(--edge-b)); background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000 40%); transition: opacity 200ms var(--ease-out); }
+.ob-shade-svc[data-on='true'] { transition: opacity 500ms var(--ease-out) 160ms; }
+.ob-shade-lock { top: 0; bottom: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.35) 46%, #000 63%); transition: opacity 900ms var(--ease-out); }
+.ob-shade-pick { bottom: 0; height: calc(160px + var(--edge-b)); background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.8) 100%); }
+
+/* the step's text and controls: touches pass through to the wall; only controls catch them, and only once it has settled */
+.ob-ui { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out); }
+.ob-ui[data-on='true'] { opacity: 1; }
+.ob-ui[data-live] :is(button, a) { pointer-events: auto; }
+.ob-ui > section { position: absolute; inset: 0; }
+.ob-rise { animation: rise-in 500ms var(--ease-out) both; }
+.ob-head { position: absolute; z-index: 3; top: calc(var(--safe-top) + 15px); left: 6px; right: 6px; height: var(--hit); display: flex; align-items: center; justify-content: space-between; }
+.ob-skip { height: var(--hit); padding: 0 14px; border: 0; background: none; font: var(--type-text); font-weight: 500; color: var(--text-secondary); cursor: pointer; }
+.ob-ui > section > h1 { position: absolute; z-index: 2; left: var(--margin); right: var(--margin); top: calc(var(--safe-top) + 75px); margin: 0; font: 500 20px/22px var(--font); letter-spacing: var(--track-title); white-space: pre-line; }
+.ob-tiles { position: absolute; z-index: 2; left: var(--margin); right: var(--margin); bottom: calc(112px + var(--edge-b)); list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ob-tiles button { width: 100%; height: 56px; padding: 0; border: 0; border-radius: var(--radius-media); corner-shape: squircle; background: #000; color: #fff; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: box-shadow 200ms var(--ease-out), transform var(--dur-press) var(--ease-out); }
+.ob-tiles button > * { opacity: 0.35; transition: opacity 200ms var(--ease-out); }
+.ob-tiles button[aria-checked='true'] { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.8); }
+.ob-tiles button[aria-checked='true'] > * { opacity: 1; }
+.ob-tiles .mark { filter: brightness(0) invert(1); scale: 1.5; }
+.ob-tiles .mark-text { font-size: 8px; line-height: 12px; text-shadow: none; }
+.ob-more-tile { display: inline-flex; align-items: center; gap: 1px; font: 600 10px/12px var(--font); }
+.ob-next { position: absolute; z-index: 3; left: 0; right: 0; bottom: calc(34px + var(--edge-b)); display: flex; justify-content: center; }
+.ob-add { z-index: 4; opacity: 0; transform: translateY(8px); transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out); }
+.ob-add[data-show='true'] { opacity: 1; transform: none; }
+.ob-ui .ob-add:not([data-show='true']) button { pointer-events: none; }
 .ob-sheet-title { margin-bottom: 8px; }
 .ob-more { margin: 0; max-height: 46vh; overflow-y: auto; }
-.ob-over { position: absolute; z-index: 3; left: 0; right: 0; top: 0; padding: 0 var(--margin); pointer-events: none; }
-.ob-over .ob-head { pointer-events: auto; }
-.ob-over h1 { text-shadow: 0 2px 24px rgba(0, 0, 0, 0.8); }
-.pick[data-bare='true'] .pick-add { bottom: calc(34px + var(--edge-b)); }
-.pick[data-bare='true'] .pick-fade { height: calc(var(--safe-top) + 240px); }
-.ob-cards { margin-top: 24px; display: flex; flex-direction: column; gap: 8px; }
-.ob-card { padding: 12px 14px; border-radius: 22px; corner-shape: squircle; background: rgba(255, 255, 255, 0.12); display: flex; align-items: center; gap: 12px; animation: rise-in 500ms var(--ease-out) both; }
-.ob-app { flex: none; width: 38px; height: 38px; border-radius: 9px; background: #000; box-shadow: inset 0 0 0 0.5px var(--hairline); display: flex; align-items: center; justify-content: center; font: 600 17px/1 var(--font); }
-.ob-card > div { flex: 1; min-width: 0; }
-.ob-card > div > div { display: flex; justify-content: space-between; gap: 8px; }
-.ob-card b { font: 600 13px/17px var(--font); }
-.ob-card small { font: var(--type-meta); color: var(--text-muted); }
-.ob-card p { margin: 1px 0 0; font: var(--type-text); color: var(--text-secondary); }
-.ob-notify { margin-top: 32px; }
-.ob-notify h1 { margin: 0; }
-.ob-notify p { margin: 8px 0 12px; font: var(--type-body); color: var(--text-muted); }
-.ob-notify .rows { margin: 0; }
-@media (prefers-reduced-motion: reduce) { .ob-step, .ob-card { animation: none; } }
+
+/* Notifications: the wall becomes a lock screen */
+.ob-clock { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 61px); text-align: center; display: flex; flex-direction: column; }
+.ob-clock span { font: 500 15px/20px var(--font); color: rgba(255, 255, 255, 0.8); }
+.ob-clock b { font: 500 76px/80px var(--font); letter-spacing: -0.03em; color: rgba(255, 255, 255, 0.92); font-variant-numeric: tabular-nums; }
+.ob-cards { position: absolute; left: 10px; right: 10px; top: calc(var(--safe-top) + 193px); pointer-events: none; }
+.ob-card { position: relative; transform-origin: 50% 0; max-height: 0; margin-bottom: 0; transform: translateY(-18px) scale(0.9);
+  transition: transform 520ms cubic-bezier(0.32, 1.25, 0.5, 1), max-height 380ms var(--ease-out), margin 380ms var(--ease-out); }
+.ob-card > div { position: relative; z-index: 1; opacity: 0; transition: opacity 260ms var(--ease-out); padding: 13px 14px; border-radius: 26px; background: rgba(80, 80, 80, 0.32); -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); box-shadow: inset 0 0 0 0.5px var(--hairline), inset 0 1px 0 rgba(255, 255, 255, 0.18); display: flex; align-items: center; gap: 12px; }
+.ob-card:is([data-phase='pre'], [data-phase='shown'], [data-phase='out'], [data-phase='swipe']) { max-height: 90px; margin-bottom: 8px; }
+.ob-card[data-phase='pre'] { transition: max-height 380ms var(--ease-out), margin 380ms var(--ease-out); }
+.ob-card:is([data-phase='shown'], [data-phase='out']) { transform: none; }
+.ob-card:is([data-phase='shown'], [data-phase='swipe']) > div, .ob-card[data-phase='shown'] .ob-under { opacity: 1; }
+.ob-card[data-phase='out'] > div { transition: opacity 200ms var(--ease-out); }
+.ob-card:is([data-phase='swipe'], [data-phase='gone']) { transform: translateX(-110%); transition: transform 300ms cubic-bezier(0.55, 0, 0.75, 0.3), max-height 320ms var(--ease-out) 220ms, margin 320ms var(--ease-out) 220ms; }
+.ob-card:is([data-phase='swipe'], [data-phase='gone']) > div { transition: opacity 300ms linear; }
+.ob-app { flex: none; width: 38px; height: 38px; border-radius: 10px; corner-shape: squircle; background: #000; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.28); display: flex; align-items: center; justify-content: center; }
+.ob-app::after { content: ''; width: 28px; height: 9px; background: #fff; -webkit-mask: url('/brand/wordmark.svg') center / contain no-repeat; mask: url('/brand/wordmark.svg') center / contain no-repeat; }
+.ob-card > div > div { flex: 1; min-width: 0; }
+.ob-card > div > div > div { display: flex; align-items: baseline; gap: 8px; }
+.ob-card b { flex: 1; min-width: 0; font: 500 15px/19px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-card small { flex: none; font: 400 13px/17px var(--font); color: rgba(255, 255, 255, 0.55); }
+.ob-card p { margin: 0; font: 400 15px/19px var(--font); color: rgba(255, 255, 255, 0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-under { position: absolute; left: 10px; right: 10px; bottom: -7px; height: 30px; border-radius: 0 0 22px 22px; background: rgba(80, 80, 80, 0.22); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.18); opacity: 0; transition: opacity 260ms var(--ease-out); }
+.ob-under + .ob-under { left: 20px; right: 20px; bottom: -13px; border-radius: 0 0 20px 20px; background: rgba(80, 80, 80, 0.14); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.12); }
+.ob-notify { position: absolute; left: var(--margin); right: var(--margin); bottom: calc(132px + var(--edge-b)); }
+.ob-notify h1 { margin: 0; font: 500 20px/22px var(--font); letter-spacing: var(--track-title); }
+.ob-notify p { margin: 4px 0 0; font: var(--type-body); color: var(--text-muted); }
+.ob-notify .rows { margin: 12px 0 0; }
+@media (prefers-reduced-motion: reduce) {
+  /* no camera move or column drift: the steps cross-fade */
+  .ob-cam, .ob-pan { transition: none !important; }
+  .ob-card, .ob-card:is([data-phase='swipe'], [data-phase='gone']) { transform: none; transition: none; }
+}
 
 /* ---- Launch: Now arrives in one movement, once ----
    The whole page (picture, title, rows) fades in as a single piece, with no movement, while the wordmark fades
