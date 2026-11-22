@@ -549,7 +549,8 @@ const saveMdbScores = async (t, ratings, missing = false) => {
   const rt = by.tomatoes ?? null;
   // the audience score: MDBList calls it "popcorn" (other spellings accepted in case it is renamed)
   const aud = by.popcorn ?? by.tomatoesaudience ?? by.audience ?? null;
-  const lb = t.kind === 'film' ? by.letterboxd ?? null : null;
+  // MDBList gives Letterboxd's average doubled (out of 10); Letterboxd itself, and Reelay, show it out of 5
+  const lb = t.kind === 'film' && by.letterboxd != null ? Math.round(by.letterboxd * 5) / 10 : null;
   // A title that didn't come back is saved too (all empty), so it doesn't sit at the front of the queue every
   // night; it is dated so that it's asked for again in a week, not a month, in case it was only left out.
   const at = missing ? `now() - interval '23 days'` : 'now()';
