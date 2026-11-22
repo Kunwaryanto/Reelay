@@ -731,6 +731,7 @@ async function reconcile(runStart) {
 // has none. Compared 22 Nov: where both have a score they match, and OMDb had some big films MDBList missed.
 // Free plan: 1,000 requests a day; each film is asked about at most once a month.
 const OMDB_PER_RUN = Number(process.env.OMDB_PER_RUN || 950);
+const OMDB_MIN_VOTES = Number(process.env.OMDB_MIN_VOTES || 5000);
 async function syncOmdb() {
   const key = env('OMDB_API_KEY', false);
   if (!key) return log('OMDb: no key, skipped');
@@ -738,8 +739,11 @@ async function syncOmdb() {
     `select t.id, t.imdb_id, t.title from public.titles t join public.scores s on s.title_id = t.id
      where t.kind = 'film' and t.imdb_id is not null and s.rt_critics is null
        and (s.omdb_synced_at is null or s.omdb_synced_at < now() - interval '30 days')
-     order by exists (select 1 from public.watchlist w where w.title_id = t.id) desc, t.popularity desc nulls last
-     limit $1`, [OMDB_PER_RUN])).rows;
+     -- Watchlist first; then films with enough IMDb votes that Rotten Tomatoes has likely reviewed them (most asks
+     -- that came back empty were small films); the rest are still asked, last. Each group by popularity.
+     order by exists (select 1 from public.watchlist w where w.title_id = t.id) desc,
+              (coalesce(s.imdb_votes, 0) >= $2) desc, t.popularity desc nulls last
+     limit $1`, [OMDB_PER_RUN, OMDB_MIN_VOTES])).rows;
   if (!todo.length) return log('OMDb: nothing to fetch');
   let asked = 0, filled = 0, spent = false;
   const sample = [];
