@@ -34,6 +34,12 @@ export function setQueryData<T>(key: string, data: T, persist = true) {
   watchers.get(key)?.forEach((f) => f())
 }
 
+/** Change what's saved under a key from what is there now (nothing happens when nothing is saved yet). */
+export function updateQueryData<T>(key: string, change: (now: T) => T, persist = true) {
+  const entry = readSaved(key)
+  if (entry) setQueryData(key, change(entry.data as T), persist)
+}
+
 // Loads started ahead of the screen that will show them (see prefetch): that screen waits for this one answer.
 const inflight = new Map<string, Promise<void>>()
 

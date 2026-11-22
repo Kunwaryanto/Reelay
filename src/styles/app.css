@@ -915,3 +915,8 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .grid.pill-in > li:nth-child(n+7) { animation-delay: 80ms; } .grid.pill-in > li:nth-child(n+10) { animation-delay: 120ms; }
 .grid.pill-in > li:nth-child(n+13) { animation-delay: 160ms; }
 @media (prefers-reduced-motion: reduce) { .pill-in > li { animation: none; } }
+
+/* A Watchlist row arriving while the list is showing: it opens up and fades in, so the rows below ease down. */
+.wl-row[data-fresh] { animation: wl-open 320ms var(--ease-sheet) both; overflow: hidden; }
+@keyframes wl-open { from { max-height: 0; opacity: 0; } to { max-height: 110px; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wl-row[data-fresh] { animation: none; } }

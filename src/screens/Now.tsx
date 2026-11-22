@@ -171,7 +171,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
           {(scores.length > 0 || !d) && <dl data-in={scores.length > 0}>{scores.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           {leaving && <p className="hold-leaves">{leaving}</p>}
         </div>
-        <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title); close() }}>
+        <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title, card); close() }}>
           <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name={isSaved ? 'bookmark_remove' : 'bookmark_add'} size={20} />
         </button>
         {avail ? (

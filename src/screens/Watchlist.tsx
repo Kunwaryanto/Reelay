@@ -53,6 +53,17 @@ export default function Watchlist() {
     if (missing && missing !== asked.current) { asked.current = missing; retry() }
   }, [tab, saved.ids, have, q.data, retry])
 
+  // A row that arrives while the list is showing (a slow save, or one from another device) opens up and fades in.
+  // Rows there when the list first shows, and rows added while another tab was showing, are just there.
+  const known = useRef<Set<number> | null>(null)
+  const born = useRef(new Map<number, number>())
+  if (q.data) {
+    const first = !known.current
+    known.current ??= new Set()
+    for (const t of q.data) if (!known.current.has(t.id)) { known.current.add(t.id); if (!first && tab === 'watchlist') born.current.set(t.id, Date.now()) }
+  }
+  const isNew = (id: number) => Date.now() - (born.current.get(id) ?? 0) < 600
+
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hasPicked = picked.length > 0 // until Your services is set up, every service counts as yours
 
@@ -136,7 +147,7 @@ export default function Watchlist() {
           </div>
           <ul key={kind} className={switched ? 'pill-in' : undefined}>
             {s.rows.map((r) => (
-              <WatchRow key={r.t.id} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
+              <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
                 where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming in Sweden' : null}
                 onNotify={() => saved.toggleNotify(r.t.id)} onHold={(card, cover) => { setOpen(null); setHeld({ card, cover }) }}
@@ -157,7 +168,8 @@ export default function Watchlist() {
 }
 
 /** One saved title. Swipe left to reveal Remove; a tap opens the title. */
-function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify, onHold }: {
+function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify, onHold }: {
+  fresh?: boolean
   onHold: (card: Card, cover: HTMLElement) => void
   row: Row; group: string; showKind: boolean; note: string | null; where: string | null; onNotify: () => void
   open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
@@ -173,7 +185,7 @@ function WatchRow({ row, group, showKind, note, where, open, setOpen, onOpen, on
   const meta = [showKind ? kindWord(t.kind) : '', year].filter(Boolean).join(' · ') + (group !== 'off' && service ? ` · ${nameOf(service)}` : '')
 
   return (
-    <li className="wl-row">
+    <li className="wl-row" data-fresh={fresh || undefined}>
       <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1}
         style={{ opacity: open || (dx !== null && dx < -8) ? 1 : 0 }} onClick={onRemove}>
         <Icon name="bookmark_remove" size={20} /><span>Remove</span>

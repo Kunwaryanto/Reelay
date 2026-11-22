@@ -58,7 +58,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
                 <Icon name="notifications" size={16} fill={notifying} />{notifying ? 'Notifying' : 'Notify me'}
               </button>
             )}
-            <button type="button" className="icon-btn" aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'} onClick={() => saved.toggleSaved(t.id, t.title)}>
+            <button type="button" className="icon-btn" aria-pressed={isSaved} aria-label={isSaved ? 'Remove from watchlist' : 'Add to watchlist'} onClick={() => saved.toggleSaved(t.id, t.title, t)}>
               <span><Icon name="bookmark" size={18} fill={isSaved} /></span>
             </button>
           </div>
