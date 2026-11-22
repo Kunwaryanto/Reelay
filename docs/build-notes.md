@@ -404,3 +404,13 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - The lists behind Home's rows open on Browse's list page (grid, type pills, filter drawer) and cover every service; Home's rows are limited to your services because those come first, not because the rest is hidden.
 - Browse category pages: each row asks for one more title than it shows, and offers View all only when that one came back.
 
+## Home from the watchlist (23 Nov)
+
+- **Because you saved X**: like Because you liked, from a title on the watchlist (films and series; a different one each day). TMDB's recommendations of the same kind, on the member's services, not already saved.
+- **More with X**: a director, creator or one of the first five billed actors behind three or more titles the member saved or rated 4+; their other titles on the member's services (at least three). View all opens the person when there are more.
+- **Now streaming from your watchlist** (saved titles that arrived on a service in the last 30 days) and **Short enough for tonight** (saved films of 40–100 minutes): up to 10 each, shown from 3. A title in one of them isn't repeated in From your watchlist.
+- **Spotlight**: up to six cards. After the second liked film come the watchlist's own finds, whether or not their rows are shown: "On your watchlist · now on Netflix" and "On your watchlist · 1 h 28 min".
+- **Taste**: genre rows follow the genres the member rates highest; with fewer than three, the genres they save most fill in.
+- Order: New · Trending films · Trending series · Leaving soon · Now streaming from your watchlist · From your watchlist · Short enough for tonight · Because you liked · Because you saved · Picked for you · Friends liked · More with · New films · New series · theme · two genres · decade.
+- The nightly sync now asks TMDB for recommendations for every saved title as well as every film rated 4+ (`title_recs` keeps films and series apart).
+
