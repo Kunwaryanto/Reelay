@@ -255,6 +255,7 @@ function Letterboxd() {
   const [leaving, setLeaving] = useState(false)
   // Import your history: the sheet explains where the export comes from; the file is read on the phone
   const [howTo, setHowTo] = useState(false)
+  const [fetched, setFetched] = useState(false) // the export link was tapped: Choose file is next
   const [importing, setImporting] = useState<null | 'reading' | number>(null)
   const [importError, setImportError] = useState('')
   const picker = useRef<HTMLInputElement>(null)
@@ -338,15 +339,18 @@ function Letterboxd() {
             onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(files) }} />
           {createPortal(<Sheet open={howTo} onClose={() => setHowTo(false)} label="Import your history">
             <h2 className="sheet-title">Import your history</h2>
-            <p className="sheet-text">The nightly read only sees your latest entries. Your Letterboxd export has everything you’ve watched.</p>
+            <p className="sheet-text">Your Letterboxd export has everything you’ve watched. Download it, then pick it here.</p>
+            {/* two steps, each with its own button; the white one is the step to do next */}
             <ol className="lb-steps">
-              <li><span className="row-text"><b>Export from Letterboxd</b><small>Settings › Data › Export your data, on letterboxd.com</small></span></li>
-              <li><span className="row-text"><b>Pick the ZIP here</b><small>It’s in Files › Downloads. Only the film list is sent; the file isn’t kept.</small></span></li>
+              <li>
+                <span className="row-text"><b>Download your export</b><small>Letterboxd saves a ZIP to Files › Downloads. Sign in there if it asks.</small></span>
+                <a className="btn-small press" data-solid={!fetched} href="https://letterboxd.com/data/export/" target="_blank" rel="noreferrer" onClick={() => setFetched(true)}>Download<Icon name="north_east" size={14} /></a>
+              </li>
+              <li>
+                <span className="row-text"><b>Pick the ZIP here</b><small>Only the film list is sent. The file isn’t kept.</small></span>
+                <SmallButton solid={fetched} onClick={() => picker.current?.click()}>Choose file</SmallButton>
+              </li>
             </ol>
-            <div className="sheet-action lb-import-actions">
-              <Button onClick={() => picker.current?.click()}>Choose file</Button>
-              <a href="https://letterboxd.com/settings/data/" target="_blank" rel="noreferrer">Open Letterboxd settings<Icon name="north_east" size={15} /></a>
-            </div>
           </Sheet>, document.body)}
           <ul className="rows set-group">
             <li><button type="button" onClick={disconnect} aria-busy={leaving}><span className="row-text"><b className="err">Disconnect</b></span>{leaving && <Spinner light />}</button></li>
