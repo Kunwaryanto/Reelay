@@ -19,8 +19,8 @@ export type HomeRow = {
   notes?: 'leaving'
   /** the Browse page with the whole list, for View all */
   more?: string
-  /** a row that is one large card instead of posters */
-  spotlight?: HomeCard
+  /** a row of large cards instead of posters, each with its reason */
+  spotlight?: HomeCard[]
 }
 export type HomeData = { hero: HomeCard[]; rows: HomeRow[] }
 export type HomeAsk = {
@@ -185,16 +185,27 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   // a thin day: fill up from trending so the hero is never one slide
   for (const t of mix([rowTrendF, rowTrendS])) if (hero.length < 5) lead(t, t.kind === 'film' ? 'Trending film this week' : 'Trending series this week')
 
-  // ---- The spotlight: one title given room, picked from what is personal first ----
+  // ---- The spotlight: up to five titles given room, each with its reason. Personal first; never a hero title,
+  // and each from a different reason where it can be. ----
   const inHero = new Set(hero.map((h) => h.id))
-  const spot = (list: HomeCard[], reason: (t: HomeCard) => string): HomeCard | undefined => {
-    const t = list.find((x) => wide(x) && !inHero.has(x.id))
-    return t ? { ...t, reason: reason(t) } : undefined
+  const spots: HomeCard[] = []
+  const spot = (list: HomeCard[], reason: (t: HomeCard) => string, n = 1) => {
+    for (const t of list) {
+      if (spots.length >= 5 || n <= 0) return
+      if (!wide(t) || inHero.has(t.id) || spots.some((x) => x.id === t.id)) continue
+      spots.push({ ...t, reason: reason(t) }); n--
+    }
   }
-  const spotlight = (because.length ? spot(rowBecause, () => `Because you liked ${because[0].source}`) : undefined)
-    ?? spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
-    ?? spot(rowNew.slice(1), (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
-    ?? spot(rowTrendF.slice(1), () => 'Trending this week')
+  if (because.length) spot(rowBecause, () => `Because you liked ${because[0].source}`)
+  spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
+  spot(rowNew, (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
+  spot(rowTheme, () => (themed === 'awards' ? 'Award winner' : 'Hidden gem'))
+  spot(rowLeaving, (t) => leavesIn(leavesOn.get(t.id)) ?? 'Leaving soon')
+  spot(rowTrendS, () => 'Trending this week')
+  spot(rowTrendF, () => 'Trending this week', 2)
+
+  // a title in the hero goes to the end of its row: the row starts with something else, and it is still there
+  const back = (items: HomeCard[]) => [...items.filter((t) => !inHero.has(t.id)), ...items.filter((t) => inHero.has(t.id))]
 
   const rows: HomeRow[] = [
     { id: 'new', title: mine ? 'New on your services' : 'New this month', items: rowNew },
@@ -203,7 +214,7 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     { id: 'leaving', title: 'Leaving soon', items: rowLeaving, notes: 'leaving', more: '/browse/g/leaving-soon/list' },
     { id: 'watchlist', title: 'From your watchlist', items: savedCards },
     { id: 'because', title: because.length ? `Because you liked ${because[0].source}` : '', items: rowBecause },
-    ...(spotlight ? [{ id: 'spotlight', title: '', items: [], spotlight }] : []),
+    ...(spots.length >= 2 ? [{ id: 'spotlight', title: '', items: [], spotlight: spots }] : []),
     { id: 'friends', title: 'Friends liked', items: rowFriends },
     { id: 'new-films', title: 'New films', items: rowNewF },
     { id: 'new-series', title: 'New series', items: rowNewS },
@@ -211,5 +222,5 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     ...rowGenres.map(({ c, items }) => ({ id: c.id, title: c.label, items, more: `/browse/c/${c.id}` })),
     { id: decade.id, title: decade.label, items: rowDecade, more: `/browse/c/${decade.id}` },
   ]
-  return { hero, rows: rows.filter((r) => r.spotlight || r.items.length >= 3) }
+  return { hero, rows: rows.filter((r) => r.spotlight || r.items.length >= 3).map((r) => ({ ...r, items: back(r.items) })) }
 }

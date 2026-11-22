@@ -276,21 +276,27 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   )
 }
 
-/** One title given room between the rows: its wide picture, why it is here, and where it plays. */
-function Spotlight({ card }: { card: HomeCard }) {
+/** Titles given room between the rows, side by side: each card has its wide picture, why it is here, and where it plays. */
+function Spotlight({ cards }: { cards: HomeCard[] }) {
   const { push } = useNavActions()
-  const art = tmdbImage(card.backdrop_path, 'w780')
-  const service = card.availability[0]?.service_id
   return (
-    <a className="spot press" href={`/title/${card.id}`} onClick={(e) => { e.preventDefault(); push(`/title/${card.id}`) }}>
-      {art && <img src={art} alt="" loading="lazy" draggable={false} />}
-      <span className="spot-text">
-        {card.reason && <small>{card.reason}</small>}
-        <b>{card.title}</b>
-        {/* the service, unless the reason already names one ("New on Netflix") */}
-        <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
-      </span>
-    </a>
+    <div className="spot-row noscroll" role="list">
+      {cards.map((card) => {
+        const art = tmdbImage(card.backdrop_path, 'w780')
+        const service = card.availability[0]?.service_id
+        return (
+          <a key={card.id} role="listitem" className="spot press" href={`/title/${card.id}`} onClick={(e) => { e.preventDefault(); push(`/title/${card.id}`) }}>
+            {art && <img src={art} alt="" loading="lazy" draggable={false} />}
+            <span className="spot-text">
+              {card.reason && <small>{card.reason}</small>}
+              <b>{card.title}</b>
+              {/* the service, unless the reason already names one ("New on Netflix") */}
+              <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
+            </span>
+          </a>
+        )
+      })}
+    </div>
   )
 }
 
@@ -390,7 +396,7 @@ export default function Now() {
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.rows.map((row, r) => (
-            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><Spotlight card={row.spotlight} /></section> :
+            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
               <SectionHeader title={row.title} onViewAll={row.more ? () => push(row.more!) : undefined} onViewAllPress={row.more ? () => warmBrowse(row.more!) : undefined} />
               <PosterRow>

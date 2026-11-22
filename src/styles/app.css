@@ -1157,12 +1157,18 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .lb-steps .btn-small { flex: none; padding: 0 14px; gap: 2px; text-decoration: none; transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out); }
 
 /* ---- Home: why a hero slide is there, and the spotlight card ---- */
-.hero-reason { position: absolute; left: 20px; right: 20px; bottom: 84px; text-align: center; font: var(--type-meta); font-weight: 500; color: #fff; }
-.hero-text[data-reason] :is(.hero-logo, .hero-name) { bottom: 112px; }
-.spot { position: relative; display: block; margin: 0 var(--margin); aspect-ratio: 16 / 10; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; }
+/* the reason and the meta under it are one block at the meta size: the reason white and medium, the meta grey; a
+   reason too long for one line is cut */
+.hero-reason { position: absolute; left: 20px; right: 20px; bottom: 82px; text-align: center; font: var(--type-meta); font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hero-text[data-reason] .hero-meta { font: var(--type-meta); }
+.hero-text[data-reason] :is(.hero-logo, .hero-name) { bottom: 106px; }
+/* the spotlight: large cards side by side, the next one peeking in */
+.spot-row { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding: 0 var(--margin); padding: 0 var(--margin); }
+.spot-row .spot { flex: none; width: calc(100% - 2 * var(--margin) - 32px); scroll-snap-align: start; }
+.spot { position: relative; display: block; aspect-ratio: 16 / 10; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; }
 .spot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 .spot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.82) 100%); }
 .spot-text { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; }
 .spot-text small { font: var(--type-meta); font-weight: 500; color: #fff; }
-.spot-text b { margin-top: 2px; font: var(--type-title); letter-spacing: var(--track-title); text-wrap: balance; }
+.spot-text b { margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); text-wrap: balance; }
 .spot-text span { margin-top: 2px; font: var(--type-meta); color: var(--text-secondary); }
