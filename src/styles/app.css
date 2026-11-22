@@ -1111,7 +1111,10 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .cover[data-ready='true'][data-watched] > img { opacity: 0.45; }
 
 /* Title page: who has watched it, under the scores */
-.lb-row { margin: var(--section-gap) var(--margin) 0; }
+/* part of the top block (meta, scores, this row, the text): an even 24px of visible space above and below,
+   counting the air the 44px row has around its 28px initials */
+.lb-row { margin: 16px var(--margin) 0; }
+.lb-row + .overview { margin-top: 14px; }
 .lb-row > button, .lb-row > div { width: 100%; min-height: var(--hit); padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 12px; text-align: left; }
 .lb-row > button { cursor: pointer; transition: opacity 200ms var(--ease-out); }
 .lb-row > button:active { opacity: 0.5; transition: opacity 0s linear 80ms; }
