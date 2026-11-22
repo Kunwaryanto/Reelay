@@ -77,7 +77,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
   const wallKey = popular.length ? `wall:${popular.map((s) => s.id).join()}` : null
   const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id)), { maxAge: 60 * 60 * 1000 })
   // What's switched on here: your own services, or three common ones when you have none yet (and always when this
-  // is shown again from Settings, to see it as a new person does; that run never changes your services).
+  // is shown again from Settings, to see it as a new person does; that run saves nothing at all).
   // Saved when you continue; Skip saves nothing.
   const [edits, setEdits] = useState<string[] | null>(null)
   const on = edits ?? (!replay && mine.length ? mine : DEFAULTS.filter((id) => all.some((s) => s.id === id)))
@@ -182,8 +182,11 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
     busy.current = true
     const any = Object.values(want).some(Boolean)
     // the system question comes from this tap; "Don't Allow" just leaves them off
-    if (ask && any && permission() === 'default') await askPermission()
-    try { await update({ ...(ask ? want : {}), onboarded_at: new Date().toISOString() }) } catch { /* offline: it shows again next time */ }
+    // shown again from Settings it is a test run: nothing is saved and iOS isn't asked
+    if (!replay) {
+      if (ask && any && permission() === 'default') await askPermission()
+      try { await update({ ...(ask ? want : {}), onboarded_at: new Date().toISOString() }) } catch { /* offline: it shows again next time */ }
+    }
     setLocked(true); setUi(false); setMore(false); fadeCards(); setBlur(false)
     setCam({ at: 'exit', tr: 'transform 900ms cubic-bezier(0.32, 0.72, 0, 1)' })
     setWallOn(false); setLeaving('wall')
@@ -313,7 +316,7 @@ export default function Onboarding({ onDone, replay }: { onDone: () => void; rep
             <h1 className="ob-rise" style={{ animationDelay: '60ms' }}>{'Pick a few\nto watch later'}</h1>
             <div className="ob-next ob-add" data-show={n > 0}>
               <Button tabIndex={n ? 0 : -1} aria-label={`Add ${n === 1 ? '1 title' : `${n} titles`} to Watchlist`}
-                onClick={() => { if (locked) return; void saved.addMany(sel); go('notify') }}>Add {n} to Watchlist</Button>
+                onClick={() => { if (locked) return; if (!replay) void saved.addMany(sel); go('notify') }}>Add {n} to Watchlist</Button>
             </div>
           </section>
         )}
