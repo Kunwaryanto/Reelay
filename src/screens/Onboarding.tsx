@@ -181,8 +181,8 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   }
 
   // Leaving hands off to Now, unhurried: the UI and cards fade, the blur lifts as the camera drifts into the wall
-  // (1.8 s, eased in and out) and the wall sinks to black (1.1 s); as it gets there this whole layer fades away
-  // (0.8 s) over Now, which rises with its tab bar already in place.
+  // (1.35 s, eased in and out) and the wall sinks to black (0.8 s); as it gets there this whole layer fades away
+  // (0.6 s) over Now, which rises with its tab bar already in place.
   const finish = async (ask: boolean) => {
     if (busy.current || locked) return
     busy.current = true
@@ -194,12 +194,12 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
       try { await update({ ...(ask ? want : {}), onboarded_at: new Date().toISOString() }) } catch { /* offline: it shows again next time */ }
     }
     setLocked(true); setUi(false); setMore(false); fadeCards(); setBlur(false)
-    setCam({ at: 'exit', tr: 'transform 1800ms cubic-bezier(0.45, 0, 0.25, 1)' })
+    setCam({ at: 'exit', tr: 'transform 1350ms cubic-bezier(0.45, 0, 0.25, 1)' })
     setWallOn(false); setLeaving('wall')
     onLeave?.()
     later(() => setView(null), 320)
-    later(() => setLeaving('out'), 1000)
-    later(onDone, 1850)
+    later(() => setLeaving('out'), 700)
+    later(onDone, 1350)
   }
 
   // Picking: drag to look around the wall, tap a poster to choose it.

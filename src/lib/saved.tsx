@@ -11,7 +11,8 @@ type Ctx = {
   isSaved: (id: number) => boolean
   isNotifying: (id: number) => boolean
   /** `card`: what the screen knows about the title, so the Watchlist has its row at once */
-  toggleSaved: (id: number, title: string, card?: Shown) => void
+  /** `quiet`: no "Removed" toast, for a button that shows the change itself and can undo it (the title page) */
+  toggleSaved: (id: number, title: string, card?: Shown, quiet?: boolean) => void
   toggleNotify: (id: number) => void
   /** the saved list has arrived (from the phone or the server) */
   loaded: boolean
@@ -75,14 +76,14 @@ export function SavedProvider({ children }: { children: ReactNode }) {
     addMany: (list) => Promise.all(list.filter((id) => !get(id)).map((id) => write(id, { title_id: id, notify: false }, null))).then(() => {}),
     isSaved: (id) => !!get(id),
     isNotifying: (id) => !!get(id)?.notify,
-    toggleSaved: (id, title, card) => {
+    toggleSaved: (id, title, card, quiet) => {
       const prev = get(id)
       if (prev) {
         write(id, null, prev)
-        toast({ text: `Removed ${title}`, action: 'Undo', run: () => write(id, prev, null, card) })
+        if (!quiet) toast({ text: `Removed ${title}`, action: 'Undo', run: () => write(id, prev, null, card) })
       } else {
+        // adding has no toast: the bookmark filling in says it (22 Nov)
         write(id, { title_id: id, notify: false }, null, card)
-        toast({ text: 'Added to Watchlist' })
       }
     },
     toggleNotify: (id) => {
