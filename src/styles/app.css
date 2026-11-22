@@ -979,19 +979,23 @@ html[data-runway] .tabbar { touch-action: none; }
    - iOS bouncing the page down, or a pull to refresh: the picture doesn't move at all; the page slides over it.
    - Scrolling up: the frame leaves at the page's speed (so the picture never shows behind the rows below) while
      the picture inside it drifts back, which makes it move at about two thirds of the page's speed.
-   Both run on the page's scroll timeline, off the main thread. --pull is how far the page is pulled to refresh. */
+   Both follow the marker at the top of the page (see .art-mark), off the main thread. --pull is how far the page is pulled to refresh. */
 @property --pull { syntax: '<length>'; inherits: true; initial-value: 0px; }
 .page[data-ptr] > * { translate: 0 var(--pull); }
-.pane-in { timeline-scope: --page; }
-.page { scroll-timeline: --page block; }
+.pane-in { timeline-scope: --art; }
+/* What the picture follows: a 540px marker at the top of the page (PinnedArt puts it there), as it leaves the
+   screen. Not the page's whole scroll: measured against that, Safari kept using the page's first length while a
+   finger was scrolling, so once the page had grown (rows arriving after the picture) the picture ran about 4%
+   fast during a scroll and snapped back when it stopped. The marker's own 540px don't change with the page. */
+.art-mark { position: absolute; top: 0; left: 0; width: 1px; height: 540px; visibility: hidden; pointer-events: none; view-timeline: --art block; }
 .art-layer { position: absolute; top: 0; left: 0; right: 0; height: 540px; overflow: hidden; pointer-events: none; }
 .art-drift { position: absolute; inset: 0; }
 .art-layer:has(+ .page[data-launch]) { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
 @supports (animation-timeline: scroll()) {
-  .art-layer { animation: art-leave linear both; animation-timeline: --page; animation-range: 0 540px; }
-  .art-layer:has(+ .page[data-launch]) { animation: art-leave linear both, launch-fade var(--dur-launch) var(--ease-launch) both; animation-timeline: --page, auto; animation-range: 0 540px, normal; }
+  .art-layer { animation: art-leave linear both; animation-timeline: --art; animation-range: exit 0% exit 100%; }
+  .art-layer:has(+ .page[data-launch]) { animation: art-leave linear both, launch-fade var(--dur-launch) var(--ease-launch) both; animation-timeline: --art, auto; animation-range: exit 0% exit 100%, normal; }
   @media (prefers-reduced-motion: no-preference) {
-    .art-drift { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
+    .art-drift { animation: art-drift linear both; animation-timeline: --art; animation-range: exit 0% exit 100%; }
   }
   @keyframes art-leave { to { translate: 0 -540px; } }
   @keyframes art-drift { to { translate: 0 170px; } }
@@ -1037,7 +1041,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .arrive { animation: launch-fade var(--dur-arrive) var(--ease-launch) both; }
 .art-layer:has(+ .page[data-arrive]) { animation: launch-fade var(--dur-arrive) var(--ease-launch) both; }
 @supports (animation-timeline: scroll()) {
-  .art-layer:has(+ .page[data-arrive]) { animation: art-leave linear both, launch-fade var(--dur-arrive) var(--ease-launch) both; animation-timeline: --page, auto; animation-range: 0 540px, normal; }
+  .art-layer:has(+ .page[data-arrive]) { animation: art-leave linear both, launch-fade var(--dur-arrive) var(--ease-launch) both; animation-timeline: --art, auto; animation-range: exit 0% exit 100%, normal; }
 }
 .skel { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; animation: launch-fade 200ms var(--ease-out) both; }
 .skel[data-leaving] { animation: skel-out 240ms var(--ease-out) both; }

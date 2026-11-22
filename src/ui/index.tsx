@@ -990,7 +990,8 @@ export function PinnedArt({ children }: { children: ReactNode }) {
     }
     return () => { stop(); layer.remove() }
   }, [])
-  return <><span ref={mark} hidden />{frame && createPortal(children, frame)}</>
+  // the marker is also what the picture's movement is measured against (.art-mark)
+  return <><span ref={mark} className="art-mark" aria-hidden="true" />{frame && createPortal(children, frame)}</>
 }
 
 /** The small count on a type pill. Without a number yet it takes no room; when the number lands the pill eases wider as it fades in. */

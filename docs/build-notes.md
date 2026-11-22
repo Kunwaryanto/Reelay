@@ -362,7 +362,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 ## Top picture, rebuilt (21 Nov): pinned behind the page
 
 - The picture is no longer inside the scrolling page. It sits behind it in a frame pinned to the top of the screen (`PinnedArt`), so when iOS bounces the page down or it is pulled to refresh, the picture doesn't move and nothing is corrected per frame.
-- Scrolling up: the frame leaves at the page's speed and the picture inside drifts back 170 px over 540 px (about two thirds of the page's speed). Both run on the page's scroll timeline.
+- Scrolling up: the frame leaves at the page's speed and the picture inside drifts back 170 px over 540 px (about two thirds of the page's speed). Both follow a 540 px marker at the top of the page as it leaves the screen (a view timeline; since 22 Nov). Measured against the page's whole scroll, Safari ran the picture about 4% fast while a finger scrolled and snapped it back at rest once the page had grown after loading.
 - The shade, title and dots stay in the page and move with it. The picture no longer grows on a pull; it stays still and the page slides down over it.
 - Keyboard closing on Search: the field sinks over 340 ms with cubic-bezier(0.4, 0, 0.2, 1), a soft start and landing, instead of matching the keyboard's abrupt 180 ms fall.
 
