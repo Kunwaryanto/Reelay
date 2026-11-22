@@ -18,6 +18,12 @@ Copied from the notes beside the screens on the Current page of the design canva
 • Notify me always saves the title. Toast: “We’ll let you know when it’s on.” with Undo, or “Notifications are off for Reelay.” with Settings. 4 s.
 • Tapping a notification opens the title's Detail page; the matching where-to-watch row lights up once in surface grey and settles (≈1.5 s), its note in white: Leaves tomorrow / New / New season.
 
+## Scores build-up (22 Nov)
+
+- MDBList is asked 200 titles at a time (its batch lookup). The first batch of each run is measured (usage before and after) and the log says what it cost: one request per batch means the whole queue is worked through, one per title means as many titles as the day's allowance has left, and if batches fail the step asks one title at a time as before.
+- Queue: never fetched first, then older than 30 days; within each, titles on someone's Watchlist, then the most popular. A title that doesn't come back is saved empty and asked for again in a week, so it no longer sits at the front every night.
+- The `Scores` workflow runs just this step by hand (`SYNC_ONLY=scores`); the nightly sync still does it every night.
+
 ## Pressed, busy, disabled, focused (22 Nov)
 
 - Every control answers the finger. Self-contained shapes shrink (`scale`, so it never fights their own animations): icon buttons 0.9, pills and chips 0.96, Browse cards 0.97 (after 80 ms, so scrolling doesn't nudge them), tab bar icons 0.88; the white buttons and posters already did. Text actions (View all, Skip, quiet buttons) and full-width rows (Settings, drawer options) dim to 50% instead; rows wait 80 ms. Long-press menu items tint like its header.

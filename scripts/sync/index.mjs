@@ -26,7 +26,10 @@ const env = (k, required = true) => {
 };
 const LIMIT = Number(process.env.SYNC_LIMIT || 0);
 const FULL = LIMIT === 0;
-const MDBLIST_PER_RUN = Number(process.env.MDBLIST_PER_RUN || 900);
+// only used when MDBList won't say how much of the day's allowance is left
+const MDBLIST_PER_RUN = Number(process.env.MDBLIST_PER_RUN || 1000);
+// SYNC_ONLY=scores: just the MDBList scores (the Scores workflow), nothing else is touched
+const ONLY = process.env.SYNC_ONLY || '';
 // Streaming Availability's free plan allows 100 requests a day. Leaving dates come first and read the whole list
 // (up to SA_PAGES pages, 25 changes each); links to the services' apps get what is left of SA_BUDGET, at most
 // SA_LINK_REQUESTS (80 since 22 Nov: the leaving list took 15 pages that night). The 5 spare are for a retry or a test run the same day.
@@ -532,52 +535,140 @@ async function syncImdbRatings() {
   log(`IMDb ratings: ${rows.length} of ${ids.size} titles`);
 }
 
+// MDBList: Rotten Tomatoes (critics and audience) and Letterboxd.
+// Asked 200 titles at a time (its batch lookup) since 22 Nov. Whether a batch costs one request or one per title
+// against the day's allowance isn't documented, so the first batch is measured: our usage is read before and after.
+//   one request per batch  -> the whole queue is worked through tonight
+//   one per title          -> as many titles as the day's allowance has left
+//   batches don't work     -> one title per request, as before
+const MDB = 'https://api.mdblist.com';
+const MDB_BATCH = 200;
+const saveMdbScores = async (t, ratings, missing = false) => {
+  const by = Object.fromEntries((ratings ?? []).map((x) => [x.source, x.value]));
+  const rt = by.tomatoes ?? null;
+  // the audience score: MDBList calls it "popcorn" (other spellings accepted in case it is renamed)
+  const aud = by.popcorn ?? by.tomatoesaudience ?? by.audience ?? null;
+  const lb = t.kind === 'film' ? by.letterboxd ?? null : null;
+  // A title that didn't come back is saved too (all empty), so it doesn't sit at the front of the queue every
+  // night; it is dated so that it's asked for again in a week, not a month, in case it was only left out.
+  const at = missing ? `now() - interval '23 days'` : 'now()';
+  await db.query(
+    `insert into public.scores (title_id, rt_critics, rt_audience, letterboxd, mdblist_synced_at) values ($1,$2,$3,$4, ${at})
+     on conflict (title_id) do update set rt_critics = excluded.rt_critics, rt_audience = excluded.rt_audience, letterboxd = excluded.letterboxd, mdblist_synced_at = ${at}`,
+    [t.id, rt == null ? null : Math.round(rt), aud == null ? null : Math.round(aud), lb],
+  );
+  return { rt: rt != null, aud: aud != null };
+};
+
 async function syncMdblist() {
   const key = env('MDBLIST_API_KEY', false);
   if (!key) return log('MDBList: no key, skipped');
-  // Never-fetched first, then the oldest, most popular first within each group.
+  // The queue: never fetched first, then anything older than 30 days; within each, titles on someone's Watchlist,
+  // then the most popular.
   const todo = (await db.query(
     `select t.id, t.kind, t.imdb_id from public.titles t left join public.scores s on s.title_id = t.id
-     where t.imdb_id is not null
-     order by s.mdblist_synced_at nulls first, t.popularity desc limit $1`,
-    [MDBLIST_PER_RUN],
+     where t.imdb_id is not null and (s.mdblist_synced_at is null or s.mdblist_synced_at < now() - interval '30 days')
+     order by (s.mdblist_synced_at is null) desc,
+              exists (select 1 from public.watchlist w where w.title_id = t.id) desc,
+              t.popularity desc nulls last`,
   )).rows;
-  let ok = 0, sample = null, spent = false, slowed = 0, withAudience = 0;
-  // Two at a time with a short pause: four at once got a quarter of the lookups refused as "too many requests"
-  // (22 Nov). That refusal is about pace and is waited out; the daily limit is not, and ends the step.
-  await pool(todo.map((t) => ({ ...t, key: t.imdb_id })), 2, async (t) => {
-    // MDBList allows a fixed number of lookups a day: once it says no, stop asking (the rest come tomorrow).
-    if (spent) return;
-    const url = `https://api.mdblist.com/imdb/${t.kind === 'film' ? 'movie' : 'show'}/${t.imdb_id}?apikey=${key}`;
-    let r = null;
+  if (!todo.length) return log('MDBList: nothing to fetch');
+
+  // our usage today, as MDBList counts it: { used, limit } or null if it won't say
+  const usage = async () => {
+    try {
+      const r = await fetch(`${MDB}/user?apikey=${key}`);
+      if (!r.ok) return null;
+      const u = await r.json();
+      const used = u.api_requests_count ?? u.api_requests_used ?? null, limit = u.api_requests ?? u.api_requests_limit ?? null;
+      return used == null || limit == null ? null : { used: Number(used), limit: Number(limit) };
+    } catch { return null; }
+  };
+
+  let ok = 0, withRt = 0, withAud = 0, absent = 0, sample = null, spent = false, slowed = 0, requests = 0;
+  // One batch: every title in it is saved (found or not). Returns false if batches can't be used.
+  const batch = async (list) => {
+    const kind = list[0].kind === 'film' ? 'movie' : 'show';
+    let res, body;
     for (let i = 0; ; i++) {
-      if (spent) return;
-      await sleep(200);
-      const res = await fetch(url);
-      if (res.ok) { r = await res.json(); break; }
-      if (res.status === 404) return;
-      const body = (await res.text()).slice(0, 300);
-      if (/Daily API limit/i.test(body)) { spent = true; return; }
+      await sleep(400);
+      requests++;
+      res = await fetch(`${MDB}/imdb/${kind}?apikey=${key}`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ ids: list.map((t) => t.imdb_id) }) });
+      if (res.ok) break;
+      body = (await res.text()).slice(0, 300);
+      if (/Daily API limit/i.test(body)) { spent = true; return true; }
       if ((res.status === 429 || res.status >= 500) && i < 3) { slowed++; await sleep(2000 * 2 ** i); continue; }
-      throw new Error(`${res.status} mdblist ${t.imdb_id}: ${body.slice(0, 80)}`);
+      log(`MDBList: batch refused (${res.status}): ${body.slice(0, 160)}`);
+      return false;
     }
-    if (!r) return;
-    if (!sample && (r.ratings ?? []).some((x) => x.source === 'tomatoes' && x.value != null)) sample = r.ratings;
-    const by = Object.fromEntries((r.ratings ?? []).map((x) => [x.source, x.value]));
-    const rt = by.tomatoes ?? null;
-    // the audience score: MDBList calls it "popcorn" (other spellings accepted in case it is renamed)
-    const aud = by.popcorn ?? by.tomatoesaudience ?? by.audience ?? null;
-    const lb = t.kind === 'film' ? by.letterboxd ?? null : null;
-    if (aud != null) withAudience++;
-    await db.query(
-      `insert into public.scores (title_id, rt_critics, rt_audience, letterboxd, mdblist_synced_at) values ($1,$2,$3,$4, now())
-       on conflict (title_id) do update set rt_critics = excluded.rt_critics, rt_audience = excluded.rt_audience, letterboxd = excluded.letterboxd, mdblist_synced_at = now()`,
-      [t.id, rt == null ? null : Math.round(rt), aud == null ? null : Math.round(aud), lb],
-    );
-    ok++;
-  });
-  log(`MDBList: ${ok} of ${todo.length} titles updated${spent ? ' (daily limit reached, the rest next run)' : ''}${slowed ? `, waited out ${slowed} “too many requests”` : ''}`);
-  log(`  with an RT audience score: ${withAudience}`);
+    const json = await res.json();
+    const items = Array.isArray(json) ? json : json.items ?? json.results ?? json.data ?? json.medias ?? null;
+    if (!Array.isArray(items)) { log('MDBList: batch answer not understood:', JSON.stringify(json).slice(0, 300)); return false; }
+    const byImdb = new Map();
+    for (const it of items) {
+      const id = it?.ids?.imdb ?? it?.imdb_id ?? it?.imdbid ?? it?.imdb;
+      if (id) byImdb.set(id, it);
+    }
+    // an answer with titles but none we can match to what we asked for is a shape we don't know: don't save empties over it
+    if (items.length && !byImdb.size) { log('MDBList: batch items have no IMDb id:', JSON.stringify(items[0]).slice(0, 300)); return false; }
+    for (const t of list) {
+      const it = byImdb.get(t.imdb_id);
+      const got = await saveMdbScores(t, it?.ratings, !it);
+      ok++; if (!it) absent++; if (got.rt) withRt++; if (got.aud) withAud++;
+      if (!sample && got.rt) sample = it.ratings;
+    }
+    return true;
+  };
+
+  // films and series are asked for separately (the route names the kind); keep the queue's order within each
+  const chunks = [];
+  for (const kind of ['film', 'series']) {
+    const of = todo.filter((t) => (t.kind === 'film') === (kind === 'film'));
+    for (let i = 0; i < of.length; i += MDB_BATCH) chunks.push(of.slice(i, i + MDB_BATCH));
+  }
+  // interleave, so neither kind waits for the whole of the other
+  chunks.sort((a, b) => todo.indexOf(a[0]) - todo.indexOf(b[0]));
+
+  const before = await usage();
+  const worked = await batch(chunks[0]);
+  const after = await usage();
+  if (!worked) {
+    // one title per request, as before 22 Nov
+    log('MDBList: batches unavailable, asking one title at a time');
+    const left = after ? Math.max(0, after.limit - after.used) : MDBLIST_PER_RUN;
+    await pool(todo.slice(0, Math.min(left, MDBLIST_PER_RUN)).map((t) => ({ ...t, key: t.imdb_id })), 2, async (t) => {
+      if (spent) return;
+      const url = `${MDB}/imdb/${t.kind === 'film' ? 'movie' : 'show'}/${t.imdb_id}?apikey=${key}`;
+      for (let i = 0; ; i++) {
+        if (spent) return;
+        await sleep(200);
+        const res = await fetch(url);
+        if (res.ok) { const r = await res.json(); const got = await saveMdbScores(t, r.ratings); ok++; if (got.rt) withRt++; if (got.aud) withAud++; if (!sample && got.rt) sample = r.ratings; return; }
+        if (res.status === 404) { await saveMdbScores(t, [], true); ok++; absent++; return; }
+        const body = (await res.text()).slice(0, 300);
+        if (/Daily API limit/i.test(body)) { spent = true; return; }
+        if ((res.status === 429 || res.status >= 500) && i < 3) { slowed++; await sleep(2000 * 2 ** i); continue; }
+        throw new Error(`${res.status} mdblist ${t.imdb_id}: ${body.slice(0, 80)}`);
+      }
+    });
+  } else {
+    const cost = before && after ? after.used - before.used : null;
+    log(`MDBList: first batch came back with ${chunks[0].length - absent} of ${chunks[0].length} titles`);
+    log(`MDBList: first batch of ${chunks[0].length} titles cost ${cost == null ? 'an unknown number of' : cost} requests (usage ${before ? before.used : '?'} -> ${after ? after.used : '?'} of ${after ? after.limit : '?'})`);
+    // how many more titles tonight: everything if a batch is cheap, otherwise what the allowance has left
+    const perTitle = cost == null || cost > 5;
+    let allowance = perTitle ? (after ? Math.max(0, after.limit - after.used) : Math.max(0, MDBLIST_PER_RUN - chunks[0].length)) : Infinity;
+    if (perTitle) log(`MDBList: counted per title: ${allowance} more titles tonight`);
+    for (const list of chunks.slice(1)) {
+      if (spent || allowance <= 0) break;
+      const part = list.slice(0, allowance);
+      if (!(await batch(part))) break;
+      allowance -= part.length;
+      if (ok % 2000 < MDB_BATCH) log(`  ${ok} titles`);
+    }
+  }
+  log(`MDBList: ${ok} of ${todo.length} waiting titles updated in ${requests} batch requests${spent ? ' (daily limit reached, the rest next run)' : ''}${slowed ? `, waited out ${slowed} “too many requests”` : ''}`);
+  log(`  with a Tomatometer: ${withRt}, with an RT audience score: ${withAud}, not known to MDBList: ${absent}`);
   // every source name with its value, from a title that has a Tomatometer
   if (sample) log('  sample ratings:', sample.map((x) => `${x.source}=${x.value}`).join(' '));
 }
@@ -630,7 +721,20 @@ async function reconcile(runStart) {
 }
 
 // ---------------------------------------------------------------------------
+const COUNTS = `select (select count(*) from public.scores where rt_critics is not null) rt,
+  (select count(*) from public.scores where rt_audience is not null) rt_audience,
+  (select count(*) from public.scores where letterboxd is not null) letterboxd,
+  (select count(*) from public.scores where mdblist_synced_at is not null) asked,
+  (select count(*) from public.titles where imdb_id is not null) with_imdb_id`;
+
 async function main() {
+  if (ONLY === 'scores') {
+    log('scores only');
+    await syncMdblist();
+    log('scores now:', JSON.stringify((await db.query(COUNTS)).rows[0]));
+    await db.end();
+    return;
+  }
   const runStart = (await db.query('select now() as t')).rows[0].t;
   log(FULL ? 'full sync' : `test sync, ${LIMIT} titles`);
   const providerMap = await syncServices();
