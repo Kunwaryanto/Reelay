@@ -7,6 +7,13 @@ import { standalone } from '../lib/runway'
 import { Button, GlassButton, Icon, IconButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
 
 const LAST_EMAIL = 'reelay:last-email'
+// "Sign in here" was tapped once on this phone: the Add to Home Screen card isn't shown on every visit after that.
+const INSTALL_SEEN = 'reelay:install-seen'
+// Where Add to Home Screen exists: an iPhone or iPad browser tab. Apps' own browsers (links opened inside
+// WhatsApp, Instagram and the like) don't have it, so those are spotted loosely and sent to Safari first.
+const ua = navigator.userAgent
+const iosTab = !standalone && (/iPhone|iPad|iPod/.test(ua) || new URLSearchParams(location.search).has('install'))
+const inAppBrowser = /Instagram|FBAN|FBAV|FB_IAB|WhatsApp|Snapchat|TikTok|musical_ly|LinkedInApp|Line\//.test(ua)
 
 type Invite = 'none' | 'checking' | 'valid' | 'expired' | 'used'
 type Step = 'email' | 'code' | 'noinv' | 'gone'
@@ -61,6 +68,10 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
   const [shake, setShake] = useState(0)
   const [ready, setReady] = useState(false)
   const [wallReady, setWallReady] = useState(false)
+  // In a browser tab on iPhone: the Add to Home Screen card for people with an account (until "Sign in here" has
+  // been tapped once), and "You're in" with the same steps after joining from an invite link.
+  const [card, setCard] = useState(() => { try { return iosTab && !localStorage.getItem(INSTALL_SEEN) } catch { return iosTab } })
+  const [joined, setJoined] = useState(false)
   const tries = useRef(0)
   const sentAt = useRef(0)
   const emailInput = useRef<HTMLInputElement>(null)
@@ -149,7 +160,11 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     setChecking(false)
     if (!error) {
       try { localStorage.setItem(LAST_EMAIL, email.trim()) } catch { /* private mode */ }
-      setOk(true); setCodeErr(''); setTimeout(onSignedIn, 700); return
+      setOk(true); setCodeErr('')
+      // joined from an invite link in a browser tab: Safari and the Home Screen app don't share sign-in, so show how to add it
+      if (iosTab && invite === 'valid') setTimeout(() => { setJoined(true); setOpen(false) }, 700)
+      else setTimeout(onSignedIn, 700)
+      return
     }
     tries.current++
     const kind: CodeErr = error.status === 429 || tries.current >= 5 ? 'locked'
@@ -193,10 +208,31 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     <div className="start">
       <div className="start-wall" data-ready={wallReady}><PosterWall posters={wall.data ?? []} onReady={() => setWallReady(true)} /></div>
       <h1 className="start-word"><Wordmark height={32} rise /></h1>
-      <main className="start-ui" data-ready={ready}>
-        <GlassButton onClick={openSheet} disabled={invite === 'checking'}>{joining ? 'Join Reelay' : 'Sign in'}</GlassButton>
-        <p>{joining ? 'You’re invited.' : 'Reelay is invite only.'}</p>
-      </main>
+      {joined || (card && !token) ? (
+        <main className="start-ui start-install" data-ready={ready}>
+          <section aria-label="Install Reelay">
+            <h2>{joined ? 'You’re in. Add Reelay to your Home Screen' : inAppBrowser ? 'Open this page in Safari' : 'Add to Home Screen'}</h2>
+            {inAppBrowser ? <p>Reelay is added to your Home Screen from Safari. This app’s own browser can’t do that.</p> : (
+              <ol>
+                <li><span>1</span><span>Tap <Icon name="more_horiz" size={16} />, then <Icon name="ios_share" size={16} /> <b>Share</b></span></li>
+                <li><span>2</span><span>Tap <Icon name="add_box" size={16} /> <b>Add to Home Screen</b></span></li>
+                <li><span>3</span><span>Tap <b>Add</b></span></li>
+              </ol>
+            )}
+            {joined && <p>Then open Reelay from your Home Screen and sign in once more.</p>}
+          </section>
+          <QuietButton onClick={() => {
+            if (joined) { onSignedIn(); return }
+            try { localStorage.setItem(INSTALL_SEEN, '1') } catch { /* private mode */ }
+            setCard(false); openSheet()
+          }}>{joined ? 'Continue here' : 'Sign in here'}</QuietButton>
+        </main>
+      ) : (
+        <main className="start-ui" data-ready={ready}>
+          <GlassButton onClick={openSheet} disabled={invite === 'checking'}>{joining ? 'Join Reelay' : 'Sign in'}</GlassButton>
+          <p>{joining ? 'You’re invited.' : 'Reelay is invite only.'}</p>
+        </main>
+      )}
 
       <SignIn open={open} onClose={() => setOpen(false)} keyboard={step === 'email' || step === 'code'} label={joining ? 'Join Reelay' : 'Continue with email'}>
         {step === 'email' && (

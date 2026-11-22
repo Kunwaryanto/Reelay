@@ -339,6 +339,17 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 .start-ui[data-ready='true'] > :nth-child(2) { transition-delay: 80ms; }
 @media (prefers-reduced-motion: reduce) { .start-ui > * { transform: none; transition-property: opacity; } }
 .start-ui p { margin: 64px 0 0; font: var(--type-meta); color: var(--text-faint); }
+/* In a browser tab on iPhone: how to add Reelay to the Home Screen (canvas: Start in Safari, v293) */
+.start-install { bottom: 12px; padding: 0 16px; align-items: stretch; text-align: left; }
+.start-install section { padding: 22px 22px 18px; border-radius: 26px; corner-shape: squircle; background: rgba(20, 20, 20, 0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: inset 0 0 0 0.5px var(--fill); }
+.start-install h2 { margin: 0; font: 500 20px/22px var(--font); letter-spacing: var(--track-title); }
+.start-install ol { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.start-install li { display: flex; gap: 10px; font: 400 13px/26px var(--font); color: var(--text-muted); }
+.start-install li > span:first-child { flex: none; width: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.start-install li b { font-weight: 500; color: #fff; }
+.start-install li .ms { vertical-align: -3px; color: #fff; }
+.start-install section p { margin: 10px 0 0; font: var(--type-meta); color: var(--text-faint); }
+.start-install .btn-quiet { align-self: center; margin-top: 8px; }
 .wall { position: absolute; inset: 0; overflow: hidden; }
 /* One canvas, tilted back in 3D. It is larger than the screen so the tilt never shows an edge. */
 .wall-canvas { position: absolute; left: -30%; top: -20%; width: 160%; height: 140%; transform: perspective(1000px) rotateX(16deg); animation: wall-tilt 41s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
