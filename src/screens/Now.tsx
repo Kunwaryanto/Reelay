@@ -125,20 +125,31 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
 
   // Tapping the lifted poster or the name opens the title's page. Not the lift of the finger that opened the
   // menu, which ends on the poster: taps count from a moment after that finger is up.
+  // The same holds for every row in the menu: with a poster low on the screen the menu opens right under that
+  // finger, and its lift would otherwise press whatever it is resting on.
   const armed = useRef(false)
+  const [live, setLive] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>
-    const up = () => { t = setTimeout(() => { armed.current = true }, 350) }
+    const up = () => { t = setTimeout(() => { armed.current = true; setLive(true) }, 350) }
     document.addEventListener('pointerup', up, { once: true })
     document.addEventListener('pointercancel', up, { once: true })
     return () => { clearTimeout(t); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up) }
   }, [])
-  const openTitle = () => { if (!armed.current) return; close(); push(`/title/${held.card.id}`) }
+  // Opening the page: the menu and the lifted poster fade where they are as the page slides in. (Flying the
+  // poster back, as closing does, put it on top of the arriving page.)
+  const openTitle = () => {
+    if (!armed.current || leaving) return
+    setLeaving(true)
+    push(`/title/${held.card.id}`)
+    setTimeout(onClose, 220)
+  }
 
   const { card } = held
   // The facts under the name: kind and year are known at once; length, genres, who made it and the scores come
-  // with the title's own data, which started loading when the finger landed. Their room is kept from the start,
-  // so the actions never move.
+  // with the title's own data, which started loading when the finger landed (usually there by the time the menu
+  // opens). The header is as tall as its lines; `headH` is the tallest it gets, for placing the menu.
   const d = useQuery(`title:${card.id}`, () => loadTitle(card.id), { maxAge: 10 * 60 * 1000 }).data
   const film = card.kind === 'film'
   const years = film || !card.year ? card.year : d?.end_year && d.end_year !== card.year ? `${card.year}–${d.end_year}` : card.year
@@ -150,8 +161,8 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   if (d?.scores?.rt_critics != null) scores.push(['RT', `${d.scores.rt_critics}%`])
   if (d?.scores?.letterboxd != null) scores.push(['Letterboxd', Number(d.scores.letterboxd).toFixed(1)])
   const leaves = card.availability[0] && leavingNote(card.availability[0].leaves_on)
-  const leaving = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
-  const headH = 26 + 20 + 18 + 18 + 26 + (leaving ? 24 : 0)
+  const leavesOn = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
+  const headH = 26 + 20 + 18 + 18 + 26 + (leavesOn ? 24 : 0)
   const vw = window.innerWidth, vh = window.innerHeight
   // small posters (list rows) lift to a size worth looking at
   const scale = Math.max(1.25, Math.min(3, 150 / rect.width))
@@ -164,7 +175,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   const isSaved = saved.isSaved(card.id)
 
   return (
-    <div className="hold" role="dialog" aria-label={card.title} data-open={open}>
+    <div className="hold" role="dialog" aria-label={card.title} data-open={open} data-live={live || undefined} data-leaving={leaving || undefined}>
       <div className="hold-back" onClick={close} />
       <div ref={lift} className="hold-poster" aria-hidden="true" onClick={openTitle} style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
@@ -177,24 +188,27 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
       }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
         {/* the name and facts open the title's page, as the lifted poster does */}
-        <a className="hold-head" role="menuitem" href={`/title/${card.id}`} aria-label={`Open ${card.title}`} style={{ minHeight: headH }}
-          onClick={(e) => { e.preventDefault(); openTitle() }}>
+        {/* not a link: iOS lifts a link under a resting finger into its own preview, with the address */}
+        <div className="hold-head" role="menuitem" tabIndex={0} aria-label={`Open ${card.title}`}
+          onClick={openTitle} onKeyDown={(e) => { if (e.key === 'Enter') openTitle() }}>
           <b>{card.title}</b>
           <p>{facts}</p>
-          {/* a line the title turns out not to have gives its room to the bottom of the header, not a gap in the middle */}
+          {/* room is kept for these two while the title's data loads; a line the title turns out not to have is then
+              dropped, so the space under the last line is always the same */}
           {(by || !d) && <p data-in={!!by}>{by ? <>{film ? 'Directed by' : 'Created by'} <span>{by}</span></> : '\u00a0'}</p>}
           {(scores.length > 0 || !d) && <dl data-in={scores.length > 0}>{scores.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
-          {leaving && <p className="hold-leaves">{leaving}</p>}
-        </a>
-        <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title, card); close() }}>
+          {leavesOn && <p className="hold-leaves">{leavesOn}</p>}
+        </div>
+        <button type="button" role="menuitem" onClick={() => { if (!armed.current) return; saved.toggleSaved(card.id, card.title, card); close() }}>
           <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name={isSaved ? 'bookmark_remove' : 'bookmark_add'} size={20} />
         </button>
         {avail ? (
-          <a role="menuitem" href={openLink(avail, card.title)} target="_blank" rel="noreferrer" onClick={close}>
+          <a role="menuitem" href={openLink(avail, card.title)} target="_blank" rel="noreferrer" draggable={false}
+            onClick={(e) => { if (!armed.current) { e.preventDefault(); return } close() }}>
             <span>Open in {SERVICE_NAME[avail.service_id] ?? avail.service_id}</span><Icon name="arrow_outward" size={20} />
           </a>
         ) : (
-          <button type="button" role="menuitem" onClick={() => { saved.toggleNotify(card.id); close() }}>
+          <button type="button" role="menuitem" onClick={() => { if (!armed.current) return; saved.toggleNotify(card.id); close() }}>
             <span>Notify me</span><Icon name="notifications" size={20} />
           </button>
         )}

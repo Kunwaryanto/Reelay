@@ -149,8 +149,12 @@ button { font: inherit; color: inherit; }
 .hold[data-open='true'] .hold-menu { transform: none; }
 .hold[data-open='true'] .hold-poster { transition-duration: var(--dur-menu-open); }
 /* the name and its facts; the lines that come with the title's data fade in, in room that was kept for them */
-.hold-menu > a.hold-head { display: block; height: auto; padding: 13px 16px; color: #fff; font: inherit; box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.12); -webkit-touch-callout: none; }
-.hold-menu > a.hold-head:active { background: rgba(255, 255, 255, 0.06); }
+.hold-head { padding: 13px 16px; box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.12); cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+/* rows answer a press only once the finger that opened the menu is up (data-live) */
+.hold[data-live] .hold-head:active { background: rgba(255, 255, 255, 0.06); }
+.hold-menu > a { -webkit-touch-callout: none; -webkit-user-drag: none; }
+/* opening the title's page from the menu: everything fades where it is */
+.hold[data-leaving] { opacity: 0; transition: opacity 180ms var(--ease-out); pointer-events: none; }
 .hold-head b { display: block; font: 500 15px/20px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hold-head p { margin: 2px 0 0; font: var(--type-meta); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hold-head p span { color: var(--text-secondary); }
