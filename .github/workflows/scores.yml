@@ -1,0 +1,32 @@
+# Scores only: Rotten Tomatoes (critics and audience) and Letterboxd from MDBList, for titles that have none yet
+# (titles on a Watchlist first, then the most popular). Started by hand while the catalogue is filling up; the
+# nightly sync does the same step every night. Nothing else in the database is touched.
+name: Scores
+on:
+  workflow_dispatch:
+concurrency:
+  group: nightly-sync
+  cancel-in-progress: false
+jobs:
+  scores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+      MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+      SYNC_ONLY: scores
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Find the database address
+        run: |
+          npx supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          test -s supabase/.temp/pooler-url || { echo "no pooler-url"; ls supabase/.temp; exit 1; }
+          echo "POOLER_URL=$(cat supabase/.temp/pooler-url)" >> "$GITHUB_ENV"
+      - run: node scripts/sync/index.mjs
