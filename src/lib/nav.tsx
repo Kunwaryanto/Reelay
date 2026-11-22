@@ -1,6 +1,7 @@
 // Navigation: four tabs, each with its own stack of pages.
 // Pages sit side by side in a horizontal scroll-snap strip, so swiping back follows the finger like iOS
 // (the "stack drill-down" pattern from modern-web-guidance). Browser history is kept in step.
+import { settlePressed } from './press'
 import {
   createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type ReactNode, type UIEvent,
@@ -86,6 +87,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const push = useCallback((path: string) => {
+    settlePressed()
     const s = stateRef.current
     if (topPath(s) === path) return
     depth.current++

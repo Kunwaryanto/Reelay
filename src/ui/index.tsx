@@ -12,6 +12,7 @@ import { summonKeyboard } from '../lib/keyboard'
 import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { prefetch, useRequestFailed } from '../lib/query'
+import { notePressed } from '../lib/press'
 
 // ---- Icons -----------------------------------------------------------------
 
@@ -216,6 +217,7 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
         start.current = [e.clientX, e.clientY]
         el.current = e.currentTarget
         const target = e.currentTarget
+        notePressed(target)
         clearTimeout(timer.current); clearTimeout(pressTimer.current)
         pressTimer.current = setTimeout(() => { if (start.current) target.dataset.pressed = 'true' }, 90)
         timer.current = setTimeout(() => {

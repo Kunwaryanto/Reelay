@@ -84,6 +84,7 @@ export function Hero({ items }: { items: Card[] }) {
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
 export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
   const saved = useSaved()
+  const { push } = useNavActions()
   const [open, setOpen] = useState(false)
   const lift = useRef<HTMLDivElement>(null)
   // Measured once without the press shrink; the copy starts at the shrunk size it had, then lifts.
@@ -122,6 +123,18 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
     return () => { document.removeEventListener('touchmove', stop); document.removeEventListener('wheel', stop) }
   }, [])
 
+  // Tapping the lifted poster or the name opens the title's page. Not the lift of the finger that opened the
+  // menu, which ends on the poster: taps count from a moment after that finger is up.
+  const armed = useRef(false)
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>
+    const up = () => { t = setTimeout(() => { armed.current = true }, 350) }
+    document.addEventListener('pointerup', up, { once: true })
+    document.addEventListener('pointercancel', up, { once: true })
+    return () => { clearTimeout(t); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up) }
+  }, [])
+  const openTitle = () => { if (!armed.current) return; close(); push(`/title/${held.card.id}`) }
+
   const { card } = held
   // The facts under the name: kind and year are known at once; length, genres, who made it and the scores come
   // with the title's own data, which started loading when the finger landed. Their room is kept from the start,
@@ -153,7 +166,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   return (
     <div className="hold" role="dialog" aria-label={card.title} data-open={open}>
       <div className="hold-back" onClick={close} />
-      <div ref={lift} className="hold-poster" aria-hidden="true" style={{
+      <div ref={lift} className="hold-poster" aria-hidden="true" onClick={openTitle} style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
         // 16px once lifted, whatever the starting size; back to the poster's own corners (and no shadow) on the way down
         borderRadius: closing ? `calc(${closing.radius} / ${closing.k})` : 20 / scale,
@@ -163,14 +176,16 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
             : `translate(${(rect.width * (1 - rect.pressed)) / 2}px, ${(rect.height * (1 - rect.pressed)) / 2}px) scale(${rect.pressed})`,
       }} />
       <div className="hold-menu" role="menu" style={{ left: menuLeft, top: top + h + 10, transformOrigin: `${rect.left + rect.width / 2 - menuLeft}px 0` }}>
-        <div className="hold-head" style={{ minHeight: headH }}>
+        {/* the name and facts open the title's page, as the lifted poster does */}
+        <a className="hold-head" role="menuitem" href={`/title/${card.id}`} aria-label={`Open ${card.title}`} style={{ minHeight: headH }}
+          onClick={(e) => { e.preventDefault(); openTitle() }}>
           <b>{card.title}</b>
           <p>{facts}</p>
           {/* a line the title turns out not to have gives its room to the bottom of the header, not a gap in the middle */}
           {(by || !d) && <p data-in={!!by}>{by ? <>{film ? 'Directed by' : 'Created by'} <span>{by}</span></> : '\u00a0'}</p>}
           {(scores.length > 0 || !d) && <dl data-in={scores.length > 0}>{scores.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           {leaving && <p className="hold-leaves">{leaving}</p>}
-        </div>
+        </a>
         <button type="button" role="menuitem" onClick={() => { saved.toggleSaved(card.id, card.title, card); close() }}>
           <span>{isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}</span><Icon name={isSaved ? 'bookmark_remove' : 'bookmark_add'} size={20} />
         </button>
