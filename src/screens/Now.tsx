@@ -162,7 +162,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   if (d?.scores?.letterboxd != null) scores.push(['Letterboxd', Number(d.scores.letterboxd).toFixed(1)])
   const leaves = card.availability[0] && leavingNote(card.availability[0].leaves_on)
   const leavesOn = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
-  const headH = 26 + 20 + 18 + 18 + 26 + (leavesOn ? 24 : 0)
+  const headH = 26 + 20 + 26 + 18 + 26 + (leavesOn ? 24 : 0)
   const vw = window.innerWidth, vh = window.innerHeight
   // small posters (list rows) lift to a size worth looking at
   const scale = Math.max(1.25, Math.min(3, 150 / rect.width))
