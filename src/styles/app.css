@@ -423,23 +423,24 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-section-head { margin: 0 var(--margin); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .wl-section-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
 .wl-section-head > span { font: var(--type-meta); color: var(--text-faint); white-space: nowrap; }
-.wl-section ul { list-style: none; margin: 4px var(--margin) 0; padding: 0; }
+/* rows run edge to edge (their own padding keeps the margin), so what a swiped row uncovers reaches the screen edge */
+.wl-section ul { list-style: none; margin: 4px 0 0; padding: 0; }
 .wl-row { position: relative; min-width: 0; overflow: hidden; }
 /* --x: how far the row is slid (px, negative is left), --r the same as a plain number; both written by the swipe */
-.wl-slide { position: relative; display: flex; align-items: center; background: var(--bg); touch-action: pan-y; user-select: none; -webkit-user-select: none; transform: translateX(var(--x, 0px)); transition: transform 320ms var(--ease-sheet); will-change: transform; }
+.wl-slide { position: relative; display: flex; align-items: center; padding: 0 var(--margin); background: var(--bg); touch-action: pan-y; user-select: none; -webkit-user-select: none; transform: translateX(var(--x, 0px)); transition: transform 320ms var(--ease-sheet); will-change: transform; }
 .wl-row[data-drag] .wl-slide, .wl-row[data-drag] .wl-remove { transition: none; }
 .wl-row[data-leaving] .wl-slide { transition: transform 200ms ease-in; }
 .wl-row[data-gone] { max-height: 0 !important; opacity: 0; transition: max-height 220ms var(--ease-sheet), opacity 160ms var(--ease-out); }
 .wl-slide > a { flex: 1; min-width: 0; min-height: 96px; display: flex; align-items: center; gap: 14px; color: #fff; -webkit-touch-callout: none; }
 .wl-bell { flex: none; width: var(--hit); height: var(--hit); margin-right: -12px; padding: 0; border: 0; background: none; color: var(--text-faint); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .wl-bell[aria-pressed='true'] { color: #fff; }
-/* Remove sits behind the row and is as wide as what the row uncovers (never under 80). Past the middle of the row
-   it is "full": its icon and word move to its leading edge, the iOS sign that letting go will remove. */
-.wl-remove { position: absolute; top: 12px; bottom: 12px; right: 0; width: max(80px, calc(var(--x, 0px) * -1 - 8px)); padding: 0; border: 0; border-radius: 12px; corner-shape: squircle; background: var(--surface); color: #fff; display: flex; justify-content: flex-end; cursor: pointer;
-  opacity: clamp(0, calc((var(--r, 0) - 4) / 24), 1); transition: width 320ms var(--ease-sheet), opacity 200ms var(--ease-out); }
+/* Remove is the grey under the row: the row is a tile slid aside, and the grey shows exactly where it has been
+   uncovered, square-cornered, the row's full height, out to the screen edge. Past the middle of the row it is
+   "full": the word moves to its leading edge, the iOS sign that letting go will remove. */
+.wl-remove { position: absolute; top: 0; bottom: 0; right: 0; width: max(88px, calc(var(--x, 0px) * -1)); padding: 0; border: 0; border-radius: 0; background: var(--surface); color: #fff; display: flex; justify-content: flex-end; cursor: pointer; transition: width 320ms var(--ease-sheet); }
 .wl-row[data-leaving] .wl-remove { transition: width 200ms ease-in; }
-.wl-remove > span { flex: none; width: 80px; height: 100%; margin-right: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: margin-right 200ms var(--ease-sheet); }
-.wl-row[data-full] .wl-remove > span { margin-right: calc(100% - 80px); }
+.wl-remove > span { flex: none; width: 88px; height: 100%; margin-right: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: margin-right 200ms var(--ease-sheet); }
+.wl-row[data-full] .wl-remove > span { margin-right: calc(100% - 88px); }
 .wl-remove > span > span { font: var(--type-text); font-weight: 500; color: #fff; }
 .wl-poster { position: relative; flex: none; width: 48px; height: 72px; border-radius: 8px; corner-shape: squircle; overflow: hidden; background: var(--surface); }
 .wl-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
