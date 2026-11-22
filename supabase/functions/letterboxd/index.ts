@@ -28,7 +28,7 @@ function reply(body: Record<string, unknown>, status = 200, origin = '') {
 
 const text = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, '&').trim();
 
-type Log = { entry_id: string; tmdb_id: number; watched_on: string | null; rating: number | null; rewatch: boolean };
+type Log = { entry_id: string; tmdb_id: number; film_name: string | null; film_year: number | null; watched_on: string | null; rating: number | null; rewatch: boolean };
 
 /** The diary entries in a member's feed (films only: lists and anything without a TMDB film id are skipped). */
 export function parseFeed(xml: string): { name: string | null; logs: Log[] } {
@@ -42,6 +42,8 @@ export function parseFeed(xml: string): { name: string | null; logs: Log[] } {
     logs.push({
       entry_id: guid.slice(0, 80),
       tmdb_id: Number(tmdb),
+      film_name: text(/<letterboxd:filmTitle>([^<]*)</.exec(item)?.[1] ?? '').slice(0, 200) || null,
+      film_year: Number(/<letterboxd:filmYear>(\d{4})</.exec(item)?.[1]) || null,
       watched_on: /<letterboxd:watchedDate>(\d{4}-\d\d-\d\d)</.exec(item)?.[1] ?? null,
       rating: rating >= 0.5 && rating <= 5 ? rating : null,
       rewatch: /<letterboxd:rewatch>Yes</.test(item),
