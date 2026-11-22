@@ -245,7 +245,7 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
   return (
     <li ref={li} className="wl-row" data-fresh={fresh || undefined} data-open={open || undefined}>
       <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1} onClick={remove}>
-        <span><Icon name="bookmark_remove" size={20} /><span>Remove</span></span>
+        <span><span>Remove</span></span>
       </button>
       <div className="wl-slide" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
        <a href={`/title/${t.id}`} draggable={false} {...hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
