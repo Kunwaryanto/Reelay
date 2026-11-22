@@ -37,7 +37,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 4
+export const HOME_VERSION = 6
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -97,13 +97,15 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   if (mine) { arrivalsQ = arrivalsQ.in('service_id', svc); leavingQ = leavingQ.in('service_id', svc) }
   const themed = day % 2 === 0 ? 'awards' : 'gems'
 
-  const [trendF, trendS, arrivals, leaving, saved, because, friends, taste, newF, newS, theme] = await Promise.all([
+  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, theme] = await Promise.all([
     titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     soft<Arrival>(on(arrivalsQ, 'title.availability.service_id') as never),
     soft<Leaving>(on(leavingQ, 'title.availability.service_id') as never),
     soft<{ title: Card }>(on(supabase.from('watchlist').select(`added_at,title:titles!inner(${H})`).order('added_at', { ascending: false }).limit(60), 'title.availability.service_id') as never),
     soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day, ...rpcArgs }) as never),
+    // a second liked film (tomorrow's), for the spotlight: it never repeats the row's reason
+    soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day + 1, ...rpcArgs }) as never),
     soft<{ title_id: number; name: string; rating: number }>(supabase.rpc('home_friends', rpcArgs) as never),
     soft<{ genre: string }>(supabase.rpc('home_taste') as never),
     soft<Card>(titles('film').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
@@ -121,8 +123,10 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const byIds = (ids: number[]) => (ids.length ? soft<Card>(on(supabase.from('titles').select(H)).in('id', ids) as never) : Promise.resolve([] as Card[]))
   const genreRow = (c: Category) => Promise.all((['film', 'series'] as Kind[]).map((k) =>
     soft<Card>(titles(k).overlaps('genres', c.rule.genres ?? []).order('popularity', { ascending: false }).limit(25) as never)))
-  const [becauseCards, friendCards, decadeLists, ...genreLists] = await Promise.all([
-    byIds(because.map((b) => b.title_id)), byIds(friends.map((f) => f.title_id)),
+  // the second liked film only counts when it is a different film from the row's
+  const alt = becauseAlt.length && because.length && becauseAlt[0].source !== because[0].source ? becauseAlt : []
+  const [becauseCards, altCards, friendCards, decadeLists, ...genreLists] = await Promise.all([
+    byIds(because.map((b) => b.title_id)), byIds(alt.map((b) => b.title_id)), byIds(friends.map((f) => f.title_id)),
     Promise.all((['film', 'series'] as Kind[]).map((k) =>
       soft<Card>(titles(k).gte('year', decade.rule.from!).lte('year', decade.rule.to!).order('popularity', { ascending: false }).limit(25) as never))),
     ...picks.map(genreRow),
@@ -184,7 +188,10 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   lead(savedLead, savedLead ? leavesIn(leavesOn.get(savedLead.id)) ?? 'On your watchlist' : '')
   lead(rowTrendF.find(wide), 'Trending film this week')
   lead(rowTrendS.find(wide), 'Trending series this week')
-  if (because.length) lead(rowBecause.find(wide), `Because you liked ${because[0].source}`)
+  const altRank = new Map(alt.map((b) => [b.title_id, b.rank]))
+  const altList: HomeCard[] = [...altCards].sort((a, b) => (altRank.get(a.id) ?? 99) - (altRank.get(b.id) ?? 99))
+  const altReason = alt.length ? `Because you liked ${alt[0].source}` : ''
+  // (no "Because you liked" in the hero: the row has one liked film and the spotlight another, each named once)
   const friendLead = rowFriends.find(wide)
   if (friendLead) { const f = friendOf.get(friendLead.id)!; lead(friendLead, `${first(f.name)} rated it ${Number(f.rating).toFixed(1)}`) }
   const goingLead = rowLeaving.find(wide)
@@ -203,7 +210,7 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
       spots.push({ ...t, reason: reason(t) }); n--
     }
   }
-  if (because.length) spot(rowBecause, () => `Because you liked ${because[0].source}`)
+  if (alt.length) spot(altList, () => altReason)
   spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
   spot(rowNew, (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
   spot(rowTheme, () => (themed === 'awards' ? 'Award winner' : 'Hidden gem'))
