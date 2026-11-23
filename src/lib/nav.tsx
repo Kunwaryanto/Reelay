@@ -6,6 +6,12 @@ import {
   createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type ReactNode, type UIEvent,
 } from 'react'
+import { pageFor, warmPage, wasWarmed } from './pages'
+
+const REPORT_COLD = import.meta.env.DEV || location.hostname !== 'usereelay.vercel.app'
+// a tap opened it (not the keyboard or code): its link had the press to preload on
+let pressedAt = 0
+if (REPORT_COLD) window.addEventListener('pointerdown', () => { pressedAt = Date.now() }, { capture: true, passive: true })
 
 export type Tab = 'now' | 'browse' | 'watchlist' | 'search'
 export const TABS: Tab[] = ['now', 'browse', 'watchlist', 'search']
@@ -90,6 +96,9 @@ export function NavProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback((path: string) => {
     settlePressed()
+    // every link preloads its page on press (PageLink, usePageLink); one that didn't is reported off production
+    if (REPORT_COLD && Date.now() - pressedAt < 1500 && pageFor(path) && !wasWarmed(path)) console.warn(`[pages] ${path} opened without being preloaded: its link should be a PageLink or use usePageLink`)
+    warmPage(path)
     const s = stateRef.current
     if (topPath(s) === path) return
     depth.current++

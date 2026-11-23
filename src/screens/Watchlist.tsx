@@ -11,7 +11,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched } from '../ui'
+import { Button, PageLink, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched } from '../ui'
 import { useWatched } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { HoldMenu } from './Now'
@@ -251,7 +251,7 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
         <span><span>Remove</span></span>
       </button>
       <div className="wl-slide" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-       <a href={`/title/${t.id}`} draggable={false} {...hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
+       <PageLink to={`/title/${t.id}`} draggable={false} handlers={hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
         onClick={(e) => {
           e.preventDefault()
           if (swiped.current) { swiped.current = false; return }
@@ -262,7 +262,7 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
         <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="sync" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{t.title}</b><small>{meta}</small>{where && <small className="wl-where">{where}</small>}</span>
         {note && <span className="wl-note">{note}</span>}
-       </a>
+       </PageLink>
        {group === 'off' && (
          <button type="button" className="wl-bell" aria-pressed={t.notify} aria-label={`Notify me when ${t.title} is on my services`}
            onClick={() => { if (swiped.current) { swiped.current = false; return } if (open) { setOpen(false); return } onNotify() }}>

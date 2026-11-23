@@ -15,7 +15,7 @@ import {
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
 import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
+import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
 import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
@@ -126,10 +126,10 @@ function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () =
   useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
     <li ref={li}>
-      <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onPointerDown={(e) => { warmFacts([h.id], true); hold.handlers.onPointerDown(e) }} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
+      <PageLink to={`/title/${h.id}`} className="s-row press-row" handlers={joinHandlers(hold.handlers, { onPointerDown: () => warmFacts([h.id], true) })} onClick={() => { if (!hold.fired()) onOpen() }}>
         <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
-      </a>
+      </PageLink>
     </li>
   )
 }
@@ -359,12 +359,12 @@ export default function Search() {
         <ul>
           {recents.map((r, i) => (
             <li key={r.t === 'q' ? `q:${r.text}` : `t:${r.id}`}>
-              <button type="button" className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(`/title/${r.id}`) } }}>
+              <PageButton to={r.t === 'title' ? `/title/${r.id}` : null} className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(`/title/${r.id}`) } }}>
                 {r.t === 'title'
                   ? <span className="s-thumb">{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                   : <span className="s-thumb-icon"><Icon name="search" size={20} /></span>}
                 <span className="s-recent-text"><b>{r.text}</b>{r.t === 'title' && <small>{r.sub}</small>}</span>
-              </button>
+              </PageButton>
               <button type="button" className="s-recent-x" aria-label={`Remove ${r.text}`} onClick={() => forget(recents.filter((_, j) => j !== i))}><Icon name="close" size={18} /></button>
             </li>
           ))}
@@ -435,11 +435,11 @@ export default function Search() {
                 <ul className="s-results s-people">
                   {shownPeople.map((p) => (
                     <li key={p.id}>
-                      <a className="s-person" href={`/person/${p.id}`} onClick={(e) => { e.preventDefault(); input.current?.blur(); push(`/person/${p.id}`) }}>
+                      <PageLink to={`/person/${p.id}`} className="s-person" onClick={() => { input.current?.blur(); push(`/person/${p.id}`) }}>
                         <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" loading="lazy" /> : p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>
                         <span className="wl-text"><b>{p.name}</b>{p.known_for && <small>{p.known_for}</small>}</span>
                         <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)' }} />
-                      </a>
+                      </PageLink>
                     </li>
                   ))}
                 </ul>

@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { SERVICE_NAME, kindWord, leavingNote, loadTitle, openLink, runtime, type TitleDetail } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingNote, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { firstName, fullDate, looseDate, times, useTitleLogs, type TitleLogs } from '../lib/letterboxd'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { useQuery } from '../lib/query'
+import { titlePage, usePageQuery } from '../lib/pages'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
-import { PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Sheet, Skeleton, TitleCard, titleArt, useArrival, usePullToRefresh } from '../ui'
+import { PageLink, PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Sheet, Skeleton, TitleCard, useArrival, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -95,7 +96,6 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
 
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
-  const { push } = useNavActions()
   // opened from a notification: where it streams lights up once, then settles
   const [flash] = useState(() => takeOpenedFrom(`/title/${t.id}`))
   const [open, setOpen] = useState(false)
@@ -198,13 +198,13 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
           <div className="row-scroll noscroll"><ul className="cast">
             {cast.map((c) => (
               <li key={c.person.id}>
-                <a href={`/person/${c.person.id}`} onClick={(e) => { e.preventDefault(); push(`/person/${c.person.id}`) }}>
+                <PageLink to={`/person/${c.person.id}`}>
                   <span className="avatar" aria-hidden="true">
                     {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
                   </span>
                   <span className="cast-name">{c.person.name}</span>
                   {c.character && <span className="cast-role">{c.character}</span>}
-                </a>
+                </PageLink>
               </li>
             ))}
           </ul></div>
@@ -250,12 +250,13 @@ export function Gone({ what }: { what: 'title' | 'person' }) {
 }
 
 export default function Title({ id }: { id: number }) {
-  const q = useQuery(Number.isFinite(id) ? `title:${id}` : null, () => loadTitle(id), { maxAge: 10 * 60 * 1000 })
+  const page = Number.isFinite(id) ? titlePage(id) : null
+  const q = usePageQuery(page)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const missing = !Number.isFinite(id) || (q.data === null && !q.loading)
   // above the fold: the top picture
-  const phase = useArrival(String(id), !!q.data, () => titleArt(q.data))
+  const phase = useArrival(String(id), !!q.data, () => page?.fold(q.data) ?? [])
   return (
     <>
     <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} ref={bind.ref} onScroll={onScroll}>

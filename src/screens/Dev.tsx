@@ -51,7 +51,7 @@ export default function Dev() {
         <div style={{ width: 147 }}><Cover path={null} service="netflix" /></div>
       </Spec>
       <section className="dev-wide">
-        <SectionHeader title="Title cards in a row" onViewAll={() => {}} />
+        <SectionHeader title="Title cards in a row" viewAll={() => {}} />
         <PosterRow>{CARDS.map((c, i) => <TitleCard key={c.id} card={c} note={i === 0 ? 'Leaves tomorrow' : undefined} />)}</PosterRow>
       </section>
       <Spec name="Sheet and toast" note="sheet: tap outside, swipe the handle down or Escape · toast: 4 s with Undo">

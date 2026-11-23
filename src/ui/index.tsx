@@ -10,11 +10,14 @@ import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
 import { useWatchedMark } from '../lib/letterboxd'
-import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
-import { prefetch, useRequestFailed } from '../lib/query'
+import { useRequestFailed } from '../lib/query'
 import { notePressed } from '../lib/press'
 import { warmFacts } from '../lib/facts'
+import { warmPage } from '../lib/pages'
+import { allDecoded, decodePicture, markDecoded, wasDecoded, type Picture } from '../lib/pictures'
+export { posterPicture, titleArt, warmPictures, type Picture } from '../lib/pictures'
 
 // ---- Icons -----------------------------------------------------------------
 
@@ -147,8 +150,6 @@ export function useNearScreen(ref: React.RefObject<HTMLElement | null>, skip = f
  * A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the
  * image, its edge line and the service mark fade in together.
  */
-function wasDecoded(src: string | null | undefined) { return !!src && decoded.has(src) }
-function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
 
 export function Cover({ path, service, eager, sizes = '147px', watched }: { path: string | null; service?: string; eager?: boolean; sizes?: string; watched?: boolean }) {
   const inRow = useContext(NearContext)
@@ -183,6 +184,7 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const { push } = useNavActions()
   const service = card.availability[0]?.service_id
   const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
+  const link = usePageLink(`/title/${card.id}`)
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
   const watched = useWatchedMark(card.id)
   // near the screen: its long-press facts are fetched with the rest of its row
@@ -190,14 +192,7 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const near = useNearScreen(box)
   useEffect(() => { if (near) warmFacts([card.id]) }, [near, card.id])
   return (
-    <a ref={box} className="card" href={`/title/${card.id}`} {...hold.handlers}
-      onPointerDown={(e) => {
-        warmFacts([card.id], true)
-        hold.handlers.onPointerDown(e)
-        // a finger resting on the poster (not a scroll passing over it) starts loading its page
-        const el = e.currentTarget
-        setTimeout(() => { if (el.dataset.pressed) warmTitle(card.id) }, 100)
-      }}
+    <a ref={box} className="card" href={`/title/${card.id}`} {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
       onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
       <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}${watched ? ', watched' : ''}`}>
         <Cover path={card.poster_path} service={service} eager={eager} watched={watched} />
@@ -257,12 +252,39 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
   }
 }
 
-export function SectionHeader({ title, onViewAll, onViewAllPress }: { title: string; onViewAll?: () => void; onViewAllPress?: () => void }) {
+/** `viewAll`: the page it opens (preloaded on press), or what it does instead (switch tab). */
+export function SectionHeader({ title, viewAll }: { title: string; viewAll?: string | (() => void) }) {
   return (
     <div className="section-head">
       <h2>{title}</h2>
-      {onViewAll && <button type="button" className="view-all" aria-label={`View all in ${title}`} onPointerDown={onViewAllPress} onClick={onViewAll}>View all</button>}
+      {viewAll && <ViewAll to={viewAll} label={`View all in ${title}`} />}
     </div>
+  )
+}
+
+/** A button that opens a page (`to`) among other things: preloads it on press; `onClick` does the opening. */
+export function PageButton({ to, children, ...rest }: { to: string | null } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const press = usePageLink(to)
+  return <button type="button" {...rest} {...press}>{children}</button>
+}
+
+export function ViewAll({ to, label }: { to: string | (() => void); label: string }) {
+  const { push } = useNavActions()
+  const press = usePageLink(typeof to === 'string' ? to : null)
+  return <button type="button" className="view-all" aria-label={label} {...press} onClick={() => (typeof to === 'string' ? push(to) : to())}>View all</button>
+}
+
+/**
+ * A link to a page in the app: preloads it on press (see usePageLink) and opens it on a tap. `onClick` replaces the
+ * opening (call `push` yourself, e.g. after checking it wasn't a swipe); `handlers` join the link's own (a long press).
+ */
+export function PageLink({ to, onClick, handlers, children, ...rest }: { to: string; onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void; handlers?: Record<string, ((e: never) => void) | undefined> } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'onClick'>) {
+  const { push } = useNavActions()
+  const press = usePageLink(to)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const joined = joinHandlers(press, (handlers ?? {}) as any)
+  return (
+    <a href={to} {...rest} {...joined} onClick={(e) => { e.preventDefault(); if (onClick) onClick(e); else push(to) }}>{children}</a>
   )
 }
 
@@ -1001,10 +1023,32 @@ export function PillCount({ n, off }: { n?: number; off?: boolean }) {
 
 // ---- Pages arriving ----------------------------------------------------------
 
-/** Start loading a title's page as a finger lands on its poster. */
-export const titleArt = (t: { backdrop_path?: string | null; poster_path?: string | null } | null | undefined): Picture[] =>
-  [{ src: t && (tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')) }]
-export const warmTitle = (id: number) => prefetch(`title:${id}`, () => loadTitle(id).then((t) => { warmPictures(titleArt(t)); return t }), { maxAge: 10 * 60 * 1000 })
+type PointerHandlers = {
+  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerMove?: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerUp?: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerCancel?: (e: React.PointerEvent<HTMLElement>) => void
+}
+/** Several sets of event handlers on one element: each event calls every set's handler for it, in turn. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function joinHandlers(...sets: Record<string, ((e: any) => void) | undefined>[]): Record<string, (e: any) => void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: Record<string, (e: any) => void> = {}
+  for (const name of new Set(sets.flatMap((s) => Object.keys(s)))) {
+    const fns = sets.map((s) => s[name]).filter((f) => !!f)
+    out[name] = (e) => { for (const f of fns) f!(e) }
+  }
+  return out
+}
+/**
+ * Every link to a page spreads this: the page (see `pageFor` in lib/pages) starts loading on a press that isn't a
+ * scroll, so it opens with its content in place. `path` null: the link goes nowhere that loads.
+ */
+export function usePageLink(path: string | null): PointerHandlers {
+  const p = useRef(path)
+  p.current = path
+  return usePressWarm(() => { if (p.current) warmPage(p.current) })
+}
 
 /** Start a load on a press that isn't a scroll: the finger still after 80 ms, or lifted without having moved. */
 export function usePressWarm(run: () => void) {
@@ -1018,44 +1062,6 @@ export function usePressWarm(run: () => void) {
     onPointerCancel: stop,
   }
 }
-
-export type Picture = { src: string | null | undefined; srcset?: string; sizes?: string }
-/** A poster as its card will ask for it, so the file waited for is the file shown. */
-export const posterPicture = (path: string | null): Picture => ({ src: tmdbImage(path, 'w342'), srcset: posterSrcSet(path), sizes: '147px' })
-// Pictures this session has already decoded: they can show from the first frame, with no fade of their own.
-const decoded = new Set<string>()
-// The decoded pictures themselves are held on to (the newest 80), so the browser keeps them in memory and the
-// page's own <img> gets them in the same frame instead of fetching them from its cache and decoding again.
-const held = new Map<string, HTMLImageElement>()
-// One request per picture, however many ask (a list warmed while Browse sits idle, then opened): the page's wait
-// joins the one under way instead of starting a second.
-const decoding = new Map<string, Promise<void>>()
-const decodePicture = ({ src, srcset, sizes }: Picture): Promise<void> => {
-  if (!src || decoded.has(src)) return Promise.resolve()
-  const going = decoding.get(src)
-  if (going) return going
-  const img = new Image()
-  if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
-  img.src = src
-  const keep = () => {
-    decoded.add(src)
-    held.set(src, img)
-    if (held.size > 120) held.delete(held.keys().next().value!)
-  }
-  // Safari sometimes refuses decode() on a picture that is still arriving. That must not count as ready (the page
-  // then faded in with posters still painting, 22 Nov): wait for it to load instead, and only a broken picture gives up.
-  const loaded = () => new Promise<void>((done) => {
-    if (img.complete) { if (img.naturalWidth > 0) keep(); done(); return }
-    img.addEventListener('load', () => { keep(); done() }, { once: true })
-    img.addEventListener('error', () => done(), { once: true })
-  })
-  const p = img.decode().then(keep, loaded).finally(() => decoding.delete(src))
-  decoding.set(src, p)
-  return p
-}
-/** Fetch and decode pictures ahead of the page that will show them. */
-export const warmPictures = (pictures: Picture[]) => { for (const p of pictures) void decodePicture(p) }
-const allDecoded = (pictures: Picture[]) => pictures.every((p) => !p.src || decoded.has(p.src))
 
 export type Arrival = 'wait' | 'in' | 'there'
 /**

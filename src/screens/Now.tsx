@@ -9,11 +9,10 @@ import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
-import { warmBrowse } from './Browse'
 import { readQueryData, useQuery } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
-import { PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { PageLink, PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
@@ -97,16 +96,16 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
         {items.map((h, i) => {
           const on = i === index
           return (
-            <a key={h.id} className="hero-slide" data-on={on} href={`/title/${h.id}`} aria-label={`${h.title}, ${h.reason ? `${h.reason}, ` : ''}${heroMeta(h)}`}
+            <PageLink key={h.id} to={`/title/${h.id}`} className="hero-slide" data-on={on} aria-label={`${h.title}, ${h.reason ? `${h.reason}, ` : ''}${heroMeta(h)}`}
               aria-hidden={!on} tabIndex={on ? 0 : -1} style={{ '--from': `${8 * dir}%` } as CSSProperties}
-              onClick={(e) => { e.preventDefault(); if (!swiped.current) push(`/title/${h.id}`) }}>
+              onClick={() => { if (!swiped.current) push(`/title/${h.id}`) }}>
               <div className="hero-text" data-reason={h.reason ? '' : undefined}>
                 {h.logo_path ? <img className="hero-logo" src={tmdbImage(h.logo_path, 'w500')} alt="" draggable={false} /> : <span className="hero-name">{h.title}</span>}
                 {/* why it is here: new on a service, leaving, on the watchlist, trending, liked by a friend */}
                 {h.reason && <span className="hero-reason">{h.reason}</span>}
                 <span className="hero-meta">{heroMeta(h)}</span>
               </div>
-            </a>
+            </PageLink>
           )
         })}
       </div>
@@ -279,14 +278,13 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
 
 /** Titles given room between the rows, side by side: each card has its wide picture, why it is here, and where it plays. */
 function Spotlight({ cards }: { cards: HomeCard[] }) {
-  const { push } = useNavActions()
   return (
     <div className="spot-row noscroll" role="list">
       {cards.map((card) => {
         const art = tmdbImage(card.backdrop_path, 'w780')
         const service = card.availability[0]?.service_id
         return (
-          <a key={card.id} role="listitem" className="spot press" href={`/title/${card.id}`} onClick={(e) => { e.preventDefault(); push(`/title/${card.id}`) }}>
+          <PageLink key={card.id} to={`/title/${card.id}`} role="listitem" className="spot press">
             {art && <img src={art} alt="" loading="lazy" draggable={false} />}
             <span className="spot-text">
               {card.reason && <small>{card.reason}</small>}
@@ -294,7 +292,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
               {/* the service, unless the reason already names one ("New on Netflix") */}
               <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
             </span>
-          </a>
+          </PageLink>
         )
       })}
     </div>
@@ -409,8 +407,7 @@ export default function Now() {
           {q.data.rows.map((row, r) => (
             row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
-              <SectionHeader title={row.title} onViewAll={row.more ? () => (row.more === 'tab:watchlist' ? setTab('watchlist') : push(row.more!)) : undefined}
-                onViewAllPress={row.more && row.more.startsWith('/') ? () => warmBrowse(row.more!) : undefined} />
+              <SectionHeader title={row.title} viewAll={row.more === 'tab:watchlist' ? () => setTab('watchlist') : row.more} />
               <PosterRow>
                 {row.items.map((card) => {
                   const note = card.note ?? (row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined)

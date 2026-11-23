@@ -3,60 +3,24 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { createPortal, flushSync } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
-  CATEGORIES, SECTIONS, categoryOf, loadCategory, loadCovers, rowsOf, titlesIn,
-  type Category, type CategoryPage, type Kind, type RowDef, type SectionId, type Sort,
+  CATEGORIES, SECTIONS, categoryOf, type Category, type Kind, type SectionId, type Sort,
 } from '../lib/browse'
 import { SERVICE_NAME, leavingNote, loadMyServices, type Card } from '../lib/catalogue'
-import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { useWatched } from '../lib/letterboxd'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
-import { prefetch, useQuery } from '../lib/query'
-import { BackButton, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, posterPicture, titleArt, useArrival, usePressWarm, useSwitched, warmPictures, type Picture } from '../ui'
+import { useQuery } from '../lib/query'
+import { categoryPage, coverPictures, coverSrc, coversPage, fits, gridDef, gridPage, usePageQuery, warmPage } from '../lib/pages'
+import { BackButton, PageLink, ViewAll, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
 import { Hero, HoldMenu } from './Now'
 
 type Pick = 'all' | Kind
 const PICKS: [Pick, string][] = [['all', 'All'], ['film', 'Films'], ['series', 'Series']]
-const DAY = 24 * 60 * 60 * 1000
 const kindPath = (k: Pick) => (k === 'all' ? '' : `/${k}`)
 const tintOf = (h: string) => `linear-gradient(25deg, ${h} 0%, ${h}E6 32%, ${h}66 62%, ${h}00 100%)`
 
 /** Where a category's card goes: lists open as a grid, everything else has a page of rows. */
 const hrefOf = (cat: Category, k: Pick) => (cat.list ? `/browse/g/${cat.id}/list${kindPath(k)}` : `/browse/c/${cat.id}${kindPath(k)}`)
-
-const HALF_HOUR = 30 * 60 * 1000
-/** What a grid page shows: a category's own list, or one of its rows. */
-const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
-  row === 'list' ? { id: 'popular', title: (kind && cat.labels?.[kind]) || cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only, notes: cat.rule.leaving ? 'leaving' : undefined } : rowsOf(cat, kind).find((r) => r.id === row)
-const gridKey = (id: string, row: string, kind: Kind | undefined, sort: Sort) => `browse-grid:${id}:${row}:${kind ?? 'all'}:${sort}`
-const loadGrid = (cat: Category, def: RowDef, row: string, sort: Sort) => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true })
-// what's above the fold: a category's first top picture, its title logo and the first row's first posters; a grid's first three rows
-const catFold = (d: CategoryPage | undefined): Picture[] => [...titleArt(d?.hero[0]), { src: tmdbImage(d?.hero[0]?.logo_path, 'w500') },
-  ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))]
-// four rows: a tall iPhone shows three and the top of a fourth
-const gridFold = (cards: Card[] | undefined): Picture[] => (cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path))
-/** Start loading a Browse page before it opens (a finger on its card, or Browse sitting idle). */
-export function warmBrowse(path: string) {
-  const [, , a, id, c, d] = path.split('/')
-  const cat = id ? categoryOf(id) : undefined
-  if (!cat) return
-  const kindOf = (s: string | undefined): Kind | undefined => (s === 'film' || s === 'series' ? s : undefined)
-  if (a === 'c') prefetch(`browse-cat:${id}:${kindOf(c) ?? 'all'}`, () => loadCategory(cat, kindOf(c)).then((p) => { warmPictures(catFold(p)); return p }), { maxAge: HALF_HOUR })
-  if (a === 'g' && c) {
-    const def = gridDef(cat, c, kindOf(d))
-    if (def) prefetch(gridKey(id, c, kindOf(d), def.sort ?? 'popular'), () => loadGrid(cat, def, c, def.sort ?? 'popular').then((l) => { warmPictures(gridFold(l)); return l }), { maxAge: HALF_HOUR, persist: false })
-  }
-}
-
-// The card is about 170px wide: w300 on ordinary screens, w780 on a 3x iPhone.
-const coverSrc = (path: string) => ({ src: tmdbImage(path, 'w780'), srcSet: `${tmdbImage(path, 'w300')} 300w, ${tmdbImage(path, 'w780')} 780w`, sizes: '50vw' })
-/** The category covers as their cards ask for them, for the arrival to wait on. */
-const coverPictures = (covers: Record<string, string | null> | undefined, cats: { id: string }[]): Picture[] =>
-  cats.map((c) => covers?.[c.id]).filter((p): p is string => !!p).map((p) => { const c = coverSrc(p); return { src: c.src, srcset: c.srcSet, sizes: c.sizes } })
-
-/** Load every card picture ahead (a couple of seconds after Browse shows), so View all opens with them ready. */
-// The saved card pictures are per set of categories: a new category makes the app look them up again, not wait a day.
-const COVERS_KEY = `browse-covers:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`
 
 function useWarmCovers(covers: Record<string, string | null> | undefined) {
   useEffect(() => {
@@ -74,7 +38,6 @@ function useWarmCovers(covers: Record<string, string | null> | undefined) {
 }
 
 function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: string | null | undefined; pick: Pick; named?: boolean }) {
-  const { push } = useNavActions()
   const href = hrefOf(cat, pick)
   // Picture, colour wash and name are one: all three fade in together once the picture is decoded (or there is
   // none), over the plain card. Nothing shows on its own first.
@@ -82,22 +45,19 @@ function CategoryCard({ cat, cover, pick, named }: { cat: Category; cover: strin
   const ready = loaded || cover === null
   const setReady = setLoaded
   const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => setReady(true)) }
-  const warm = usePressWarm(() => warmBrowse(href))
   return (
-    <a className="br-card press" href={href} data-ready={ready} {...warm}
-      // on the Browse tab each card has a name, so switching type moves it to its new place (see setPick there)
-      data-flip={named ? cat.id : undefined} onClick={(e) => { e.preventDefault(); push(href) }}>
+    // on the Browse tab each card has a name, so switching type moves it to its new place (see setPick there)
+    <PageLink to={href} className="br-card press" data-ready={ready} data-flip={named ? cat.id : undefined}>
       {cover && <img {...coverSrc(cover)} alt="" decoding="sync" draggable={false}
         ref={(el) => { if (el?.complete && el.naturalWidth && !ready) show(el) }}
         onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
       <span className="br-tint" aria-hidden="true" style={{ background: tintOf(cat.tint) }} />
       <span className="hair" aria-hidden="true" />
       <span className="br-label">{cat.label}</span>
-    </a>
+    </PageLink>
   )
 }
 
-const fits = (cat: Category, pick: Pick) => pick === 'all' || !cat.only || cat.only === pick
 
 function TypePills({ pick, setPick, counts }: { pick: Pick; setPick: (p: Pick) => void; counts?: Partial<Record<Pick, number>> }) {
   return (
@@ -113,7 +73,6 @@ function TypePills({ pick, setPick, counts }: { pick: Pick; setPick: (p: Pick) =
 
 /** The Browse tab. */
 export default function Browse() {
-  const { push } = useNavActions()
   const onDim = useDimOnScroll()
   const [pick, setPickNow] = useState<Pick>('all')
   const page = useRef<HTMLElement>(null)
@@ -136,13 +95,13 @@ export default function Browse() {
       if ((dx || dy) && (seen(from) || seen(to))) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' })
     }
   }
-  const covers = useQuery(COVERS_KEY, loadCovers, { maxAge: DAY })
+  const covers = usePageQuery(coversPage)
   useWarmCovers(covers.data)
   // the first cards' pages load ahead, a moment after Browse has settled
   useEffect(() => {
     const t = setTimeout(() => {
       const sec = SECTIONS[0]
-      for (const c of CATEGORIES.filter((x) => x.section === sec.id && fits(x, pick)).slice(0, sec.shown)) warmBrowse(hrefOf(c, pick))
+      for (const c of CATEGORIES.filter((x) => x.section === sec.id && fits(x, pick)).slice(0, sec.shown)) warmPage(hrefOf(c, pick))
     }, 2000)
     return () => clearTimeout(t)
   }, [pick])
@@ -164,7 +123,7 @@ export default function Browse() {
             <div className="br-section-head" data-flip={`head-${sec.id}`}>
               <h2>{sec.title}</h2>
               {cats.length > sec.shown && (
-                <button type="button" className="view-all" aria-label={`View all ${sec.title.toLowerCase()}`} onClick={() => push(`/browse/all/${sec.id}${kindPath(pick)}`)}>View all</button>
+                <ViewAll to={`/browse/all/${sec.id}${kindPath(pick)}`} label={`View all ${sec.title.toLowerCase()}`} />
               )}
             </div>
             <div className="br-grid">
@@ -210,7 +169,7 @@ function TopBar({ title, glass, shown = true }: { title: string; glass?: boolean
 export function BrowseSection({ section, kind }: { section: SectionId; kind?: Kind }) {
   const onDim = useDimOnScroll()
   const pick: Pick = kind ?? 'all'
-  const covers = useQuery(COVERS_KEY, loadCovers, { maxAge: DAY })
+  const covers = usePageQuery(coversPage)
   const sec = SECTIONS.find((s) => s.id === section)
   const cats = CATEGORIES.filter((c) => c.section === section && fits(c, pick))
   // above the fold: the first eight cards' pictures (Browse usually fetched them already, then it shows at once)
@@ -235,13 +194,13 @@ const holdMenu = (held: Held | null, close: () => void) => held && createPortal(
 
 /** A category: its top titles, then rows. */
 export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
-  const { push } = useNavActions()
   const onDim = useDimOnScroll()
   const cat = categoryOf(id)
-  const q = useQuery<CategoryPage>(cat ? `browse-cat:${id}:${kind ?? 'all'}` : null, () => loadCategory(cat!, kind), { maxAge: 30 * 60 * 1000 })
+  const page = cat ? categoryPage(cat, kind) : null
+  const q = usePageQuery(page)
   const [held, setHeld] = useState<Held | null>(null)
   // above the fold: the first top picture and its title logo, and the first row's first posters
-  const phase = useArrival(`${id}:${kind ?? 'all'}`, !!q.data, () => catFold(q.data))
+  const phase = useArrival(`${id}:${kind ?? 'all'}`, !!q.data, () => page?.fold(q.data) ?? [])
   if (!cat) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This category isn’t here any more.</p></main></>
   const empty = q.data && q.data.hero.length === 0 && q.data.rows.length === 0
   return (
@@ -257,8 +216,7 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
             {q.data.rows.map((row, r) => (
               <section key={row.id} className="row">
                 {/* View all only when the row doesn't already hold the whole list */}
-                <SectionHeader title={row.title} onViewAll={row.more ? () => push(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`) : undefined}
-                  onViewAllPress={row.more ? () => warmBrowse(`/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}`) : undefined} />
+                <SectionHeader title={row.title} viewAll={row.more ? `/browse/g/${cat.id}/${row.id}${kindPath(kind ?? 'all')}` : undefined} />
                 <PosterRow>
                   {row.items.map((card) => {
                     const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0])
@@ -301,10 +259,11 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const uid = session?.user.id
   const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
-  const key = gridKey(id, row, kind, sort)
-  const q = useQuery<Card[]>(cat && def ? key : null, () => loadGrid(cat!, def!, row, sort), { maxAge: HALF_HOUR, persist: false })
+  const page = cat && def ? gridPage(cat, def, row, kind, sort) : null
+  const key = page?.key ?? ''
+  const q = usePageQuery(page)
   // above the fold: the first three rows of posters
-  const phase = useArrival(key, !!q.data, () => gridFold(q.data))
+  const phase = useArrival(key, !!q.data, () => page?.fold(q.data) ?? [])
 
   if (!cat || !def) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This list isn’t here any more.</p></main></>
 

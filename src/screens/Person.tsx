@@ -5,30 +5,13 @@ import { SERVICE_NAME, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll } from '../lib/nav'
 import { servicesLabel, useMyServices } from '../lib/profile'
-import { useQuery } from '../lib/query'
-import { supabase } from '../lib/supabase'
-import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, useSwitched, TitleCard, Skeleton, posterPicture, useArrival } from '../ui'
+import { DEPT, firstRole, personPage, rolesOf, usePageQuery, type PersonCredit as Credit, type Role } from '../lib/pages'
+import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, useSwitched, TitleCard, Skeleton, useArrival } from '../ui'
 import { HoldMenu } from './Now'
 import { Gone } from './Title'
 
-type Role = 'cast' | 'director' | 'creator' | 'writer'
-type Credit = { role: Role; character: string | null; title: Card }
-type PersonData = { id: number; name: string; profile_path: string | null; known_for: string | null; credits: Credit[] }
-
-const DEPT: Record<Role, string> = { cast: 'Acting', director: 'Directing', creator: 'Creating', writer: 'Writing' }
 const JOB: Record<Role, string> = { cast: 'Actor', director: 'Director', creator: 'Creator', writer: 'Writer' }
 const KNOWN: Record<string, string> = { Acting: 'Actor', Directing: 'Director', Writing: 'Writer', Production: 'Producer', Creator: 'Creator' }
-
-async function loadPerson(id: number): Promise<PersonData | null> {
-  const { data, error } = await supabase.from('people')
-    .select('id,name,profile_path,known_for,credits(role,character,title:titles(id,kind,title,year,poster_path,availability(service_id,leaves_on)))')
-    .eq('id', id).maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!data) return null
-  const p = data as unknown as PersonData
-  p.credits = (p.credits ?? []).filter((c) => c.title).map((c) => ({ ...c, title: { ...c.title, availability: c.title.availability ?? [] } }))
-  return p
-}
 
 const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 type Sort = 'new' | 'old' | 'az'
@@ -38,7 +21,8 @@ const KINDS: [Kind, string][] = [['all', 'Films and series'], ['film', 'Films'],
 
 export default function Person({ id }: { id: number }) {
   const onDim = useDimOnScroll()
-  const q = useQuery<PersonData | null>(Number.isFinite(id) ? `person:${id}` : null, () => loadPerson(id), { maxAge: 30 * 60 * 1000 })
+  const page = Number.isFinite(id) ? personPage(id) : null
+  const q = usePageQuery(page)
   const { mine } = useMyServices()
   const [dept, setDept] = useState<Role | null>(null)
   const switched = useSwitched(dept ?? '')
@@ -50,19 +34,14 @@ export default function Person({ id }: { id: number }) {
   const p = q.data
 
   const pass = (c: Credit) => (kind === 'all' || c.title.kind === kind) && (!onlyMine || c.title.availability.some((a) => mine.includes(a.service_id)))
-  const depts = useMemo(() => (Object.keys(DEPT) as Role[]).filter((r) => p?.credits.some((c) => c.role === r)), [p])
-  // open on what they're known for, else the role with most titles
-  const known = (Object.keys(DEPT) as Role[]).find((r) => DEPT[r] === p?.known_for && depts.includes(r))
-  const current = dept ?? known ?? [...depts].sort((a, b) => (p?.credits.filter((c) => c.role === b).length ?? 0) - (p?.credits.filter((c) => c.role === a).length ?? 0))[0]
+  const depts = useMemo(() => rolesOf(p), [p])
+  const current = dept ?? firstRole(p)
   const list = (p?.credits ?? []).filter((c) => c.role === current && pass(c)).sort((a, b) =>
     sort === 'az' ? a.title.title.localeCompare(b.title.title)
       : sort === 'new' ? (b.title.year ?? 0) - (a.title.year ?? 0) : (a.title.year ?? 9999) - (b.title.year ?? 9999))
 
   // above the fold: the portrait and the first three rows of posters, then all of it fades in as one piece
-  const phase = useArrival(`person:${id}`, !!q.data, () => [
-    { src: tmdbImage(q.data?.profile_path ?? null, 'w185') },
-    ...list.slice(0, 9).map((c) => posterPicture(c.title.poster_path)),
-  ])
+  const phase = useArrival(`person:${id}`, !!q.data, () => page?.fold(q.data) ?? [])
   if (q.error) return <main className="page"><div className="page-back"><BackButton /></div><div className="page-center"><LoadFailed what="this person" retry={q.retry} retrying={q.retrying} /></div></main>
   if (q.data === null) return <main className="page"><div className="page-back"><BackButton glass /></div><Gone what="person" /></main>
   const total = new Set((p?.credits ?? []).map((c) => c.title.id)).size

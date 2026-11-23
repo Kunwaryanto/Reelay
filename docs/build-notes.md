@@ -425,3 +425,13 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - Saving or removing a title, or a Letterboxd import, builds Home again quietly; it goes in when the member is back on
   the Home tab, never under their eyes. Back to the app after 5 minutes away: checked again, and put in at once only if
   the page hasn't been touched.
+
+## Preloading pages (23 Nov)
+
+- One list of pages (`src/lib/pages.ts`): title, person, a Browse category, a grid (View all), a Browse section. Each
+  says what it loads, what that is saved as and which pictures are above the fold; the page itself reads through it.
+- Every link to a page preloads it on press (still for 80 ms, or lifted without moving): `PageLink`, `PageButton`,
+  `ViewAll` and the poster card. `push` preloads as well, for anything opened another way.
+- Now covered too: Home's hero and spotlight, Watchlist rows, Search results, recent searches and people, a title's
+  cast, and View all on Browse sections.
+- Off production, a page opened by a tap without having been preloaded logs `[pages] … opened without being preloaded`.
