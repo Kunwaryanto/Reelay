@@ -356,10 +356,14 @@ async function saveAvailability(found, keys) {
       cols.slice(0, 4),
     );
     offers += r.rowCount;
+    // Popularity is written only when it has really moved (15%, and at least half a point): TMDB's number shifts a
+    // little for almost every title every night, and each write copies the whole row (overview and all), which left
+    // titles half empty. Sorting by popularity doesn't notice the difference.
     await db.query(
       `update public.titles t set popularity = x.pop, keep_reason = 'streaming'
        from (select distinct on (tmdb_id, kind) * from unnest($1::int[], $2::text[], $3::real[]) as u(tmdb_id, kind, pop)) x
-       where t.tmdb_id = x.tmdb_id and t.kind = x.kind and (t.popularity is distinct from x.pop or t.keep_reason <> 'streaming')`,
+       where t.tmdb_id = x.tmdb_id and t.kind = x.kind
+         and (t.popularity is null or abs(t.popularity - x.pop) > greatest(0.15 * t.popularity, 0.5) or t.keep_reason <> 'streaming')`,
       [cols[0], cols[1], cols[4]],
     );
   }
