@@ -494,3 +494,21 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - `titles.released_on` holds the release or first air day from TMDB.
 - "Added" events: a service's first full night (`services.first_synced_on`) isn't arrivals; the 30,000 events of
   20 Nov and the 6,900 of 23 Nov (the five new services) were removed, so New on streaming shows real arrivals.
+
+## Faster reads (23 Nov)
+
+Measured on the database before and after:
+
+| Read | Before | After |
+|---|---|---|
+| Search | 0.4-2.2 s | 9-110 ms |
+| Rated lists (Top, Classics, a genre or country by rating) | 0.3-1.4 s | 6-26 ms |
+| Filter counts (genre, years) | 0.4 s | 9 ms |
+| Start wall | 0.1-1.1 s | under 1 ms |
+
+- `search_titles` finds its candidates through the trigram index (substring, and word similarity at 0.4 with `<%`).
+- `titles.imdb_rating` and `imdb_votes` are copies of the scores (a trigger keeps them in step, writing only on
+  change); lists sort and filter on them through `titles_rating`. Use them, not `scores!inner`, to sort or narrow.
+- GIN indexes on `titles.genres` and `titles.countries`.
+- The Start wall is built each night into `start_wall_posters` (`refresh_start_wall`).
+- The sync writes cast and crew by difference (it used to delete and re-add them on every refresh).

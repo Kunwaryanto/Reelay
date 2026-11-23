@@ -141,24 +141,25 @@ type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boole
 export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets }: Opts = {}): Promise<Card[]> {
   const r = cat.rule
   const k = kind ?? cat.only
-  const scored = sort === 'rated' || r.rating !== undefined || r.votes !== undefined
+  // The IMDb rating and votes are on the title itself (kept in step with scores by a trigger), so rated lists are
+  // read in rating order through an index and stop at `limit`, instead of joining and sorting every title's scores.
   // facets: what the filter drawer checks on the phone (genre, language, length, rating)
-  const extra = facets ? `,genres,original_language,runtime_min${scored ? '' : ',scores(imdb_rating,rt_critics,letterboxd)'}` : ''
+  const extra = facets ? ',genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)' : ''
   const joins = `${r.arrived ? ',availability_events!inner(event,happened_on)' : ''}${r.awards ? ',awards!inner(won)' : ''}`
-  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? `,scores!inner(imdb_rating,imdb_votes${facets ? ',rt_critics,letterboxd' : ''})` : ''}${extra}${joins}`)
+  let q = supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`)
   if (k) q = q.eq('kind', k)
   if (r.genres) q = q.overlaps('genres', r.genres)
   if (r.from !== undefined) q = q.gte('year', r.from)
   if (r.to !== undefined) q = q.lte('year', r.to)
   if (r.country) q = q.contains('countries', [r.country])
   if (r.under) q = q.eq('kind', 'film').gt('runtime_min', 40).lt('runtime_min', r.under)
-  if (r.rating !== undefined) q = q.gte('scores.imdb_rating', r.rating)
+  if (r.rating !== undefined) q = q.gte('imdb_rating', r.rating)
   if (r.votes) {
-    q = q.gte('scores.imdb_votes', r.votes[0])
-    if (r.votes[1]) q = q.lte('scores.imdb_votes', r.votes[1])
+    q = q.gte('imdb_votes', r.votes[0])
+    if (r.votes[1]) q = q.lte('imdb_votes', r.votes[1])
   } else if (sort === 'rated') {
     // enough votes for the rating to mean something; fewer for small categories (a country, an old decade)
-    q = q.gte('scores.imdb_votes', cat.section === 'genres' ? 20000 : 3000)
+    q = q.gte('imdb_votes', cat.section === 'genres' ? 20000 : 3000)
   }
   if (row === 'new') q = q.gte('year', thisYear - 1)
   if (row === 'leaving' || r.leaving) q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
@@ -167,7 +168,7 @@ export async function titlesIn(cat: Category, { kind, sort = 'popular', row, lim
   if (r.trending) q = q.not('trend_rank', 'is', null)
   if (r.awards) q = q.eq('awards.won', true)
 
-  if (sort === 'rated') q = q.order('scores(imdb_rating)', { ascending: false })
+  if (sort === 'rated') q = q.order('imdb_rating', { ascending: false, nullsFirst: false })
   else if (sort === 'newest') q = q.order('year', { ascending: false, nullsFirst: false })
   else if (sort === 'trending') q = q.order('trend_rank', { ascending: true, nullsFirst: false })
   const list = unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]

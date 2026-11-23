@@ -114,8 +114,9 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     soft<Card>(titles('series').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
     themed === 'awards'
       ? soft<{ title: Card }>(on(supabase.from('awards').select(`year,title:titles!inner(${H})`).eq('won', true).order('year', { ascending: false }).limit(80), 'title.availability.service_id') as never).then((r) => r.map((x) => x.title))
-      : soft<Card>(on(supabase.from('titles').select(`${H},scores!inner(imdb_rating,imdb_votes)`)).gte('scores.imdb_rating', 7.5).gte('scores.imdb_votes', 2000).lte('scores.imdb_votes', 30000)
-        .order('scores(imdb_rating)', { ascending: false }).limit(40) as never),
+      // the IMDb rating and votes are on the title (kept in step with scores), so this reads in rating order
+      : soft<Card>(on(supabase.from('titles').select(H)).gte('imdb_rating', 7.5).gte('imdb_votes', 2000).lte('imdb_votes', 30000)
+        .order('imdb_rating', { ascending: false }).limit(40) as never),
     soft<{ source: string; source_id: number; title_id: number; rank: number }>(supabase.rpc('home_saved', { p_day: day, ...rpcArgs }) as never),
     soft<{ person_id: number; name: string; title_id: number }>(supabase.rpc('home_people', { p_day: day, ...rpcArgs }) as never),
   ])
