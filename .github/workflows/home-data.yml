@@ -1,5 +1,5 @@
-# Home data only: TMDB's weekly trending lists, the members' Letterboxd feeds, and TMDB's recommendations for the
-# films they rated 4 or higher. The nightly sync does the same steps; this runs them by hand, e.g. right after
+# Home data only: TMDB's weekly trending lists, the members' Letterboxd feeds, TMDB's recommendations for the
+# films they rated 4 or higher, and the More like this lists that are due (title_similar). The nightly sync does the same steps; this runs them by hand, e.g. right after
 # someone connects Letterboxd. Nothing else in the database is touched.
 name: Home data
 on:
@@ -10,7 +10,7 @@ concurrency:
 jobs:
   home:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
