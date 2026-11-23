@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useServicesQuery } from '../lib/profile'
 import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
+import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
 import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
@@ -380,6 +381,15 @@ export default function Now() {
     if (failed || phase === 'late') { markLaunched(); return }
     if (show) markLaunched()
   }, [show, failed, phase])
+  // The two likeliest taps (the first hero slide, the first Picked for you card) load a moment after Home has
+  // arrived, so they open at once even without the press preload's head start
+  const heroId = q.data?.hero[0]?.id
+  const spotId = q.data?.rows.find((r) => r.spotlight)?.spotlight?.[0]?.id
+  useEffect(() => {
+    if (!show) return
+    const t = setTimeout(() => { for (const id of [heroId, spotId]) if (id) warmPage(paths.title(id)) }, 1500)
+    return () => clearTimeout(t)
+  }, [show, heroId, spotId])
   // the staged rise plays once, at launch
   const [launching, setLaunching] = useState(true)
   useEffect(() => { if (!show) return; const t = setTimeout(() => setLaunching(false), 1600); return () => clearTimeout(t) }, [show])

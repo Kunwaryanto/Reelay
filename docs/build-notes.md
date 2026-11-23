@@ -478,3 +478,8 @@ A mix of what is happening on the member's services and what is theirs. Everythi
   (`reelay-pictures-v1`), fetched with CORS so they count at their real size. iOS often empties a Home Screen
   app's ordinary cache between opens; with these, a cold start shows its pictures without downloading them again.
 - The privacy policy says the app keeps copies of what it shows on the device (updated 23 Nov).
+
+## Likeliest taps (23 Nov)
+
+- 1.5 s after Home has arrived, the title pages of the first hero slide and the first Picked for you card load
+  (data and top picture), so they open at once.
