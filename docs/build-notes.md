@@ -540,3 +540,12 @@ Measured on the database before and after:
 - The page is dropped only once the strip is exactly at rest, so the end of the movement can't restart.
 - Pull to refresh takes a touch only when it starts clearly downward (1.5 times more down than sideways), so a
   swipe back that begins a little downward stays a swipe.
+
+## Database storage (24 Nov)
+
+- The sync wrote every title's popularity every night for tiny changes, and each write copies the whole row: titles
+  was half empty. Popularity is now written only when it moves 15% (and at least half a point).
+- `Database compact` (run by hand, waits for the nightly sync) rewrites titles, credits, people, availability and
+  scores without the empty space (VACUUM FULL). First run: 170.5 MB → 121.8 MB, each table locked 1–8 seconds.
+- Measured and skipped: 4-byte ids (saves under 1%: padding) and reordering columns. Ready if we pass ~350 MB:
+  keep directors, creators and the top 3 actors, fetch full cast and person pages from TMDB (about 40 MB).
