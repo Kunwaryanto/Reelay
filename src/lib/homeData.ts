@@ -136,7 +136,7 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
     setRetrying(true)
     const started = Date.now()
     try {
-      const stamp = await loadStamp()
+      const stamp = await checkStamp() // a pull asks the server, however recently it was asked
       const v = await build(stamp)
       pending.current = null
       setView(v); setError(false)

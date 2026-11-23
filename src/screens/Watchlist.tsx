@@ -12,7 +12,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, PageLink, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched, useHold } from '../ui'
+import { Button, PageLink, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched, useHold, usePageRefresh } from '../ui'
 import { useWatched } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 
@@ -36,6 +36,8 @@ export default function Watchlist() {
   const uid = session?.user.id
   const q = useQuery<SavedTitle[]>(uid ? `watchlist-titles:${uid}` : null, loadWatchlistTitles, FRESH.mine('watchlist'))
   const mineQ = useServicesQuery()
+  // pull to refresh: the list itself, its titles and the member's services
+  const pull = usePageRefresh(q, mineQ, { retry: saved.reload })
   const [kind, setKind] = useState<Kind>('all')
   const switched = useSwitched(kind)
   // sort and filters, set in the Sort and filter drawer
@@ -118,7 +120,8 @@ export default function Watchlist() {
   if (saved.ids.length === 0) return <PickWall header={header} onAdd={(ids) => { saved.addMany(ids).then(() => q.retry()) }} />
 
   return (
-    <main className="page noscroll" onScroll={(e) => { onDim(e); if (open !== null) setOpen(null) }}>
+    <>
+    <main className="page noscroll" ref={pull.bind.ref} onScroll={(e) => { onDim(e); if (open !== null) setOpen(null) }}>
       {header}
       <div className="wl-filters">
         <div role="group" aria-label="Type">
@@ -162,6 +165,8 @@ export default function Watchlist() {
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
         noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />
     </main>
+    {pull.indicator}
+    </>
   )
 }
 

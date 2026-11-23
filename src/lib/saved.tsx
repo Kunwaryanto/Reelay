@@ -16,6 +16,8 @@ type Ctx = {
   toggleNotify: (id: number) => void
   /** the saved list has arrived (from the phone or the server) */
   loaded: boolean
+  /** load the saved list again (pull to refresh on Watchlist) */
+  reload: () => Promise<void>
   /** every saved title id, local changes included */
   ids: number[]
   /** save several at once, without a toast each (the empty Watchlist's Add) */
@@ -66,6 +68,7 @@ export function SavedProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     ids,
     loaded,
+    reload: q.retry,
     addMany: (list) => Promise.all(list.filter((id) => !get(id)).map((id) => write(id, { title_id: id, notify: false }, null))).then(() => {}),
     isSaved: (id) => !!get(id),
     isNotifying: (id) => !!get(id)?.notify,
@@ -96,7 +99,7 @@ export function SavedProvider({ children }: { children: ReactNode }) {
       if (perm === 'default') askPermission().then((answer) => { if (answer === 'denied') toast({ text: 'Notifications are off for Reelay.' }); else on() })
       else on()
     },
-  }), [get, write, toast, ids, loaded])
+  }), [get, write, toast, ids, loaded, q.retry])
 
   return <C.Provider value={value}>{children}</C.Provider>
 }

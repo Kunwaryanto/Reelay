@@ -11,7 +11,7 @@ import { useWatched } from '../lib/letterboxd'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { paths } from '../lib/routes'
 import { categoryPage, coverPictures, coverSrc, coversPage, fits, gridDef, gridPage, sectionCats, sectionPage, usePageQuery, warmPage } from '../lib/pages'
-import { BackButton, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
+import { BackButton, useJoinedRef, usePageRefresh, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
 import { Hero } from './Now'
 
 type Pick = 'all' | Kind
@@ -95,6 +95,8 @@ export default function Browse() {
     }
   }
   const covers = usePageQuery(coversPage)
+  const pull = usePageRefresh(covers)
+  const pageRef = useJoinedRef(page, pull.bind.ref)
   useWarmCovers(covers.data)
   // the first cards' pages load ahead, a moment after Browse has settled
   useEffect(() => {
@@ -109,7 +111,8 @@ export default function Browse() {
   const phase = useArrival('browse-tab', !!covers.data, () => coverPictures(covers.data, SECTIONS.slice(0, 2).flatMap((sec) =>
     CATEGORIES.filter((c) => c.section === sec.id && fits(c, pick)).slice(0, sec.shown))))
   return (
-    <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim} ref={page}>
+    <>
+    <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim} ref={pageRef}>
       <div className="tab-head br-head"><h1>Browse</h1></div>
       <div className="wl-filters"><TypePills pick={pick} setPick={setPick} /></div>
       <div className="br-body">
@@ -134,6 +137,8 @@ export default function Browse() {
       </div>
       </div>
     </main>
+    {pull.indicator}
+    </>
   )
 }
 
@@ -169,19 +174,20 @@ export function BrowseSection({ section, kind }: { section: SectionId; kind?: Ki
   const onDim = useDimOnScroll()
   const pick: Pick = kind ?? 'all'
   // above the fold: the first eight cards' pictures (Browse usually fetched them already, then it shows at once)
-  const { q: covers, phase } = usePageFrame(sectionPage(section, pick))
+  const { q: covers, phase, pull } = usePageFrame(sectionPage(section, pick))
   const sec = SECTIONS.find((s) => s.id === section)
   const cats = sectionCats(section, pick)
   return (
     <>
       <TopBar title={sec?.title ?? 'Browse'} />
-      <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim}>
+      <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} ref={pull.bind.ref} onScroll={onDim}>
         <h1 className="sr-only">{sec?.title}</h1>
         {phase !== 'there' && <Skeleton kind="cards" leaving={phase === 'in'} />}
         <div className={phase === 'in' ? 'br-grid br-grid-page arrive' : 'br-grid br-grid-page'} hidden={phase === 'wait'}>
           {cats.map((c) => <CategoryCard key={c.id} cat={c} cover={covers.data ? covers.data[c.id] ?? null : undefined} pick={pick} />)}
         </div>
       </main>
+      {pull.indicator}
     </>
   )
 }
@@ -197,7 +203,7 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
   return (
     <>
       <TopBar title={cat.label} glass />
-      <main className="page noscroll" data-arrive={frame.arrive} onScroll={onDim}>
+      <main className="page noscroll" data-arrive={frame.arrive} ref={frame.pull.bind.ref} onScroll={onDim}>
         <h1 className="sr-only">{cat.label}</h1>
         <PageContent frame={frame} what={cat.label} skeleton="rows">{(d) => (
           <>
@@ -219,6 +225,7 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
           </>
         )}</PageContent>
       </main>
+      {frame.pull.indicator}
     </>
   )
 }
@@ -245,7 +252,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   const mineQ = useServicesQuery()
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const frame = usePageFrame(cat && def ? gridPage(cat, def, row, kind, sort) : null)
-  const { q, phase } = frame
+  const { q, phase, pull } = frame
   // above the fold: the first three rows of posters
 
   if (!cat || !def) return <><TopBar title="Browse" /><main className="page"><p className="br-none">This list isn’t here any more.</p></main></>
@@ -279,7 +286,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
   return (
     <>
       <TopBar title={def.title} shown={small} />
-      <main className="page noscroll" onScroll={(e) => {
+      <main className="page noscroll" ref={pull.bind.ref} onScroll={(e) => {
         onDim(e)
         const y = e.currentTarget.scrollTop
         // the big name fades as the small one takes over in the bar
@@ -309,6 +316,7 @@ export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: 
         </div>
         {q.data && phase !== 'wait' && list.length === 0 && <p className="br-none">{chips.length ? 'Nothing here with these filters.' : 'Nothing streaming here right now.'}</p>}
       </main>
+      {pull.indicator}
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map((s) => SERVICE_NAME[s] ?? s)}
         noun={typed ? (def.kind === 'film' ? ['film', 'films'] : ['series', 'series']) : ['title', 'titles']} sorts={sorts} firstSort={start} rows={rows}
         countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />

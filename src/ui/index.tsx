@@ -18,6 +18,7 @@ import { notePressed } from '../lib/press'
 import { warmFacts } from '../lib/facts'
 import { usePageQuery, warmPage, type Page } from '../lib/pages'
 import type { Query } from '../lib/query'
+import { checkStamp } from '../lib/stamp'
 import { allDecoded, decodePicture, markDecoded, wasDecoded, type Picture } from '../lib/pictures'
 export { posterPicture, titleArt, warmPictures, type Picture } from '../lib/pictures'
 
@@ -408,6 +409,17 @@ const SETTLE = '--pull 420ms cubic-bezier(0.22, 1, 0.36, 1)'
  * movement is one transform on the page, so nothing fights the native bounce.
  * Put `bind.ref` on the scroll area and render `indicator` next to it, inside the same pane.
  */
+/**
+ * Pull to refresh on a page, the one way (see CLAUDE.md, Pull to refresh): ask whether the nightly sync has run,
+ * then load what the page shows afresh, skipping the saved copy. Offline or failing, the page stays as it is (the
+ * Offline pill or Couldn't load says why). Spread `bind` on the page's <main> and render `indicator` after it.
+ */
+export function usePageRefresh(...queries: { retry: () => Promise<void> }[]) {
+  const qs = useRef(queries)
+  qs.current = queries
+  return usePullToRefresh(async () => { await checkStamp(); await Promise.all(qs.current.map((q) => q.retry())) })
+}
+
 export function usePullToRefresh(refresh: () => Promise<unknown>) {
   const ind = useRef<HTMLDivElement>(null)
   const latest = useRef(refresh)
@@ -1089,11 +1101,24 @@ export function usePressWarm(run: () => void) {
 }
 
 /** A page's content, read through its entry (lib/pages), and how far it has arrived. */
-export type PageFrame<T> = { q: Query<T>; phase: Arrival; arrive: '' | undefined; /** the address names nothing (an id that isn't one) */ none: boolean }
-export function usePageFrame<T>(page: Page<T> | null): PageFrame<T> {
+export type PageFrame<T> = {
+  q: Query<T>; phase: Arrival; arrive: '' | undefined
+  /** the address names nothing (an id that isn't one) */
+  none: boolean
+  /** pull to refresh: `pull.bind` on the <main>, `pull.indicator` after it */
+  pull: { bind: { ref: (el: HTMLElement | null) => void | (() => void) }; indicator: ReactNode }
+}
+/** `refresh: false`: a page without pull to refresh (one where you type or change settings). */
+export function usePageFrame<T>(page: Page<T> | null, { refresh = true }: { refresh?: boolean } = {}): PageFrame<T> {
   const q = usePageQuery(page)
   const phase = useArrival(page?.key ?? '-', q.data != null, () => page?.fold(q.data) ?? [])
-  return { q, phase, arrive: phase === 'in' ? '' : undefined, none: page === null }
+  const pull = usePageRefresh(q)
+  return { q, phase, arrive: phase === 'in' ? '' : undefined, none: page === null, pull: refresh ? pull : NO_PULL }
+}
+const NO_PULL = { bind: { ref: () => {} }, indicator: null }
+/** Two refs on one element (a page's own and pull to refresh's). */
+export function useJoinedRef<E extends HTMLElement>(own: React.RefObject<E | null>, other: (el: E | null) => void | (() => void)) {
+  return useCallback((el: E | null) => { own.current = el; return other(el) }, [own, other])
 }
 /**
  * What every page shows while its content comes: placeholders while it waits, Couldn't load with Try again, the page's

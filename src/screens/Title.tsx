@@ -9,7 +9,7 @@ import { titlePage } from '../lib/pages'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
-import { PageContent, PageLink, usePageFrame, PinnedArt, BackButton, GlassButton, Icon, Laurel, PosterRow, PosterWall, SectionHeader, Sheet, TitleCard, usePullToRefresh } from '../ui'
+import { PageContent, PageLink, usePageFrame, PinnedArt, BackButton, GlassButton, Icon, Laurel, PosterRow, PosterWall, SectionHeader, Sheet, TitleCard } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -253,16 +253,15 @@ export function Gone({ what }: { what: 'title' | 'person' }) {
 export default function Title({ id }: { id: number }) {
   const frame = usePageFrame(Number.isFinite(id) ? titlePage(id) : null)
   const onScroll = useDimOnScroll()
-  const { bind, indicator } = usePullToRefresh(frame.q.retry)
   return (
     <>
-    <main className="page noscroll" data-arrive={frame.arrive} ref={bind.ref} onScroll={onScroll}>
+    <main className="page noscroll" data-arrive={frame.arrive} ref={frame.pull.bind.ref} onScroll={onScroll}>
       <div className="page-back"><BackButton glass /></div>
       <PageContent frame={frame} what="this title" skeleton="title" missing={<Gone what="title" />}>
         {(t) => <Body t={t} stale={frame.q.stale} />}
       </PageContent>
     </main>
-    {indicator}
+    {frame.pull.indicator}
     </>
   )
 }

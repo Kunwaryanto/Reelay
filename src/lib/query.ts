@@ -247,12 +247,13 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: Fr
     return () => { live = false; window.removeEventListener('online', online); clearTimeout(timer.current); depWatchers.delete(watch) }
   }, [key, depsKey, run])
 
+  const retry = useCallback(() => run(true), [run])
   return {
     data: saved?.data as T | undefined,
     loading: !saved && !error,
     error: error && !saved,
     stale: !!saved && Date.now() - saved.at > DAY,
     retrying,
-    retry: () => run(true),
+    retry,
   }
 }

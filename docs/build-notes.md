@@ -448,3 +448,10 @@ A mix of what is happening on the member's services and what is theirs. Everythi
   the same signal.
 - **Long press**: one menu for the whole app, opened by any poster or row.
 - **Leaving notes**: one function (`leavingFor`) for rows, grids, the hold menu, Watchlist and the title page.
+
+## Pull to refresh (23 Nov)
+
+- On Home, Title, Person, Watchlist, the Browse tab, categories, View all lists and Browse sections. Not on Search,
+  Settings and its pages, onboarding, Privacy, Terms or sheets.
+- A pull asks whether the nightly sync has run, then reloads what the page shows (Watchlist: the list, its titles and
+  your services; Home: a full rebuild). Offline, the page stays as it is and the Offline pill shows.

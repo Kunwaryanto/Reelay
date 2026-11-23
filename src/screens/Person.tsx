@@ -41,7 +41,7 @@ export default function Person({ id }: { id: number }) {
 
   return (
     <>
-      <main className="page noscroll" data-arrive={frame.arrive} onScroll={onDim}>
+      <main className="page noscroll" data-arrive={frame.arrive} ref={frame.pull.bind.ref} onScroll={onDim}>
         <div className="page-back"><BackButton glass={!!frame.none || q.data === null} /></div>
         <PageContent frame={frame} what="this person" skeleton="person" missing={<Gone what="person" />}>{(p) => (
           <>
@@ -75,6 +75,7 @@ export default function Person({ id }: { id: number }) {
           </>
         )}</PageContent>
       </main>
+      {frame.pull.indicator}
       <Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
         <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('new'); setKind('all'); setOnlyMine(false) }}>Reset</button></div>
         <p className="wl-sheet-label">Sort by</p>
