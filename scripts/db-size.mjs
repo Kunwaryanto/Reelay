@@ -49,4 +49,31 @@ if (first) {
   const days = Math.max(1, (Date.now() - new Date(first).getTime()) / 864e5);
   console.log(`\nWHOLE DATABASE since the first sync (${new Date(first).toISOString().slice(0, 10)}, ${days.toFixed(1)} days): ~${mb(Number(total) / days)}/day on average (includes the first big catalogue load)`);
 }
+
+// What could be smaller or faster
+const idx = (await db.query(`select s.relname t, s.indexrelname i, pg_relation_size(s.indexrelid) b, s.idx_scan scans
+  from pg_stat_user_indexes s where s.schemaname = 'public' order by pg_relation_size(s.indexrelid) desc limit 30`)).rows;
+console.log('\nINDEXES (public, biggest first; scans since stats were last reset)');
+for (const r of idx) console.log(`${r.t.padEnd(24)} ${r.i.padEnd(44)} ${mb(r.b).padStart(9)}  ${String(r.scans).padStart(9)} scans`);
+const dead = (await db.query(`select relname t, n_live_tup live, n_dead_tup dead, last_autovacuum, last_autoanalyze from pg_stat_user_tables
+  where schemaname = 'public' order by n_dead_tup desc limit 8`)).rows;
+console.log('\nDEAD ROWS (left by updates and deletes, until vacuum reuses the space)');
+for (const r of dead) console.log(`${r.t.padEnd(24)} live ${String(r.live).padStart(8)}  dead ${String(r.dead).padStart(8)}  vacuumed ${r.last_autovacuum ? new Date(r.last_autovacuum).toISOString().slice(0, 16) : 'never'}`);
+const orphans = (await db.query(`select count(*) n from public.people p where not exists (select 1 from public.credits c where c.person_id = p.id)`)).rows[0].n;
+console.log('\npeople with no credits:', orphans);
+const kept = (await db.query(`select keep_reason, count(*) n, count(*) filter (where not exists (select 1 from public.availability a where a.title_id = t.id)) not_streaming from public.titles t group by 1`)).rows;
+console.log('titles by why kept:', JSON.stringify(kept));
+const colSizes = (await db.query(`select avg(pg_column_size(overview))::int overview, avg(pg_column_size(search_text))::int search_text, avg(pg_column_size(genres))::int genres,
+  avg(pg_column_size(countries))::int countries, avg(pg_column_size(t.*))::int whole_row from public.titles t`)).rows[0];
+console.log('titles, average bytes per column:', JSON.stringify(colSizes));
+const ccols = (await db.query(`select avg(pg_column_size(c.*))::int row, avg(pg_column_size(character))::int character from public.credits c`)).rows[0];
+console.log('credits, average bytes:', JSON.stringify(ccols));
+const ext = (await db.query(`select extname from pg_extension order by 1`)).rows.map((r) => r.extname);
+console.log('extensions:', ext.join(', '));
+if (ext.includes('pg_stat_statements')) {
+  const slow = (await db.query(`select calls, round(mean_exec_time::numeric, 1) ms, round(total_exec_time::numeric / 1000, 1) total_s, left(regexp_replace(query, '\\s+', ' ', 'g'), 140) q
+    from extensions.pg_stat_statements where query not ilike '%pg_stat%' order by total_exec_time desc limit 12`).catch((e) => ({ rows: [{ q: 'not readable: ' + e.message }] }))).rows;
+  console.log('\nSLOWEST QUERIES (by total time)');
+  for (const r of slow) console.log(`${String(r.calls ?? '').padStart(7)} calls ${String(r.ms ?? '').padStart(8)} ms avg ${String(r.total_s ?? '').padStart(7)} s total  ${r.q}`);
+}
 await db.end();
