@@ -66,7 +66,7 @@ console.log('titles by why kept:', JSON.stringify(kept));
 const colSizes = (await db.query(`select avg(pg_column_size(overview))::int overview, avg(pg_column_size(search_text))::int search_text, avg(pg_column_size(genres))::int genres,
   avg(pg_column_size(countries))::int countries, avg(pg_column_size(t.*))::int whole_row from public.titles t`)).rows[0];
 console.log('titles, average bytes per column:', JSON.stringify(colSizes));
-const ccols = (await db.query(`select avg(pg_column_size(c.*))::int row, avg(pg_column_size(character))::int character from public.credits c`)).rows[0];
+const ccols = (await db.query(`select avg(pg_column_size(c.*))::int row, avg(pg_column_size(c."character"))::int as role_name from public.credits c`)).rows[0];
 console.log('credits, average bytes:', JSON.stringify(ccols));
 const ext = (await db.query(`select extname from pg_extension order by 1`)).rows.map((r) => r.extname);
 console.log('extensions:', ext.join(', '));
