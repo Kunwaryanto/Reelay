@@ -743,6 +743,9 @@ async function reconcile(runStart) {
        and not exists (select 1 from public.awards a where a.title_id = t.id)
        and t.synced_at < now() - interval '90 days'`,
   );
+  // People in no title we still keep (their titles were removed above, or their credits changed) go too.
+  // Credits are the only thing that points at a person, and a person seen again is fetched again with the title.
+  const unseen = await db.query(`delete from public.people p where not exists (select 1 from public.credits c where c.person_id = p.id)`);
   const idle = (await db.query('select count(*)::int n from public.titles t where not exists (select 1 from public.availability a where a.title_id = t.id)')).rows[0].n;
   await db.query(`delete from public.availability_events where happened_on < current_date - 90`);
   await db.query(`delete from public.tmdb_search_cache where fetched_at < now() - interval '1 day'`);
@@ -757,7 +760,7 @@ async function reconcile(runStart) {
   } catch (e) {
     log('sign-in log: could not clean up:', e.message);
   }
-  log(`events: ${added.rowCount} added, ${left.rowCount} left; ${idle} titles kept with nothing streaming, ${dropped.rowCount} old ones removed`);
+  log(`events: ${added.rowCount} added, ${left.rowCount} left; ${idle} titles kept with nothing streaming, ${dropped.rowCount} old ones removed, ${unseen.rowCount} people in no title removed`);
 }
 
 // ---------------------------------------------------------------------------
