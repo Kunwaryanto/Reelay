@@ -1,7 +1,7 @@
 // "Made for your phone": the one page any computer gets, whatever the address. The QR code opens Reelay on a phone.
 import qrcode from 'qrcode-generator'
 import { useMemo, useState } from 'react'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import { supabase } from '../lib/supabase'
 import { PosterWall, Wordmark } from '../ui'
 
@@ -32,7 +32,7 @@ function qrPath(text: string): { d: string; size: number } {
 }
 
 export default function Desktop() {
-  const wall = useQuery<string[]>('wall', loadWall, { maxAge: 24 * 60 * 60 * 1000 })
+  const wall = useQuery<string[]>('wall', loadWall, FRESH.catalogue)
   const [ready, setReady] = useState(false)
   // from an invite link, the code carries the invite itself; always this site's own address
   const invited = /^\/i\/[A-Za-z0-9_-]+$/.test(location.pathname)

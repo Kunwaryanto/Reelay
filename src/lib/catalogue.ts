@@ -262,6 +262,20 @@ export function leavingNote(date: string | null | undefined): string | null {
   return `Leaves ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
 
+/** The first day a title leaves one of its services, if it does. */
+export const leavesOn = (t: { availability: { leaves_on?: string | null }[] }) =>
+  t.availability.map((a) => a.leaves_on).filter((d): d is string => !!d).sort()[0] ?? null
+/**
+ * "Leaves in 3 days" for a title (its first leaving date), or for one date. The one way every screen writes it:
+ * nothing when the saved copy is outdated (`stale`: the date may have passed), or past `within` days.
+ */
+export function leavingFor(what: { availability: { leaves_on?: string | null }[] } | string | null | undefined, { stale = false, within }: { stale?: boolean; within?: number } = {}): string | null {
+  const date = typeof what === 'string' || what == null ? what : leavesOn(what)
+  if (stale || !date) return null
+  if (within !== undefined && (Date.parse(date + 'T00:00:00Z') - Date.now()) / 864e5 > within) return null
+  return leavingNote(date)
+}
+
 export const kindWord = (kind: Card['kind']) => (kind === 'film' ? 'Film' : 'Series')
 
 export function runtime(min: number | null): string | null {

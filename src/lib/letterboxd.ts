@@ -2,7 +2,7 @@
 // logged for a title. The letterboxd function and the nightly sync do the reading; this only asks the database.
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAuth } from './auth'
-import { setQueryData, useQuery } from './query'
+import { FRESH, changed, setQueryData, useQuery } from './query'
 import { supabase } from './supabase'
 
 export type LbAccount = { username: string; display_name: string | null; mark_watched: boolean; hide_watched: boolean; synced_at: string | null; sync_error: string | null; films: number; imported_at: string | null; imported_films: number | null }
@@ -30,7 +30,7 @@ export async function loadTitleLogs(titleId: number): Promise<LbLog[]> {
 /** The signed-in person's connection: undefined while loading, null when not connected. */
 export function useLetterboxd() {
   const uid = useAuth().session?.user.id
-  const q = useQuery<LbAccount | null>(uid ? meKey(uid) : null, loadMe, { maxAge: 5 * 60 * 1000 })
+  const q = useQuery<LbAccount | null>(uid ? meKey(uid) : null, loadMe, FRESH.mine('letterboxd'))
   return { account: q.data, loading: q.loading, error: q.error }
 }
 
@@ -39,6 +39,7 @@ export async function refreshLetterboxd(uid: string) {
   const [me, watched] = await Promise.all([loadMe(), loadWatched()])
   setQueryData(meKey(uid), me)
   setQueryData(watchedKey(uid), watched)
+  changed('letterboxd')
   return me
 }
 
@@ -64,6 +65,7 @@ export async function disconnectLetterboxd(uid: string) {
   if (error) throw new Error(error.message)
   setQueryData(meKey(uid), null)
   setQueryData(watchedKey(uid), [])
+  changed('letterboxd')
 }
 
 /** Flip one of the member's two switches: the check on posters, or leaving watched films out of Home's recommendations. */
@@ -71,6 +73,7 @@ export async function setLetterboxdSwitch(uid: string, account: LbAccount, key: 
   setQueryData(meKey(uid), { ...account, [key]: on })
   const { error } = await supabase.from('letterboxd_accounts').update({ [key]: on }).eq('user_id', uid)
   if (error) { setQueryData(meKey(uid), account); throw new Error(error.message) }
+  changed('letterboxd')
 }
 
 // ---- Watched titles: one shared set, so every poster can ask without a query of its own ----
@@ -87,8 +90,8 @@ function publish(ids: number[], show: boolean) {
 /** Keeps the shared set in step with the server. Mounted once, by the app shell. */
 export function useWatchedSync() {
   const uid = useAuth().session?.user.id
-  const me = useQuery<LbAccount | null>(uid ? meKey(uid) : null, loadMe, { maxAge: 5 * 60 * 1000 })
-  const q = useQuery<number[]>(uid && me.data ? watchedKey(uid) : null, loadWatched, { maxAge: 5 * 60 * 1000 })
+  const me = useQuery<LbAccount | null>(uid ? meKey(uid) : null, loadMe, FRESH.mine('letterboxd'))
+  const q = useQuery<number[]>(uid && me.data ? watchedKey(uid) : null, loadWatched, FRESH.logs)
   const ids = me.data ? q.data : undefined
   const show = !!me.data?.mark_watched
   useEffect(() => { publish(ids ?? [], show) }, [ids, show])
@@ -121,7 +124,7 @@ export function groupLogs(logs: LbLog[]): TitleLogs {
 
 export function useTitleLogs(titleId: number, film: boolean): TitleLogs | null {
   const uid = useAuth().session?.user.id
-  const q = useQuery<LbLog[]>(uid && film ? `lb-title:${titleId}` : null, () => loadTitleLogs(titleId), { persist: false, maxAge: 5 * 60 * 1000 })
+  const q = useQuery<LbLog[]>(uid && film ? `lb-title:${titleId}` : null, () => loadTitleLogs(titleId), { ...FRESH.logs, persist: false })
   return useMemo(() => (q.data && q.data.length ? groupLogs(q.data) : null), [q.data])
 }
 

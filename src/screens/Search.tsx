@@ -1,22 +1,22 @@
 // Search: the field sits at the bottom, above the keyboard. Before typing: a prompt and three ideas, with recents
 // in a drawer on the left. While typing: results with type pills, filter chips read from the words, and a sort sheet.
+import { useServicesQuery } from '../lib/profile'
+import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal, flushSync } from 'react-dom'
-import { useAuth } from '../lib/auth'
-import { SERVICE_NAME, kindWord, loadMyServices, type Card } from '../lib/catalogue'
+import { flushSync } from 'react-dom'
+import { SERVICE_NAME, kindWord, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
 import { useWatched } from '../lib/letterboxd'
 import { useNav, useNavActions } from '../lib/nav'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import {
   addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
 import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
-import { HoldMenu } from './Now'
+import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 
@@ -119,14 +119,15 @@ const Skeleton = () => (
   </ul>
 )
 
-function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
+function Row({ h, near, onOpen, before }: { h: Hit; near?: boolean; onOpen: () => void; before?: () => void }) {
+  const onHold = useHold(before)
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   const li = useRef<HTMLLIElement>(null)
   const close = useNearScreen(li, near)
   useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
     <li ref={li}>
-      <PageLink to={`/title/${h.id}`} className="s-row press-row" handlers={joinHandlers(hold.handlers, { onPointerDown: () => warmFacts([h.id], true) })} onClick={() => { if (!hold.fired()) onOpen() }}>
+      <PageLink to={paths.title(h.id)} className="s-row press-row" handlers={joinHandlers(hold.handlers, { onPointerDown: () => warmFacts([h.id], true) })} onClick={() => { if (!hold.fired()) onOpen() }}>
         <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
       </PageLink>
@@ -135,10 +136,8 @@ function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () =
 }
 
 export default function Search() {
-  const { session } = useAuth()
   const { push, setTab } = useNavActions()
   const { tab } = useNav()
-  const uid = session?.user.id
   const input = useRef<HTMLInputElement>(null)
   const [q, setQ] = useState('')
   const [removed, setRemoved] = useState<string[]>([])
@@ -151,15 +150,13 @@ export default function Search() {
   const [drawer, setDrawer] = useState(false)
   const [typing, setTyping] = useState(false)
   const [recents, setRecents] = useState(readRecents)
-  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
-  const hold = (card: Card, cover: HTMLElement) => { input.current?.blur(); setHeld({ card, cover }) }
   const [online, setOnline] = useState(navigator.onLine)
   const { room, pending } = useKeyboardRoom(typing)
   const [hour] = useState(() => new Date().getHours())
 
-  const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
-  const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, { maxAge: 60 * 60 * 1000 })
-  const popular = useQuery<Hit[]>('search-popular', loadPopular, { maxAge: 60 * 60 * 1000 })
+  const mineQ = useServicesQuery()
+  const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, FRESH.catalogue)
+  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
@@ -215,7 +212,7 @@ export default function Search() {
   const open = (h: Hit) => {
     remember({ t: 'title', id: h.id, text: h.title, sub: [kindWord(h.kind), h.year].filter(Boolean).join(' · '), poster_path: h.poster_path })
     input.current?.blur()
-    push(`/title/${h.id}`)
+    push(paths.title(h.id))
   }
   const run = (text: string) => { change(text); setExtra({}); setKind(guess(text, [])?.kind ?? 'all'); setDrawer(false) }
 
@@ -359,7 +356,7 @@ export default function Search() {
         <ul>
           {recents.map((r, i) => (
             <li key={r.t === 'q' ? `q:${r.text}` : `t:${r.id}`}>
-              <PageButton to={r.t === 'title' ? `/title/${r.id}` : null} className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(`/title/${r.id}`) } }}>
+              <PageButton to={r.t === 'title' ? paths.title(r.id) : null} className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(paths.title(r.id)) } }}>
                 {r.t === 'title'
                   ? <span className="s-thumb">{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                   : <span className="s-thumb-icon"><Icon name="search" size={20} /></span>}
@@ -435,7 +432,7 @@ export default function Search() {
                 <ul className="s-results s-people">
                   {shownPeople.map((p) => (
                     <li key={p.id}>
-                      <PageLink to={`/person/${p.id}`} className="s-person" onClick={() => { input.current?.blur(); push(`/person/${p.id}`) }}>
+                      <PageLink to={paths.person(p.id)} className="s-person" onClick={() => { input.current?.blur(); push(paths.person(p.id)) }}>
                         <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" loading="lazy" /> : p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>
                         <span className="wl-text"><b>{p.name}</b>{p.known_for && <small>{p.known_for}</small>}</span>
                         <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)' }} />
@@ -448,7 +445,7 @@ export default function Search() {
               {skeleton && <Skeleton />}
               {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
               <ul className="s-results" key={kind} data-waiting={waiting}>
-                {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} onHold={hold} />)}
+                {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} before={() => input.current?.blur()} />)}
               </ul>
 
               {nothing && online && (
@@ -459,7 +456,7 @@ export default function Search() {
                   {nothing.popular && (popular.data ?? []).length > 0 && (
                     <>
                       <h3>Popular right now</h3>
-                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}</ul>
+                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} before={() => input.current?.blur()} />)}</ul>
                     </>
                   )}
                 </section>
@@ -489,7 +486,6 @@ export default function Search() {
         </form>
       </div>
 
-      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
         services={picked.map(nameOf)} noun={kind === 'film' ? ['film', 'films'] : kind === 'series' ? ['series', 'series'] : ['result', 'results']}

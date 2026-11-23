@@ -8,21 +8,18 @@
 //    opens the app again; or at once if they haven't touched the page since the app came back to the front.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HomeData } from './home'
-import { readQueryData, setQueryData } from './query'
-import { supabase } from './supabase'
+import { isDirty, readQueryData, setQueryData } from './query'
+import { checkStamp, currentStamp, recentlyChecked } from './stamp'
 
-type Saved = { data: HomeData; stamp: string | null; day: string; mine: string }
+type Saved = { data: HomeData; stamp: string | null; day: string }
 const WAIT = 1500
 
 /** the member's local day: the rotating rows change at midnight */
 const today = () => new Date().toLocaleDateString('sv-SE')
 const sleep = (ms: number) => new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))
 
-async function loadStamp(): Promise<string> {
-  const { data, error } = await supabase.from('data_stamp').select('finished_at').maybeSingle()
-  if (error) throw new Error(error.message)
-  return (data?.finished_at as string | undefined) ?? ''
-}
+// the stamp, asked once for the whole app when it opens or comes back (Home asks at the same moment)
+const loadStamp = () => (recentlyChecked() ? Promise.resolve(currentStamp()) : checkStamp())
 
 export type HomeQuery = {
   data: HomeData | undefined
@@ -37,33 +34,28 @@ export type HomeQuery = {
 
 /**
  * @param key   what Home depends on that can be part of a name (version, services, the hide switch)
- * @param mine  a short signature of the member's own things that change Home's rows (the watchlist)
+ * @param changes goes up when the member's own things that shape Home change (watchlist, Letterboxd: `useChanges`)
  * @param active Home is the page in front: a waiting Home is put in place when this turns true
  */
-export function useHome(key: string | null, load: () => Promise<HomeData>, mine: string, active: boolean): HomeQuery {
+export function useHome(key: string | null, load: () => Promise<HomeData>, changes: number, active: boolean): HomeQuery {
   const [view, setView] = useState<{ data: HomeData; day: string } | undefined>()
   const [error, setError] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const pending = useRef<{ data: HomeData; day: string } | null>(null)
   const loadRef = useRef(load)
   loadRef.current = load
-  const mineRef = useRef(mine)
-  mineRef.current = mine
   const touched = useRef(false)
   const activeRef = useRef(active)
   activeRef.current = active
 
   const build = useCallback(async (stamp: string | null): Promise<{ data: HomeData; day: string }> => {
-    const mine = mineRef.current
     const data = await loadRef.current()
     const day = today()
-    builtMine.current = mine
-    if (key) setQueryData<Saved>(key, { data, stamp, day, mine })
+    // saved with what it is built from: a change to either marks it out of date (see `changed`)
+    if (key) setQueryData<Saved>(key, { data, stamp, day }, true, ['watchlist', 'letterboxd'])
     return { data, day }
   }, [key])
-  // what the Home on screen (or waiting) was built from: the member's own things then
-  const builtMine = useRef<string | null>(null)
-  const current = (s: Saved | undefined, stamp: string | null) => !!s && s.day === today() && s.stamp === stamp
+  const current = (s: Saved | undefined, stamp: string | null) => !!s && s.day === today() && s.stamp === stamp && !!key && !isDirty(key)
 
   // Opening (and a change of key: services or the switch, made in Settings while Home isn't in front)
   useEffect(() => {
@@ -71,13 +63,12 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, mine:
     let live = true
     const read = readQueryData<Saved>(key)
     const saved = read?.day ? read : undefined // an entry from before the stamp
-    builtMine.current = saved?.mine ?? null
     const show = (v: { data: HomeData; day: string }) => { if (live) { setView(v); setError(false) } }
     const keep = (v: { data: HomeData; day: string }) => { if (live) pending.current = v }
     setError(false)
     void (async () => {
       const started = Date.now()
-      const stampP = loadStamp().catch(() => null)
+      const stampP = loadStamp()
       const stamp = await Promise.race([stampP, sleep(WAIT)])
       if ((stamp === undefined || stamp === null) && saved) {
         // slow or offline: the saved Home, and a new one later if the sync has run since
@@ -98,16 +89,14 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, mine:
   }, [key, build])
 
   // The member's own things changed (a title saved): build again quietly; it is shown when Home next comes to the front
-  // (compared after a moment: while the app opens, the lists it is made from are still arriving)
+  const firstChanges = useRef(changes)
   useEffect(() => {
-    if (!key) return
+    if (!key || changes === firstChanges.current) return
+    firstChanges.current = changes
     let live = true
-    const t = setTimeout(() => {
-      if (builtMine.current === null || builtMine.current === mineRef.current) return
-      loadStamp().catch(() => null).then((stamp) => build(stamp)).then((v) => { if (live) pending.current = v }, () => {})
-    }, 800)
-    return () => { live = false; clearTimeout(t) }
-  }, [key, mine, build])
+    loadStamp().then((stamp) => build(stamp)).then((v) => { if (live) pending.current = v }, () => {})
+    return () => { live = false }
+  }, [key, changes, build])
 
   // Back on the Home tab: put a waiting Home in place before it is seen
   useEffect(() => {
@@ -126,7 +115,7 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, mine:
       touched.current = false
       const saved = readQueryData<Saved>(key)
       loadStamp().then(async (stamp) => {
-        if (current(saved, stamp)) return
+        if (stamp === null || current(saved, stamp)) return
         const v = await build(stamp)
         if (!touched.current && activeRef.current) setView(v)
         else pending.current = v
@@ -147,7 +136,7 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, mine:
     setRetrying(true)
     const started = Date.now()
     try {
-      const stamp = await loadStamp().catch(() => null)
+      const stamp = await loadStamp()
       const v = await build(stamp)
       pending.current = null
       setView(v); setError(false)

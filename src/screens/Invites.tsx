@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { cancelInvite, createInvite, inviteState, loadInvites, restoreInvite, shortDate, type Invite } from '../lib/catalogue'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import { BackButton, Icon, LoadFailed, SmallButton, useToast } from '../ui'
 
 const SITE = 'https://usereelay.vercel.app'
@@ -12,7 +12,7 @@ const linkOf = (inv: Invite) => `${SITE}/i/${inv.token}`
 export default function Invites() {
   const { session } = useAuth()
   const toast = useToast()
-  const q = useQuery<Invite[]>(session ? `invites:${session.user.id}` : null, loadInvites, { persist: false, maxAge: 0 })
+  const q = useQuery<Invite[]>(session ? `invites:${session.user.id}` : null, loadInvites, FRESH.live)
   const [busy, setBusy] = useState(false)
   // rows cancelled here, hidden until the list is fetched again
   const [gone, setGone] = useState<Record<string, true>>({})

@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 // Building blocks from the Components page of the design canvas. Styles are in src/styles/app.css.
+import { paths } from '../lib/routes'
 import { useLayoutEffect,
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
@@ -15,7 +16,8 @@ import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { useRequestFailed } from '../lib/query'
 import { notePressed } from '../lib/press'
 import { warmFacts } from '../lib/facts'
-import { warmPage } from '../lib/pages'
+import { usePageQuery, warmPage, type Page } from '../lib/pages'
+import type { Query } from '../lib/query'
 import { allDecoded, decodePicture, markDecoded, wasDecoded, type Picture } from '../lib/pictures'
 export { posterPicture, titleArt, warmPictures, type Picture } from '../lib/pictures'
 
@@ -180,11 +182,34 @@ export function Cover({ path, service, eager, sizes = '147px', watched }: { path
   )
 }
 
-export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: string | null; eager?: boolean; onHold?: (card: Card, cover: HTMLElement) => void }) {
+// ---- Holding a poster ------------------------------------------------------------------------------------------
+// A long press on any poster opens the same menu, wherever it is: one menu for the app (`HoldProvider`, set up in
+// App), which poster cards and rows reach through `useHold`. Screens don't keep a menu of their own.
+export type Held = { card: Card; cover: HTMLElement }
+const HoldCtx = createContext<((held: Held) => void) | null>(null)
+/** Open the menu for a held poster. `before` runs first (close a swiped row, put the keyboard away). */
+export function useHold(before?: () => void): (card: Card, cover: HTMLElement) => void {
+  const open = useContext(HoldCtx)
+  const pre = useRef(before)
+  pre.current = before
+  return useCallback((card: Card, cover: HTMLElement) => { pre.current?.(); open?.({ card, cover }) }, [open])
+}
+export function HoldProvider({ menu, children }: { menu: (held: Held, close: () => void) => ReactNode; children: ReactNode }) {
+  const [held, setHeld] = useState<Held | null>(null)
+  return (
+    <HoldCtx.Provider value={setHeld}>
+      {children}
+      {held && createPortal(menu(held, () => setHeld(null)), document.body)}
+    </HoldCtx.Provider>
+  )
+}
+
+export function TitleCard({ card, note, eager }: { card: Card; note?: string | null; eager?: boolean }) {
   const { push } = useNavActions()
   const service = card.availability[0]?.service_id
-  const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
-  const link = usePageLink(`/title/${card.id}`)
+  const onHold = useHold()
+  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.cover')!))
+  const link = usePageLink(paths.title(card.id))
   const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
   const watched = useWatchedMark(card.id)
   // near the screen: its long-press facts are fetched with the rest of its row
@@ -192,8 +217,8 @@ export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: st
   const near = useNearScreen(box)
   useEffect(() => { if (near) warmFacts([card.id]) }, [near, card.id])
   return (
-    <a ref={box} className="card" href={`/title/${card.id}`} {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
-      onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
+    <a ref={box} className="card" href={paths.title(card.id)} {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
+      onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(card.id)) }}>
       <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}${watched ? ', watched' : ''}`}>
         <Cover path={card.poster_path} service={service} eager={eager} watched={watched} />
       </div>
@@ -1063,6 +1088,33 @@ export function usePressWarm(run: () => void) {
   }
 }
 
+/** A page's content, read through its entry (lib/pages), and how far it has arrived. */
+export type PageFrame<T> = { q: Query<T>; phase: Arrival; arrive: '' | undefined; /** the address names nothing (an id that isn't one) */ none: boolean }
+export function usePageFrame<T>(page: Page<T> | null): PageFrame<T> {
+  const q = usePageQuery(page)
+  const phase = useArrival(page?.key ?? '-', q.data != null, () => page?.fold(q.data) ?? [])
+  return { q, phase, arrive: phase === 'in' ? '' : undefined, none: page === null }
+}
+/**
+ * What every page shows while its content comes: placeholders while it waits, Couldn't load with Try again, the page's
+ * own `missing` when there is no such thing (a title or person Reelay doesn't have), and then the content, fading in
+ * as one piece. Goes inside the page's <main data-arrive={frame.arrive}>.
+ */
+export function PageContent<T>({ frame, what, skeleton, missing, className, children }: {
+  frame: PageFrame<T>; what: string; skeleton: SkeletonKind; missing?: ReactNode; className?: string
+  children: (data: NonNullable<T>) => ReactNode
+}) {
+  const { q, phase } = frame
+  if (frame.none || (q.data === null && !q.loading)) return <>{missing ?? null}</>
+  return (
+    <>
+      {q.error && <div className="page-center"><LoadFailed what={what} retry={q.retry} retrying={q.retrying} /></div>}
+      {phase !== 'there' && !q.error && <Skeleton kind={skeleton} leaving={phase === 'in'} />}
+      {q.data != null && phase !== 'wait' && <div className={className ? `arrive ${className}` : 'arrive'}>{children(q.data as NonNullable<T>)}</div>}
+    </>
+  )
+}
+
 export type Arrival = 'wait' | 'in' | 'there'
 /**
  * How a page arrives. Its answer saved and its pictures above the fold already decoded when it opens: 'there' at
@@ -1093,7 +1145,8 @@ export function useArrival(key: string, has: boolean, pictures: () => Picture[])
 }
 
 /** Placeholders while a page waits: 'rows' a heading and posters under the top picture, 'grid' posters three across, 'title' a title page's first lines. */
-export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title' | 'person' | 'cards'; leaving?: boolean }) {
+export type SkeletonKind = 'rows' | 'grid' | 'title' | 'person' | 'cards'
+export function Skeleton({ kind, leaving }: { kind: SkeletonKind; leaving?: boolean }) {
   return (
     <div className="skel" data-kind={kind} data-leaving={leaving || undefined} aria-hidden="true">
       {kind === 'rows' && <section><i /><div><span /><span /><span /></div></section>}

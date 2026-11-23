@@ -1,20 +1,20 @@
 // Watchlist: what you've saved, grouped by whether you can watch it tonight. Empty: a wall of posters to pick from.
+import { useServicesQuery } from '../lib/profile'
+import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useAuth } from '../lib/auth'
 import {
-  SERVICE_NAME, kindWord, leavingNote, loadMyServices, loadPicks, loadWatchlistTitles,
+  SERVICE_NAME, kindWord, leavingFor, loadPicks, loadWatchlistTitles,
   type Card, type SavedTitle,
 } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, PageLink, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched } from '../ui'
+import { Button, PageLink, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched, useHold } from '../ui'
 import { useWatched } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
-import { HoldMenu } from './Now'
 
 type Kind = 'all' | 'film' | 'series'
 type Sort = 'added' | 'leaving' | 'rated' | 'az'
@@ -34,8 +34,8 @@ export default function Watchlist() {
   const saved = useSaved()
   const onDim = useDimOnScroll()
   const uid = session?.user.id
-  const q = useQuery<SavedTitle[]>(uid ? `watchlist-titles:${uid}` : null, loadWatchlistTitles)
-  const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
+  const q = useQuery<SavedTitle[]>(uid ? `watchlist-titles:${uid}` : null, loadWatchlistTitles, FRESH.mine('watchlist'))
+  const mineQ = useServicesQuery()
   const [kind, setKind] = useState<Kind>('all')
   const switched = useSwitched(kind)
   // sort and filters, set in the Sort and filter drawer
@@ -43,7 +43,6 @@ export default function Watchlist() {
   const sort = f.sort as Sort
   const [sheet, setSheet] = useState(false)
   const [open, setOpen] = useState<number | null>(null) // the row swiped open
-  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
 
   // Titles saved elsewhere in the app aren't in this list's data yet: fetch again when one is missing.
   const have = useMemo(() => new Set((q.data ?? []).map((t) => t.id)), [q.data])
@@ -94,11 +93,8 @@ export default function Watchlist() {
         : sort === 'rated' ? (b.t.rating ?? 0) - (a.t.rating ?? 0)
           : a.t.title.localeCompare(b.t.title))
 
-  const note = (r: Row) => {
-    if (q.stale || !r.leaves) return null
-    const days = (Date.parse(r.leaves + 'T00:00:00Z') - Date.now()) / 864e5
-    return days <= 30 ? leavingNote(r.leaves) : null
-  }
+  // leaving within a month counts as Leaving soon
+  const note = (r: Row) => leavingFor(r.leaves, { stale: q.stale, within: 30 })
   const leaving = list.filter((r) => r.mine && note(r))
   const on = list.filter((r) => r.mine && !note(r))
   const off = list.filter((r) => !r.mine)
@@ -111,7 +107,7 @@ export default function Watchlist() {
   const header = (
     <div className="tab-head">
       <h1>Watchlist</h1>
-      <IconButton label="Settings" onClick={() => push('/settings')}><GearIcon /></IconButton>
+      <IconButton label="Settings" onClick={() => push(paths.settings())}><GearIcon /></IconButton>
     </div>
   )
 
@@ -147,7 +143,7 @@ export default function Watchlist() {
         <section key={s.id} className="wl-section">
           <div className="wl-section-head"><h2>{s.title}</h2>
             {s.sub && (s.id === 'on'
-              ? <button type="button" className="wl-services" onClick={() => push('/settings/services')}>{s.sub}<Icon name="chevron_right" size={14} /></button>
+              ? <button type="button" className="wl-services" onClick={() => push(paths.settings('services'))}>{s.sub}<Icon name="chevron_right" size={14} /></button>
               : <span>{s.sub}</span>)}
           </div>
           <ul key={kind} className={switched ? 'pill-in' : undefined}>
@@ -155,15 +151,14 @@ export default function Watchlist() {
               <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
                 where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming in Sweden' : null}
-                onNotify={() => saved.toggleNotify(r.t.id)} onHold={(card, cover) => { setOpen(null); setHeld({ card, cover }) }}
-                onOpen={() => push(`/title/${r.t.id}`)} onRemove={() => { setOpen(null); saved.toggleSaved(r.t.id, r.t.title) }} />
+                onNotify={() => saved.toggleNotify(r.t.id)}
+                onOpen={() => push(paths.title(r.t.id))} onRemove={() => { setOpen(null); saved.toggleSaved(r.t.id, r.t.title) }} />
             ))}
           </ul>
         </section>
       ))}
       {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
-      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
         noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />
     </main>
@@ -171,14 +166,15 @@ export default function Watchlist() {
 }
 
 /** One saved title. Swipe left to reveal Remove; a tap opens the title. */
-function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify, onHold }: {
+function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
   fresh?: boolean
-  onHold: (card: Card, cover: HTMLElement) => void
   row: Row; group: string; showKind: boolean; note: string | null; where: string | null; onNotify: () => void
   open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
 }) {
   const { t, service } = row
   const swiped = useRef(false)
+  // a held row closes its swipe first
+  const onHold = useHold(() => setOpen(false))
   const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
   const year = t.year ? String(t.year) : ''
   const meta = [showKind ? kindWord(t.kind) : '', year].filter(Boolean).join(' · ') + (group !== 'off' && service ? ` · ${nameOf(service)}` : '')
@@ -251,7 +247,7 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
         <span><span>Remove</span></span>
       </button>
       <div className="wl-slide" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-       <PageLink to={`/title/${t.id}`} draggable={false} handlers={hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
+       <PageLink to={paths.title(t.id)} draggable={false} handlers={hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
         onClick={(e) => {
           e.preventDefault()
           if (swiped.current) { swiped.current = false; return }
@@ -285,7 +281,7 @@ const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
 
 /** The wall of posters to pick from. Used when the Watchlist is empty, and as a step in onboarding (`bare`: no tab bar, no hint). */
 export function PickWall({ header, onAdd, bare }: { header: React.ReactNode; onAdd: (ids: number[]) => void; bare?: boolean }) {
-  const q = useQuery<Card[]>(`picks:${PICKS}`, loadPicks, { maxAge: 60 * 60 * 1000 })
+  const q = useQuery<Card[]>(`picks:${PICKS}`, loadPicks, FRESH.catalogue)
   const [sel, setSel] = useState<number[]>([])
   const [pan, setPan] = useState({ x: 0, y: 0, settle: false })
   const d = useRef<{ x: number; y: number; px: number; py: number; moved: boolean; lx: number; ly: number; lt: number; vx: number; vy: number } | null>(null)

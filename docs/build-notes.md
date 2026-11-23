@@ -435,3 +435,16 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - Now covered too: Home's hero and spotlight, Watchlist rows, Search results, recent searches and people, a title's
   cast, and View all on Browse sections.
 - Off production, a page opened by a tap without having been preloaded logs `[pages] … opened without being preloaded`.
+
+## Shared systems (23 Nov)
+
+- **Routes** (`src/lib/routes.ts`): every address is read by `routeOf` and built by `paths`. The app shell picks the
+  screen (`renderRoute`), pages.ts what it loads (`pageOf`), and `tabBarShown` whether the tab bar shows.
+- **Page frame**: title, person, Browse category, grid and section pages wait, fail ("Couldn't load"), show "isn't
+  available" and fade in through `usePageFrame` and `PageContent`.
+- **Freshness**: catalogue content (titles, people, lists, covers, search ideas, pictures for walls) is kept until the
+  nightly sync has run, not on timers; the stamp is asked on opening and after five minutes away. The member's own
+  things (services, watchlist, Letterboxd) are reloaded when they change them (`changed`), and Home rebuilds from
+  the same signal.
+- **Long press**: one menu for the whole app, opened by any poster or row.
+- **Leaving notes**: one function (`leavingFor`) for rows, grids, the hold menu, Watchlist and the title page.

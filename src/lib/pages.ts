@@ -6,24 +6,20 @@ import { CATEGORIES, categoryOf, loadCategory, loadCovers, rowsOf, titlesIn, typ
 import { loadTitle, type Card, type TitleDetail } from './catalogue'
 import { tmdbImage } from './images'
 import { posterPicture, titleArt, warmPictures, type Picture } from './pictures'
-import { prefetch, readQueryData, useQuery, type Query } from './query'
+import { prefetch, readQueryData, useQuery, type Freshness, type Query } from './query'
 import { supabase } from './supabase'
+import { routeOf, type Route } from './routes'
 
-export type Page<T> = {
+export type Page<T> = Freshness & {
   key: string
   load: () => Promise<T>
-  maxAge: number
-  persist?: boolean
   /** what is above the fold: the page arrives once these are decoded */
   fold: (data: T | undefined) => Picture[]
 }
-const MIN = 60 * 1000
-const HALF_HOUR = 30 * MIN
-const DAY = 24 * 60 * MIN
 
 // ---- Title -------------------------------------------------------------------
 export const titlePage = (id: number): Page<TitleDetail | null> => ({
-  key: `title:${id}`, load: () => loadTitle(id), maxAge: 10 * MIN, fold: (t) => titleArt(t),
+  key: `title:${id}`, load: () => loadTitle(id), catalogue: true, fold: (t) => titleArt(t),
 })
 
 // ---- Person ------------------------------------------------------------------
@@ -51,7 +47,7 @@ export function firstRole(p: PersonData | null | undefined): Role | undefined {
   return roles.find((r) => DEPT[r] === p?.known_for) ?? [...roles].sort((a, b) => count(b) - count(a))[0]
 }
 export const personPage = (id: number): Page<PersonData | null> => ({
-  key: `person:${id}`, load: () => loadPerson(id), maxAge: HALF_HOUR,
+  key: `person:${id}`, load: () => loadPerson(id), catalogue: true,
   // the portrait and the first three rows of posters, as the page opens (its first role, newest first)
   fold: (p) => {
     const role = firstRole(p)
@@ -68,7 +64,7 @@ export const coverPictures = (covers: Record<string, string | null> | undefined,
   cats.map((c) => covers?.[c.id]).filter((p): p is string => !!p).map((p) => { const c = coverSrc(p); return { src: c.src, srcset: c.srcSet, sizes: c.sizes } })
 // The saved card pictures are per set of categories: a new category makes the app look them up again, not wait a day.
 export const coversPage: Page<Record<string, string | null>> = {
-  key: `browse-covers:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`, load: loadCovers, maxAge: DAY, fold: () => [],
+  key: `browse-covers:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`, load: loadCovers, catalogue: true, fold: () => [],
 }
 /** A category's cards in a section (View all on a Browse section): the first eight cards' pictures. */
 export const fits = (c: Category, k: 'all' | Kind) => k === 'all' || !c.only || c.only === k
@@ -79,7 +75,7 @@ export const sectionPage = (section: SectionId, kind: 'all' | Kind): Page<Record
 
 /** A category's page: its first top picture, its title logo and the first row's first posters. */
 export const categoryPage = (cat: Category, kind?: Kind): Page<CategoryPage> => ({
-  key: `browse-cat:${cat.id}:${kind ?? 'all'}`, load: () => loadCategory(cat, kind), maxAge: HALF_HOUR,
+  key: `browse-cat:${cat.id}:${kind ?? 'all'}`, load: () => loadCategory(cat, kind), catalogue: true,
   fold: (d) => [...titleArt(d?.hero[0]), { src: tmdbImage(d?.hero[0]?.logo_path, 'w500') },
     ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))],
 })
@@ -92,30 +88,27 @@ export const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undef
 export const gridPage = (cat: Category, def: RowDef, row: string, kind: Kind | undefined, sort: Sort): Page<Card[]> => ({
   key: `browse-grid:${cat.id}:${row}:${kind ?? 'all'}:${sort}`,
   load: () => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true }),
-  maxAge: HALF_HOUR, persist: false,
+  catalogue: true, persist: false,
   fold: (cards) => (cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path)),
 })
 
-// ---- Paths -------------------------------------------------------------------
-const kindOf = (s: string | undefined): Kind | undefined => (s === 'film' || s === 'series' ? s : undefined)
-
-/** The entry for a path, or null for a page that loads nothing of its own (Settings, a tab). */
-export function pageFor(path: string): Page<unknown> | null {
-  const parts = path.split('?')[0].split('/') // '', 'title', '12'
-  const [, a, b, c, d, e] = parts
-  if (a === 'title' && /^\d+$/.test(b ?? '')) return titlePage(Number(b)) as Page<unknown>
-  if (a === 'person' && /^\d+$/.test(b ?? '')) return personPage(Number(b)) as Page<unknown>
-  if (a === 'browse') {
-    const cat = c ? categoryOf(c) : undefined
-    if (b === 'all' && c) return sectionPage(c as SectionId, kindOf(d) ?? 'all') as Page<unknown>
-    if (b === 'c' && cat) return categoryPage(cat, kindOf(d)) as Page<unknown>
-    if (b === 'g' && cat && d) {
-      const def = gridDef(cat, d, kindOf(e))
-      if (def) return gridPage(cat, def, d, kindOf(e), def.sort ?? 'popular') as Page<unknown>
+// ---- Routes ------------------------------------------------------------------
+/** What a route loads, or null for one that loads nothing of its own (Settings, a tab). */
+export function pageOf(r: Route): Page<unknown> | null {
+  switch (r.name) {
+    case 'title': return titlePage(r.id) as Page<unknown>
+    case 'person': return personPage(r.id) as Page<unknown>
+    case 'browse-section': return sectionPage(r.section, r.kind ?? 'all') as Page<unknown>
+    case 'browse-category': { const cat = categoryOf(r.id); return cat ? categoryPage(cat, r.kind) as Page<unknown> : null }
+    case 'browse-grid': {
+      const cat = categoryOf(r.id)
+      const def = cat && gridDef(cat, r.row, r.kind)
+      return cat && def ? gridPage(cat, def, r.row, r.kind, def.sort ?? 'popular') as Page<unknown> : null
     }
+    default: return null
   }
-  return null
 }
+export const pageFor = (path: string) => pageOf(routeOf(path))
 
 // Paths preloaded lately: opening one that wasn't is reported on staging (a link that forgot usePageLink).
 const warmed = new Map<string, number>()
@@ -128,10 +121,10 @@ export function warmPage(path: string) {
   warmed.set(path, Date.now())
   const saved = readQueryData<unknown>(page.key)
   if (saved !== undefined) warmPictures(page.fold(saved))
-  prefetch(page.key, () => page.load().then((data) => { warmPictures(page.fold(data)); return data }), { maxAge: page.maxAge, persist: page.persist })
+  prefetch(page.key, () => page.load().then((data) => { warmPictures(page.fold(data)); return data }), page)
 }
 
 /** A page's content, read through its entry (null: nothing to load, e.g. an id that isn't a number). */
 export function usePageQuery<T>(page: Page<T> | null): Query<T> {
-  return useQuery<T>(page?.key ?? null, page ? page.load : () => Promise.reject(new Error('no page')), { maxAge: page?.maxAge, persist: page?.persist })
+  return useQuery<T>(page?.key ?? null, page ? page.load : () => Promise.reject(new Error('no page')), page ?? {})
 }

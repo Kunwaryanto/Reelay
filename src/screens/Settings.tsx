@@ -7,7 +7,8 @@ import { readExport, sendImport } from '../lib/letterboxdImport'
 import { useNavActions } from '../lib/nav'
 import { deleteAccount, exportMyData, forgetSession, loadServices, servicesLabel, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission, type Permission } from '../lib/push'
-import { clearSavedData, lastLoadError, useQuery } from '../lib/query'
+import { paths, type SettingsPage } from '../lib/routes'
+import { FRESH, clearSavedData, lastLoadError, useQuery } from '../lib/query'
 import { BUILD, checkVersion, reloadApp, useNewVersion } from '../lib/update'
 import { BackButton, Button, Icon, Sheet, SmallButton, Spinner, useToast } from '../ui'
 
@@ -89,8 +90,8 @@ export default function Settings() {
   const { push } = useNavActions()
   const { mine } = useMyServices()
   const lb = useLetterboxd()
-  const services = useQuery<Service[]>('services', loadServices, { maxAge: DAY })
-  const invites = useQuery<Invite[]>(isAdmin && session ? `invites:${session.user.id}` : null, loadInvites, { persist: false, maxAge: 0 })
+  const services = useQuery<Service[]>('services', loadServices, FRESH.catalogue)
+  const invites = useQuery<Invite[]>(isAdmin && session ? `invites:${session.user.id}` : null, loadInvites, FRESH.live)
   const waiting = (invites.data ?? []).filter((i) => inviteState(i) === 'waiting').length
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState('')
@@ -141,7 +142,7 @@ export default function Settings() {
         <section className="settings-block">
           <h2 className="block-title">Testing</h2>
           <ul className="rows">
-            <li><button type="button" onClick={() => push('/onboarding')}><span className="row-text"><b>Show onboarding again</b></span></button></li>
+            <li><button type="button" onClick={() => push(paths.onboarding)}><span className="row-text"><b>Show onboarding again</b></span></button></li>
           </ul>
         </section>
       )}
@@ -166,7 +167,7 @@ export default function Settings() {
 export function ServiceList() {
   const { mine, set } = useMyServices()
   const toast = useToast()
-  const services = useQuery<Service[]>('services', loadServices, { maxAge: DAY })
+  const services = useQuery<Service[]>('services', loadServices, FRESH.catalogue)
   const toggle = (s: Service) => set(s.id, !mine.includes(s.id)).catch(() =>
     toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' }))
   const group = (title: string, list: Service[]) => list.length > 0 && (
@@ -472,15 +473,14 @@ function Delete() {
 }
 
 /** Pages under /settings/. */
-export function settingsPage(path: string): ReactNode | null {
-  switch (path) {
-    case '/settings/services': return <Services />
-    case '/settings/letterboxd': return <Letterboxd />
-    case '/settings/region': return <Region />
-    case '/settings/version': return <Version />
-    case '/settings/credits': return <Credits />
-    case '/settings/privacy': return <Privacy />
-    case '/settings/delete': return <Delete />
-    default: return null
+export function settingsPage(page: Exclude<SettingsPage, 'invites'>): ReactNode {
+  switch (page) {
+    case 'services': return <Services />
+    case 'letterboxd': return <Letterboxd />
+    case 'region': return <Region />
+    case 'version': return <Version />
+    case 'credits': return <Credits />
+    case 'privacy': return <Privacy />
+    case 'delete': return <Delete />
   }
 }

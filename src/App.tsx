@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
-import { NavProvider, TabStack, useNav, type Tab } from './lib/nav'
+import { NavProvider, TabStack, useNav } from './lib/nav'
+import { routeOf, tabBarShown, type Route, type Tab } from './lib/routes'
 import { SavedProvider } from './lib/saved'
 import { useWatchedSync } from './lib/letterboxd'
 import { setRunway } from './lib/runway'
 import Dev from './screens/Dev'
-import Browse, { browsePage } from './screens/Browse'
+import Browse, { BrowseCategory, BrowseGrid, BrowseSection } from './screens/Browse'
 import Desktop, { isDesktop } from './screens/Desktop'
 import { useProfile } from './lib/profile'
 import { noteOpenedFrom, registerDevice } from './lib/push'
 import Invites from './screens/Invites'
-import Now from './screens/Now'
+import Now, { HoldMenu } from './screens/Now'
 import Onboarding from './screens/Onboarding'
 import Person from './screens/Person'
 import Search from './screens/Search'
@@ -20,24 +21,27 @@ import Start from './screens/Start'
 import Title from './screens/Title'
 import Watchlist from './screens/Watchlist'
 import { watchForStaleResume } from './lib/update'
+import { checkStamp } from './lib/stamp'
 import { useLaunched } from './lib/launch'
-import { OfflinePill, TabBar, ToastProvider } from './ui'
+import { HoldProvider, OfflinePill, TabBar, ToastProvider } from './ui'
 
-function renderPage(path: string) {
-  const title = path.match(/^\/title\/(\d+)$/)
-  if (title) return <Title id={Number(title[1])} />
-  const person = path.match(/^\/person\/(\d+)$/)
-  if (person) return <Person id={Number(person[1])} />
-  if (path.startsWith('/browse/')) { const page = browsePage(path); if (page) return page }
-  if (path === '/settings') return <Settings />
-  if (path.startsWith('/settings/')) { const page = settingsPage(path); if (page) return page }
-  if (path === '/privacy') return <PrivacyPolicy />
-  if (path === '/terms') return <Terms />
-  if (path === '/settings/invites') return <Invites />
-  if (path === '/onboarding') return <main className="page" />
-  if (path === '/dev') return <Dev />
-  return <Title id={NaN} />
+/** The screen for each route (see lib/routes): a new route that TypeScript doesn't see here fails to build. */
+function renderRoute(r: Route): React.ReactNode {
+  switch (r.name) {
+    case 'title': return <Title id={r.id} />
+    case 'person': return <Person id={r.id} />
+    case 'browse-section': return <BrowseSection section={r.section} kind={r.kind} />
+    case 'browse-category': return <BrowseCategory id={r.id} kind={r.kind} />
+    case 'browse-grid': return <BrowseGrid id={r.id} row={r.row} kind={r.kind} />
+    case 'settings': return r.page === 'invites' ? <Invites /> : r.page ? settingsPage(r.page) : <Settings />
+    case 'privacy': return <PrivacyPolicy />
+    case 'terms': return <Terms />
+    case 'onboarding': return <main className="page" />
+    case 'dev': return <Dev />
+    case 'tab': case 'invite': case 'unknown': return <Title id={NaN} />
+  }
 }
+const renderPage = (path: string) => renderRoute(routeOf(path))
 
 const ROOT: Record<Tab, React.ReactNode> = {
   now: <Now />, browse: <Browse />, watchlist: <Watchlist />, search: <Search />,
@@ -59,7 +63,6 @@ function FirstRun() {
   return <Onboarding onDone={() => setDone(true)} />
 }
 
-const TAB_OF: Record<string, Tab> = { '/': 'now', '/browse': 'browse', '/watchlist': 'watchlist', '/search': 'search' }
 
 function Shell() {
   const { path, push, setTab } = useNav()
@@ -75,22 +78,36 @@ function Shell() {
       const url = (e.data as { open?: string } | null)?.open
       if (!url) return
       const to = noteOpenedFrom(url)
-      if (TAB_OF[to]) setTab(TAB_OF[to]); else push(to)
+      const r = routeOf(to)
+      if (r.name === 'tab') setTab(r.tab); else push(to)
     }
     navigator.serviceWorker?.addEventListener('message', onMessage)
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
   }, [push, setTab])
+  // has the catalogue changed? (on opening, and back after five minutes away): saved catalogue content waits for this
+  useEffect(() => {
+    void checkStamp()
+    let away = 0
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') { away = Date.now(); return }
+      if (away && Date.now() - away > 5 * 60 * 1000) void checkStamp()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
   // back after an hour or more with a newer version out: open it
   useEffect(() => watchForStaleResume(), [])
   // Safari: run the app behind the status bar and address bar while signed in (Start stays as it is)
   useEffect(() => { setRunway(true); return () => setRunway(false) }, [])
   return (
     <SavedProvider>
+     <HoldProvider menu={(held, close) => <HoldMenu held={held} onClose={close} />}>
       {(Object.keys(ROOT) as Tab[]).map((tab) => <TabStack key={tab} tab={tab} root={ROOT[tab]} render={renderPage} />)}
       <FirstRun />
       <OfflinePill />
       {/* Search has its own bar at the bottom: the field and a close button */}
-      <TabBar arriving={arriving} hidden={!launched || path.startsWith('/settings') || path === '/search' || path === '/privacy' || path === '/terms' || path === '/onboarding'} />
+      <TabBar arriving={arriving} hidden={!launched || !tabBarShown(routeOf(path))} />
+     </HoldProvider>
     </SavedProvider>
   )
 }

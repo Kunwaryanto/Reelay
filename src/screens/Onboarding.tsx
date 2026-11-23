@@ -7,7 +7,7 @@ import { loadWall, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { loadServices, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission } from '../lib/push'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { Button, Icon, Sheet, useToast } from '../ui'
 
@@ -70,12 +70,12 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const { update } = useProfile()
   const saved = useSaved()
   const toast = useToast()
-  const services = useQuery<Service[]>('services', loadServices, { maxAge: 24 * 60 * 60 * 1000 })
+  const services = useQuery<Service[]>('services', loadServices, FRESH.catalogue)
   const all = services.data ?? []
   const popular = all.filter((s) => s.popular).slice(0, 9)
   const rest = all.filter((s) => !popular.includes(s))
   const wallKey = popular.length ? `wall:${popular.map((s) => s.id).join()}` : null
-  const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id)), { maxAge: 60 * 60 * 1000 })
+  const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id)), FRESH.catalogue)
   // What's switched on here: your own services, or three common ones when you have none yet (and always when this
   // is shown again from Settings, to see it as a new person does; that run saves nothing at all).
   // Saved when you continue; Skip saves nothing.

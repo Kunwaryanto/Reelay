@@ -1,15 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
-import { SERVICE_NAME, kindWord, leavingNote, loadMyServices, openLink, runtime, type Card } from '../lib/catalogue'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useServicesQuery } from '../lib/profile'
+import { paths } from '../lib/routes'
+import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
-import { useLetterboxd, useWatched } from '../lib/letterboxd'
+import { useLetterboxd } from '../lib/letterboxd'
 import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
-import { readQueryData, useQuery } from '../lib/query'
+import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
 import { PageLink, PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
@@ -96,9 +97,9 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
         {items.map((h, i) => {
           const on = i === index
           return (
-            <PageLink key={h.id} to={`/title/${h.id}`} className="hero-slide" data-on={on} aria-label={`${h.title}, ${h.reason ? `${h.reason}, ` : ''}${heroMeta(h)}`}
+            <PageLink key={h.id} to={paths.title(h.id)} className="hero-slide" data-on={on} aria-label={`${h.title}, ${h.reason ? `${h.reason}, ` : ''}${heroMeta(h)}`}
               aria-hidden={!on} tabIndex={on ? 0 : -1} style={{ '--from': `${8 * dir}%` } as CSSProperties}
-              onClick={() => { if (!swiped.current) push(`/title/${h.id}`) }}>
+              onClick={() => { if (!swiped.current) push(paths.title(h.id)) }}>
               <div className="hero-text" data-reason={h.reason ? '' : undefined}>
                 {h.logo_path ? <img className="hero-logo" src={tmdbImage(h.logo_path, 'w500')} alt="" draggable={false} /> : <span className="hero-name">{h.title}</span>}
                 {/* why it is here: new on a service, leaving, on the watchlist, trending, liked by a friend */}
@@ -199,7 +200,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   const openTitle = () => {
     if (!armed.current || leaving) return
     setLeaving(true)
-    push(`/title/${held.card.id}`)
+    push(paths.title(held.card.id))
     setTimeout(onClose, 220)
   }
 
@@ -218,7 +219,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   if (d?.imdb != null) scores.push(['IMDb', Number(d.imdb).toFixed(1)])
   if (d?.rt != null) scores.push(['RT', `${d.rt}%`])
   if (d?.lb != null) scores.push(['Letterboxd', Number(d.lb).toFixed(1)])
-  const leaves = card.availability[0] && leavingNote(card.availability[0].leaves_on)
+  const leaves = leavingFor(card)
   const leavesOn = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
   const headH = 26 + 20 + 26 + 18 + 26 + (leavesOn ? 24 : 0)
   const vw = window.innerWidth, vh = window.innerHeight
@@ -284,7 +285,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
         const art = tmdbImage(card.backdrop_path, 'w780')
         const service = card.availability[0]?.service_id
         return (
-          <PageLink key={card.id} to={`/title/${card.id}`} role="listitem" className="spot press">
+          <PageLink key={card.id} to={paths.title(card.id)} role="listitem" className="spot press">
             {art && <img src={art} alt="" loading="lazy" draggable={false} />}
             <span className="spot-text">
               {card.reason && <small>{card.reason}</small>}
@@ -304,26 +305,19 @@ export default function Now() {
   const { tab, path } = useNav()
   // Home is built for this member: their services, and whether films they have logged are left out
   const uid = useAuth().session?.user.id
-  const services = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
+  const services = useServicesQuery()
   const lb = useLetterboxd()
   const hide = lb.account?.hide_watched ?? true
   const svc = services.data
-  // the watchlist shapes several rows: a short signature of it tells Home when to build again
-  // (and so do the films logged on Letterboxd: an import changes them)
-  const { ids: savedIds, loaded: savedLoaded } = useSaved()
-  const watched = useWatched()
-  const mine = useMemo(() => {
-    let h = 5381
-    for (const id of [...savedIds].sort((a, b) => a - b)) h = ((h * 33) ^ id) >>> 0
-    return `${savedIds.length}:${h}:${watched.size}`
-  }, [savedIds, watched])
+  // the watchlist and Letterboxd shape several rows: Home builds again (quietly) when they change
+  const changes = useChanges(['watchlist', 'letterboxd'])
+  const savedLoaded = useSaved().loaded
   const settled = svc !== undefined && lb.account !== undefined && savedLoaded
   const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), mine, tab === 'now' && path === '/')
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), changes, tab === 'now' && path === '/')
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const fresh = useNewVersion()
-  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its
   // title logo, and the first posters of the first row. Ready within 300 ms: Now just rises.
   // Later than that: the wordmark rises on black and always finishes (900 ms) before fading into the page; still
@@ -390,7 +384,7 @@ export default function Now() {
     <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
       <h1 className="sr-only">Home</h1>
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
-      {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
+      {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push(paths.settings())}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
       {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
@@ -410,8 +404,8 @@ export default function Now() {
               <SectionHeader title={row.title} viewAll={row.more === 'tab:watchlist' ? () => setTab('watchlist') : row.more} />
               <PosterRow>
                 {row.items.map((card) => {
-                  const note = card.note ?? (row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined)
-                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} onHold={(c, cover) => setHeld({ card: c, cover })} />
+                  const note = card.note ?? (row.notes === 'leaving' ? leavingFor(card, { stale: q.stale }) : undefined)
+                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} />
                 })}
               </PosterRow>
             </section>
@@ -419,7 +413,6 @@ export default function Now() {
           {q.data.rows.length === 0 && q.data.hero.length === 0 && <p className="empty">Nothing to show yet. The catalogue is still filling up.</p>}
         </div>
       )}
-      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
     </main>
     {indicator}
     </>

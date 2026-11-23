@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { SERVICE_NAME, kindWord, leavingNote, openLink, runtime, type TitleDetail } from '../lib/catalogue'
+import { paths } from '../lib/routes'
+import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { firstName, fullDate, looseDate, times, useTitleLogs, type TitleLogs } from '../lib/letterboxd'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
-import { useQuery } from '../lib/query'
-import { titlePage, usePageQuery } from '../lib/pages'
+import { FRESH, useQuery } from '../lib/query'
+import { titlePage } from '../lib/pages'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
-import { PageLink, PinnedArt, BackButton, GlassButton, Icon, Laurel, LoadFailed, PosterRow, PosterWall, SectionHeader, Sheet, Skeleton, TitleCard, useArrival, usePullToRefresh } from '../ui'
+import { PageContent, PageLink, usePageFrame, PinnedArt, BackButton, GlassButton, Icon, Laurel, PosterRow, PosterWall, SectionHeader, Sheet, TitleCard, usePullToRefresh } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -97,7 +98,7 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
   // opened from a notification: where it streams lights up once, then settles
-  const [flash] = useState(() => takeOpenedFrom(`/title/${t.id}`))
+  const [flash] = useState(() => takeOpenedFrom(paths.title(t.id)))
   const [open, setOpen] = useState(false)
   const [bump, setBump] = useState<'on' | 'off' | null>(null)
   const film = t.kind === 'film'
@@ -164,7 +165,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
       <section className="block" data-flash={flash ? '' : undefined}>
         <ul className="rows">
           {t.availability.map((a) => {
-            const note = stale ? null : leavingNote(a.leaves_on)
+            const note = leavingFor(a.leaves_on, { stale })
             return (
               <li key={a.service_id}><a href={openLink(a, t.title)} target="_blank" rel="noreferrer">
                 <span className="row-text"><b>{a.service?.name ?? SERVICE_NAME[a.service_id] ?? a.service_id}</b><small>{a.type === 'free' || a.service?.kind === 'free' ? 'Free' : 'Subscription'}</small></span>
@@ -198,7 +199,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
           <div className="row-scroll noscroll"><ul className="cast">
             {cast.map((c) => (
               <li key={c.person.id}>
-                <PageLink to={`/person/${c.person.id}`}>
+                <PageLink to={paths.person(c.person.id)}>
                   <span className="avatar" aria-hidden="true">
                     {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
                   </span>
@@ -237,7 +238,7 @@ async function loadWall(): Promise<string[]> {
 /** For a link or old notification pointing at a title or person Reelay no longer has. */
 export function Gone({ what }: { what: 'title' | 'person' }) {
   const { setTab } = useNavActions()
-  const wall = useQuery<string[]>('wall', loadWall, { maxAge: 24 * 60 * 60 * 1000 })
+  const wall = useQuery<string[]>('wall', loadWall, FRESH.catalogue)
   return (
     <div className="gone-page">
       <div className="gone-wall" aria-hidden="true"><PosterWall posters={wall.data ?? []} dim={0.62} /></div>
@@ -250,21 +251,16 @@ export function Gone({ what }: { what: 'title' | 'person' }) {
 }
 
 export default function Title({ id }: { id: number }) {
-  const page = Number.isFinite(id) ? titlePage(id) : null
-  const q = usePageQuery(page)
+  const frame = usePageFrame(Number.isFinite(id) ? titlePage(id) : null)
   const onScroll = useDimOnScroll()
-  const { bind, indicator } = usePullToRefresh(q.retry)
-  const missing = !Number.isFinite(id) || (q.data === null && !q.loading)
-  // above the fold: the top picture
-  const phase = useArrival(String(id), !!q.data, () => page?.fold(q.data) ?? [])
+  const { bind, indicator } = usePullToRefresh(frame.q.retry)
   return (
     <>
-    <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
+    <main className="page noscroll" data-arrive={frame.arrive} ref={bind.ref} onScroll={onScroll}>
       <div className="page-back"><BackButton glass /></div>
-      {q.error && <div className="page-center"><LoadFailed what="this title" retry={q.retry} retrying={q.retrying} /></div>}
-      {missing && <Gone what="title" />}
-      {phase !== 'there' && !q.error && !missing && <Skeleton kind="title" leaving={phase === 'in'} />}
-      {q.data && phase !== 'wait' && <div className="arrive"><Body t={q.data} stale={q.stale} /></div>}
+      <PageContent frame={frame} what="this title" skeleton="title" missing={<Gone what="title" />}>
+        {(t) => <Body t={t} stale={frame.q.stale} />}
+      </PageContent>
     </main>
     {indicator}
     </>

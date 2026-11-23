@@ -2,6 +2,7 @@
 // and what is theirs (their watchlist, films like the ones they rated highly, what friends liked), then a few
 // rows that change from day to day. Every row is limited to the member's services when they have picked some.
 // A title is shown once: a row skips what a row above it already has. A row needs three titles to be shown.
+import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
 import { SERVICE_NAME, type Card } from './catalogue'
 import { supabase } from './supabase'
@@ -266,10 +267,10 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const row = (id: string, title: string, items: HomeCard[], from: { length: number }, to?: string, extra: Partial<HomeRow> = {}): HomeRow =>
     ({ id, title, items, ...(to && from.length > items.length ? { more: to } : {}), ...extra })
   const rows: HomeRow[] = [
-    row('new', mine ? 'New on your services' : 'New this month', rowNew, arrived, '/browse/g/new-arrivals/list'),
-    row('trending-films', 'Trending films', rowTrendF, trendF, '/browse/g/trending/list/film'),
-    row('trending-series', 'Trending series', rowTrendS, trendS, '/browse/g/trending/list/series'),
-    row('leaving', 'Leaving soon', rowLeaving, leaving, '/browse/g/leaving-soon/list', { notes: 'leaving' }),
+    row('new', mine ? 'New on your services' : 'New this month', rowNew, arrived, paths.grid('new-arrivals', 'list')),
+    row('trending-films', 'Trending films', rowTrendF, trendF, paths.grid('trending', 'list', 'film')),
+    row('trending-series', 'Trending series', rowTrendS, trendS, paths.grid('trending', 'list', 'series')),
+    row('leaving', 'Leaving soon', rowLeaving, leaving, paths.grid('leaving-soon', 'list'), { notes: 'leaving' }),
     row('just-in', 'Now streaming from your watchlist', rowJustIn, rowJustIn, 'tab:watchlist'),
     row('watchlist', 'From your watchlist', savedCards, saved, 'tab:watchlist'),
     row('tonight', 'Short enough for tonight', rowTonight, rowTonight),
@@ -277,12 +278,12 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     row('saved', savedRecs.length ? `Because you saved ${savedRecs[0].source}` : '', rowSaved, savedRecs),
     ...(spots.length >= 2 ? [{ id: 'spotlight', title: 'Picked for you', items: [], spotlight: spots }] : []),
     row('friends', 'Friends liked', rowFriends, friends),
-    row('people', people.length ? `More with ${people[0].name}` : '', rowPeople, people, people.length ? `/person/${people[0].person_id}` : undefined),
-    row('new-films', 'New films', rowNewF, newF, '/browse/g/new-releases/list/film'),
-    row('new-series', 'New series', rowNewS, newS, '/browse/g/new-releases/list/series'),
-    themed === 'awards' ? row('awards', 'Award winners', rowTheme, theme, '/browse/g/award-winners/list') : row('gems', 'Hidden gems', rowTheme, theme, '/browse/g/hidden-gems/list'),
-    ...rowGenres.map(({ c, items }, i) => row(c.id, c.label, items, mix(genreLists[i] as Card[][]), `/browse/c/${c.id}`)),
-    row(decade.id, decade.label, rowDecade, mix(decadeLists), `/browse/c/${decade.id}`),
+    row('people', people.length ? `More with ${people[0].name}` : '', rowPeople, people, people.length ? paths.person(people[0].person_id) : undefined),
+    row('new-films', 'New films', rowNewF, newF, paths.grid('new-releases', 'list', 'film')),
+    row('new-series', 'New series', rowNewS, newS, paths.grid('new-releases', 'list', 'series')),
+    themed === 'awards' ? row('awards', 'Award winners', rowTheme, theme, paths.grid('award-winners', 'list')) : row('gems', 'Hidden gems', rowTheme, theme, paths.grid('hidden-gems', 'list')),
+    ...rowGenres.map(({ c, items }, i) => row(c.id, c.label, items, mix(genreLists[i] as Card[][]), paths.category(c.id))),
+    row(decade.id, decade.label, rowDecade, mix(decadeLists), paths.category(decade.id)),
   ]
   return { hero, rows: rows.filter((r) => r.spotlight || r.items.length >= 3).map((r) => ({ ...r, items: back(r.items) })) }
 }

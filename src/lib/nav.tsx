@@ -7,15 +7,15 @@ import {
   type ReactNode, type UIEvent,
 } from 'react'
 import { pageFor, warmPage, wasWarmed } from './pages'
+import { TAB_PATH, routeOf, type Tab } from './routes'
 
 const REPORT_COLD = import.meta.env.DEV || location.hostname !== 'usereelay.vercel.app'
 // a tap opened it (not the keyboard or code): its link had the press to preload on
 let pressedAt = 0
 if (REPORT_COLD) window.addEventListener('pointerdown', () => { pressedAt = Date.now() }, { capture: true, passive: true })
 
-export type Tab = 'now' | 'browse' | 'watchlist' | 'search'
+export type { Tab } from './routes'
 export const TABS: Tab[] = ['now', 'browse', 'watchlist', 'search']
-const TAB_PATH: Record<Tab, string> = { now: '/', browse: '/browse', watchlist: '/watchlist', search: '/search' }
 
 type Page = { key: string; path: string }
 type State = { tab: Tab; stacks: Record<Tab, Page[]> }
@@ -59,9 +59,9 @@ const page = (path: string): Page => ({ key: `p${++seq}`, path })
 function initialState(): State {
   const stacks: State['stacks'] = { now: [], browse: [], watchlist: [], search: [] }
   const path = location.pathname
-  const tab = TABS.find((t) => TAB_PATH[t] === path)
-  if (tab) return { tab, stacks }
-  if (path !== '/' && !path.startsWith('/i/')) stacks.now = [page(path)]
+  const r = routeOf(path)
+  if (r.name === 'tab') return { tab: r.tab, stacks }
+  if (r.name !== 'invite') stacks.now = [page(path)]
   return { tab: 'now', stacks }
 }
 

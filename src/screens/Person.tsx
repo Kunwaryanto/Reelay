@@ -1,13 +1,11 @@
 // A person: what they've made that Reelay has, as a grid, by role.
 import { useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { SERVICE_NAME, type Card } from '../lib/catalogue'
+import { SERVICE_NAME } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll } from '../lib/nav'
 import { servicesLabel, useMyServices } from '../lib/profile'
-import { DEPT, firstRole, personPage, rolesOf, usePageQuery, type PersonCredit as Credit, type Role } from '../lib/pages'
-import { BackButton, Button, Icon, LoadFailed, PillCount, Sheet, useSwitched, TitleCard, Skeleton, useArrival } from '../ui'
-import { HoldMenu } from './Now'
+import { DEPT, firstRole, personPage, rolesOf, type PersonCredit as Credit, type Role } from '../lib/pages'
+import { BackButton, PageContent, usePageFrame, Button, Icon, PillCount, Sheet, useSwitched, TitleCard } from '../ui'
 import { Gone } from './Title'
 
 const JOB: Record<Role, string> = { cast: 'Actor', director: 'Director', creator: 'Creator', writer: 'Writer' }
@@ -21,8 +19,8 @@ const KINDS: [Kind, string][] = [['all', 'Films and series'], ['film', 'Films'],
 
 export default function Person({ id }: { id: number }) {
   const onDim = useDimOnScroll()
-  const page = Number.isFinite(id) ? personPage(id) : null
-  const q = usePageQuery(page)
+  const frame = usePageFrame(Number.isFinite(id) ? personPage(id) : null)
+  const q = frame.q
   const { mine } = useMyServices()
   const [dept, setDept] = useState<Role | null>(null)
   const switched = useSwitched(dept ?? '')
@@ -30,7 +28,6 @@ export default function Person({ id }: { id: number }) {
   const [kind, setKind] = useState<Kind>('all')
   const [onlyMine, setOnlyMine] = useState(false)
   const [sheet, setSheet] = useState(false)
-  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
   const p = q.data
 
   const pass = (c: Credit) => (kind === 'all' || c.title.kind === kind) && (!onlyMine || c.title.availability.some((a) => mine.includes(a.service_id)))
@@ -40,19 +37,14 @@ export default function Person({ id }: { id: number }) {
     sort === 'az' ? a.title.title.localeCompare(b.title.title)
       : sort === 'new' ? (b.title.year ?? 0) - (a.title.year ?? 0) : (a.title.year ?? 9999) - (b.title.year ?? 9999))
 
-  // above the fold: the portrait and the first three rows of posters, then all of it fades in as one piece
-  const phase = useArrival(`person:${id}`, !!q.data, () => page?.fold(q.data) ?? [])
-  if (q.error) return <main className="page"><div className="page-back"><BackButton /></div><div className="page-center"><LoadFailed what="this person" retry={q.retry} retrying={q.retrying} /></div></main>
-  if (q.data === null) return <main className="page"><div className="page-back"><BackButton glass /></div><Gone what="person" /></main>
   const total = new Set((p?.credits ?? []).map((c) => c.title.id)).size
 
   return (
     <>
-      <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim}>
-        <div className="page-back"><BackButton /></div>
-        {phase !== 'there' && <Skeleton kind="person" leaving={phase === 'in'} />}
-        {p && phase !== 'wait' && (
-          <div className="arrive">
+      <main className="page noscroll" data-arrive={frame.arrive} onScroll={onDim}>
+        <div className="page-back"><BackButton glass={!!frame.none || q.data === null} /></div>
+        <PageContent frame={frame} what="this person" skeleton="person" missing={<Gone what="person" />}>{(p) => (
+          <>
             <header className="person-head">
               <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" /> : initials(p.name)}</span>
               <div>
@@ -76,14 +68,13 @@ export default function Person({ id }: { id: number }) {
             <ul key={dept ?? ''} className={switched ? 'grid pill-in' : 'grid'} data-typed="true" aria-label="Filmography">
               {list.map((c) => {
                 const job = c.role === 'cast' ? c.character : JOB[c.role]
-                return <li key={c.title.id}><TitleCard card={c.title} note={[c.title.year, job].filter(Boolean).join(' · ')} onHold={(card, cover) => setHeld({ card, cover })} /></li>
+                return <li key={c.title.id}><TitleCard card={c.title} note={[c.title.year, job].filter(Boolean).join(' · ')} /></li>
               })}
             </ul>
             {list.length === 0 && <p className="br-none">Nothing here matches your filters.</p>}
-          </div>
-        )}
+          </>
+        )}</PageContent>
       </main>
-      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       <Sheet open={sheet} onClose={() => setSheet(false)} label="Sort and filter">
         <div className="wl-sheet-head"><h2>Sort and filter</h2><button type="button" onClick={() => { setSort('new'); setKind('all'); setOnlyMine(false) }}>Reset</button></div>
         <p className="wl-sheet-label">Sort by</p>
