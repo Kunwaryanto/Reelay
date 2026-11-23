@@ -14,6 +14,7 @@ import Title from './screens/Title'
 import Watchlist from './screens/Watchlist'
 import { watchForStaleResume } from './lib/update'
 import { checkStamp } from './lib/stamp'
+import { endBoot } from './lib/boot'
 import { useLaunched } from './lib/launch'
 import { HoldProvider, OfflinePill, TabBar, ToastProvider } from './ui'
 
@@ -75,6 +76,7 @@ function Shell() {
   const { path, push, setTab } = useNav()
   // at launch the tab bar waits for Now, then arrives last: its fade eases in and the icons rise
   const launched = useLaunched()
+  useEffect(() => { if (launched) endBoot() }, [launched])
   useWatchedSync()
   const [arriving, setArriving] = useState(!launched)
   useEffect(() => { if (!launched) return; const t = setTimeout(() => setArriving(false), 1100); return () => clearTimeout(t) }, [launched])
@@ -125,6 +127,8 @@ function Gate() {
   const [entering, setEntering] = useState(false)
   const sawSignedOut = useRef(false)
   useEffect(() => { if (session === null) setEntering(false) }, [session])
+  // signed out (Start has its own entrance), or the address isn't Home: the start-up wordmark leaves at once
+  useEffect(() => { if (session === null) endBoot() }, [session])
   if (session === undefined) return null // black, like the launch screen
   if (session === null) sawSignedOut.current = true
   if (location.pathname === '/dev' && !session) return <NavProvider><div className="pane solo"><Later><Dev /></Later></div></NavProvider>
@@ -139,6 +143,6 @@ function Gate() {
 
 export default function App() {
   // a computer gets one page, whatever the address
-  if (isDesktop()) return <Later><Desktop /></Later>
+  if (isDesktop()) { endBoot(); return <Later><Desktop /></Later> }
   return <AuthProvider><ToastProvider><Gate /></ToastProvider></AuthProvider>
 }

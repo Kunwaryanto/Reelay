@@ -464,3 +464,10 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - The Supabase client is built from `@supabase/auth-js` and `@supabase/postgrest-js` only (`src/lib/supabase.ts`),
   set up as supabase-js sets up its own (same session key, so nobody is signed out). Realtime, Storage and Functions
   aren't used; Edge Functions are called with fetch. The Edge Functions themselves still use supabase-js.
+
+## Wordmark from the first frame (23 Nov)
+
+- The launch wordmark is in index.html (`#boot`, the brand file put in at build time by a small Vite plugin), so it
+  rises from the first frame instead of after a black wait while the code loads. Home takes it over as its own
+  wordmark phase (timed from when the page started: shown once its rise is done, 1.2 s, and Home is ready), and
+  it fades as Home arrives. Signed out, on a computer or opened at another address, it fades at once.

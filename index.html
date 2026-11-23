@@ -8,7 +8,19 @@
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
     <!-- Black from the very first frame: until the stylesheet arrives, a dark-scheme page is Safari's dark grey, which showed as a one-frame flash when opening the app -->
-    <style>html, body, #root { background: #000; }</style>
+    <style>html, body, #root { background: #000; }
+      #boot { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; pointer-events: none; color: #fff; }
+      #boot > span { display: block; height: 32px; }
+      #boot svg { display: block; height: 100%; width: auto; overflow: visible; }
+      #boot .l { transform: translateY(2200px); opacity: 0; animation: boot-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards, boot-fade 600ms cubic-bezier(0.4, 0, 0.6, 1) forwards; }
+      #boot .l:nth-child(1) { animation-delay: 150ms; } #boot .l:nth-child(2) { animation-delay: 205ms; } #boot .l:nth-child(3) { animation-delay: 260ms; }
+      #boot .l:nth-child(4) { animation-delay: 315ms; } #boot .l:nth-child(5) { animation-delay: 370ms; } #boot .l:nth-child(6) { animation-delay: 425ms; }
+      #boot[data-leaving] { animation: boot-out 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+      @keyframes boot-rise { to { transform: none; } }
+      @keyframes boot-fade { to { opacity: 1; } }
+      @keyframes boot-out { to { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { #boot .l { animation: none; transform: none; opacity: 1; } #boot[data-leaving] { animation-duration: 1ms; } }
+    </style>
 
     <!-- Home Screen web app (see docs/build-notes.md, Home Screen setup) -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -25,6 +37,9 @@
   </head>
   <body style="background:#000">
     <div id="root"></div>
+    <!-- The wordmark rises from the first frame, before the app's code has loaded (src/lib/boot.ts takes it over).
+         Signed out, on a computer or opened at another address it fades at once. Same rise as .wordmark[data-rise]. -->
+    <div id="boot" aria-hidden="true"><span><!-- boot-wordmark --></span></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

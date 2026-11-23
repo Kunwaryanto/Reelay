@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useServicesQuery } from '../lib/profile'
+import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { paths } from '../lib/routes'
 import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
@@ -353,17 +354,21 @@ export default function Now() {
   const ready = !!q.data && artFor === foldKey && icons
   const readyRef = useRef(ready)
   readyRef.current = ready
-  const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>('wait')
+  // The start-up wordmark (index.html) is usually already rising when this mounts: Home takes it over as its own
+  // 'mark' phase, timed from when the page started rather than from now, and the page arrives under it.
+  const [booted] = useState(bootShowing)
+  const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>(booted ? 'mark' : 'wait')
   useEffect(() => {
-    const a = setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
-    const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), 1200)
-    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), 3300)
+    const since = booted ? performance.now() : 0
+    const a = booted ? undefined : setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
+    const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), Math.max(0, (booted ? BOOT_RISE_MS : 1200) - since))
+    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), Math.max(0, 3300 - since))
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
-  }, [])
+  }, [booted])
   const show = ready && phase !== 'mark'
   // The wordmark stays mounted while it fades out over the arriving page (mounting it again would replay its rise).
   const [mark, setMark] = useState<'none' | 'on' | 'gone'>('none')
-  if (phase === 'mark' && mark === 'none') setMark('on')
+  if (phase === 'mark' && mark === 'none' && !booted) setMark('on')
   useEffect(() => {
     if (!show || mark !== 'on') return
     const t = setTimeout(() => setMark('gone'), 700)
