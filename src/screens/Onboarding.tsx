@@ -36,6 +36,8 @@ const LOGOS: Record<string, [file: string, ratio: number]> = {
   netflix: ['netflix.png', 3.7], 'hbo-max': ['hbo-max.png', 1.39], 'svt-play': ['svt-play.png', 2.4], viaplay: ['viaplay.png', 4.13],
   'disney-plus': ['disney-plus.png', 1.84], 'prime-video': ['prime-video.png', 3.24], 'apple-tv': ['apple-tv.png', 1.98],
   skyshowtime: ['skyshowtime.png', 4.28], 'tv4-play': ['tv4-play.svg', 1],
+  britbox: ['britbox.png', 4.12], curiosity: ['curiosity.png', 2.92], 'pluto-tv': ['pluto-tv.png', 1.34], mubi: ['mubi.png', 1],
+  crunchyroll: ['crunchyroll.png', 1], 'triart-play': ['triart-play.png', 3.42],
 }
 function Logo({ service }: { service: Service }) {
   const logo = LOGOS[service.id]

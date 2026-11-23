@@ -195,7 +195,8 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
 
       {cast.length > 0 && (
         <section className="block">
-          <h2 className="block-title">Cast</h2>
+          {/* an animated film's cast are all voices: said once, in the heading, not under every name */}
+          <h2 className="block-title">{cast.every((c) => isVoice(c.character)) ? 'Voice cast' : 'Cast'}</h2>
           <div className="row-scroll noscroll"><ul className="cast">
             {cast.map((c) => (
               <li key={c.person.id}>
@@ -204,7 +205,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
                     {c.person.profile_path ? <img src={tmdbImage(c.person.profile_path, 'w185')} alt="" loading="lazy" /> : initials(c.person.name)}
                   </span>
                   <span className="cast-name">{c.person.name}</span>
-                  {c.character && <span className="cast-role">{c.character}</span>}
+                  {c.character && <span className="cast-role">{part(c.character)}</span>}
                 </PageLink>
               </li>
             ))}
@@ -249,6 +250,11 @@ export function Gone({ what }: { what: 'title' | 'person' }) {
     </div>
   )
 }
+
+// "Porco Rosso (voice)": the part without the note (the heading says Voice cast when every part is a voice)
+const VOICE = /\s*\((?:voice|uncredited voice|voice, uncredited)\)\s*$/i
+const isVoice = (character: string | null | undefined) => !!character && VOICE.test(character)
+const part = (character: string) => character.replace(VOICE, '').trim()
 
 export default function Title({ id }: { id: number }) {
   const frame = usePageFrame(Number.isFinite(id) ? titlePage(id) : null)
