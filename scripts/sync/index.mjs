@@ -925,6 +925,47 @@ async function syncRecs() {
   log(`recommendations: ${saved} of ${todo.length} liked or saved titles asked about`);
 }
 
+// "More like this" (title_similar): for each streaming title, up to 15 alike titles in order. TMDB's
+// recommendations that stream here come first (same kind), then our own scoring (public.similar_backup) fills the
+// rest. Due by tier (refresh_every 'similar': new every 2 weeks, recent 2 months, older 6 months); titles without a
+// list first. SIMILAR_PER_RUN caps a night (the first nights build the whole catalogue).
+const SIMILAR_PER_RUN = Number(process.env.SIMILAR_PER_RUN || 6000);
+async function syncSimilar() {
+  const idOf = new Map((await db.query(
+    'select t.id, t.kind, t.tmdb_id from public.titles t where exists (select 1 from public.availability a where a.title_id = t.id)',
+  )).rows.map((r) => [`${r.kind}:${r.tmdb_id}`, Number(r.id)]));
+  const todo = (await db.query(
+    `select t.id, t.kind, t.tmdb_id from public.titles t
+       join public.title_refresh r on r.title_id = t.id
+       left join public.title_similar s on s.title_id = t.id
+     where exists (select 1 from public.availability a where a.title_id = t.id)
+       and (s.title_id is null or s.tmdb_at is null or s.tmdb_at < now() - public.refresh_every(r.tier, 'similar') + interval '3 hours')
+     order by (s.title_id is null) desc, case r.tier when 'new' then 0 when 'recent' then 1 else 2 end, t.popularity desc
+     limit $1`, [SIMILAR_PER_RUN])).rows;
+  if (!todo.length) return log('similar: nothing due');
+  let built = 0, fromTmdb = 0, failed = 0;
+  await pool(todo, 8, async ({ id, kind, tmdb_id }) => {
+    const r = await tmdb(`/${kind === 'film' ? 'movie' : 'tv'}/${tmdb_id}/recommendations`, { page: 1 }).catch(() => undefined);
+    if (r === undefined) { failed++; return; } // asked again next night
+    const ids = [];
+    for (const x of r?.results ?? []) {
+      const other = idOf.get(`${kind}:${x.id}`);
+      if (other && other !== Number(id) && !ids.includes(other)) ids.push(other);
+      if (ids.length === 15) break;
+    }
+    fromTmdb += ids.length;
+    if (ids.length < 15) {
+      const more = (await db.query('select id from public.similar_backup($1, 30)', [id])).rows.map((x) => Number(x.id));
+      for (const other of more) { if (!ids.includes(other)) ids.push(other); if (ids.length === 15) break; }
+    }
+    await db.query(
+      `insert into public.title_similar (title_id, ids, tmdb_at, built_at) values ($1, $2, now(), now())
+       on conflict (title_id) do update set ids = excluded.ids, tmdb_at = now(), built_at = now()`, [id, ids]);
+    if (++built % 1000 === 0) log(`  similar: ${built} built`);
+  });
+  log(`similar: ${built} of ${todo.length} built (${(fromTmdb / Math.max(1, built)).toFixed(1)} from TMDB on average)${failed ? `, ${failed} TMDB failures` : ''}`);
+}
+
 // The app keeps what it has loaded until this moves (see data_stamp): set at the end of every run that changes data.
 async function stamp() {
   await db.query('update public.data_stamp set finished_at = now() where id = 1').catch((e) => log('stamp failed:', e.message));
@@ -937,6 +978,7 @@ async function main() {
     await syncTrending();
     await syncLetterboxd();
     await syncRecs();
+    await syncSimilar();
     await stamp();
     await db.end();
     return;
@@ -1014,6 +1056,7 @@ async function main() {
   if (FULL) await syncLetterboxd().catch((e) => log('Letterboxd failed:', e.message));
   if (FULL) await syncTrending().catch((e) => log('trending failed:', e.message));
   if (FULL) await syncRecs().catch((e) => log('recommendations failed:', e.message));
+  if (FULL) await syncSimilar().catch((e) => log('similar failed:', e.message));
   if (FULL) await reconcile(runStart);
   // the Start screen's poster wall, made once a night (public.start_wall reads it)
   if (FULL) await db.query('select public.refresh_start_wall()').catch((e) => log('start wall failed:', e.message));
