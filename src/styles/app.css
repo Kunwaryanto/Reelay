@@ -1130,7 +1130,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .lb-faces i { width: 28px; height: 28px; border-radius: 50%; background: #2A2A2A; color: var(--text-secondary); font: 600 12px/28px var(--font); font-style: normal; text-align: center; box-shadow: 0 0 0 2px var(--bg); position: relative; }
 .lb-faces i + i { margin-left: -8px; }
 .lb-faces i:nth-child(1) { z-index: 3; } .lb-faces i:nth-child(2) { z-index: 2; }
-.lb-faces i[data-me] { background: #fff; color: #000; }
+/* your own picture is the same grey as friends' (23 Nov: white was louder than anything else on the page) */
 /* the sheet with every log */
 .lb-head { display: flex; align-items: center; justify-content: space-between; margin-top: -12px; min-height: var(--hit); }
 .lb-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
