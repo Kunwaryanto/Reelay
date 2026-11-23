@@ -7,7 +7,7 @@ await db.connect();
 const mb = (b) => (Number(b) / 1048576).toFixed(2) + ' MB';
 for (const t of ['titles', 'credits', 'people']) {
   await db.query(`analyze public.${t}`);
-  const s = (await db.query(`select count(*)::int n, pg_relation_size('public.${t}') heap, pg_total_relation_size('public.${t}') total,
+  const s = (await db.query(`select pg_relation_size('public.${t}') heap, pg_total_relation_size('public.${t}') total,
     pg_indexes_size('public.${t}') idx, coalesce(pg_relation_size(reltoastrelid), 0) toast from pg_class where oid = 'public.${t}'::regclass`)).rows[0];
   const n = (await db.query(`select count(*)::int n from public.${t}`)).rows[0].n;
   console.log(`\n=== ${t}: ${n} rows, total ${mb(s.total)} (data ${mb(s.heap)}, toast ${mb(s.toast)}, indexes ${mb(s.idx)}), ${(Number(s.heap) / Math.max(1, n)).toFixed(0)} bytes/row on disk`);
