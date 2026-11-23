@@ -471,3 +471,10 @@ A mix of what is happening on the member's services and what is theirs. Everythi
   rises from the first frame instead of after a black wait while the code loads. Home takes it over as its own
   wordmark phase (timed from when the page started: shown once its rise is done, 1.2 s, and Home is ready), and
   it fades as Home arrives. Signed out, on a computer or opened at another address, it fades at once.
+
+## Pictures kept on the phone (23 Nov)
+
+- The service worker keeps TMDB pictures (posters, backdrops, logos, portraits) after first use, the newest 900
+  (`reelay-pictures-v1`), fetched with CORS so they count at their real size. iOS often empties a Home Screen
+  app's ordinary cache between opens; with these, a cold start shows its pictures without downloading them again.
+- The privacy policy says the app keeps copies of what it shows on the device (updated 23 Nov).

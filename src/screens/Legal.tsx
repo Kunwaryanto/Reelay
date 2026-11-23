@@ -34,13 +34,13 @@ const HANDLERS: [string, string][] = [
 
 export function PrivacyPolicy({ signedIn = true }: { signedIn?: boolean }) {
   return (
-    <Doc title="Privacy policy" signedIn={signedIn} updated="22 Nov 2026">
+    <Doc title="Privacy policy" signedIn={signedIn} updated="23 Nov 2026">
       <p>Reelay keeps only what it needs to show you where films and series stream and to remind you about them. No ads, no tracking, no analytics, and your data is never sold.</p>
       <h2>Who is responsible</h2>
       <p>Reelay is a free personal project run by Lukas K. in Sweden, who is the controller of your personal data. Questions or requests: {mail}.</p>
       <h2>What Reelay keeps, and why</h2>
       <ul>{KEEPS.map(([what, why, basis]) => <li key={what}><b>{what}</b><span>{why}</span><small>{basis}</small></li>)}</ul>
-      <p>Sign-in codes stop working after one hour. Reelay stores your sign-in session on your device so you stay signed in; it uses no other cookies or similar storage.</p>
+      <p>Sign-in codes stop working after one hour. Reelay stores your sign-in session on your device so you stay signed in, and copies of what it shows (lists, titles and pictures) so pages open quickly and work without a connection. It uses no cookies, and nothing on your device is used for tracking.</p>
       <h2>Who handles the data for Reelay</h2>
       <ul>{HANDLERS.map(([who, what]) => <li key={who}><b>{who}</b><span>{what}</span></li>)}</ul>
       <p>They process data only on Reelay’s behalf, under data processing agreements. Posters and photos load straight from TMDB (run by TiVo Platform Technologies in the USA), which sees your IP address when an image loads. Reelay sends TMDB nothing else about you.</p>
