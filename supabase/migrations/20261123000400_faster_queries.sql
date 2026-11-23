@@ -3,6 +3,8 @@
 -- 1. Search finds its candidates through the trigram index (the old "like ... or word_similarity(...) > 0.4" could
 --    use no index, so every search read all titles). The two ways of matching are asked separately, each through
 --    the index, and only the matches are scored and joined.
+-- (pg_trgm is loaded first, so its threshold setting is known and the function may set it)
+select extensions.similarity('a', 'a');
 create or replace function public.search_titles(q text, max_results int default 30)
 returns table (
   id bigint, kind text, title text, year int, poster_path text,
