@@ -455,3 +455,12 @@ A mix of what is happening on the member's services and what is theirs. Everythi
   Settings and its pages, onboarding, Privacy, Terms or sheets.
 - A pull asks whether the nightly sync has run, then reloads what the page shows (Watchlist: the list, its titles and
   your services; Home: a full rebuild). Offline, the page stays as it is and the Offline pill shows.
+
+## Start-up size (23 Nov)
+
+- The app's start-up code went from 208 kB to 151 kB (gzip). Search, Settings, Person, Onboarding, Start, the legal
+  pages, Invites, Dev and the desktop page load as their own files (`lazy` in App), asked for as soon as the app has
+  started or when first opened.
+- The Supabase client is built from `@supabase/auth-js` and `@supabase/postgrest-js` only (`src/lib/supabase.ts`),
+  set up as supabase-js sets up its own (same session key, so nobody is signed out). Realtime, Storage and Functions
+  aren't used; Edge Functions are called with fetch. The Edge Functions themselves still use supabase-js.

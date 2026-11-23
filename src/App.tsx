@@ -1,29 +1,36 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { NavProvider, TabStack, useNav } from './lib/nav'
 import { routeOf, tabBarShown, type Route, type Tab } from './lib/routes'
 import { SavedProvider } from './lib/saved'
 import { useWatchedSync } from './lib/letterboxd'
 import { setRunway } from './lib/runway'
-import Dev from './screens/Dev'
 import Browse, { BrowseCategory, BrowseGrid, BrowseSection } from './screens/Browse'
-import Desktop, { isDesktop } from './screens/Desktop'
+import { isDesktop } from './lib/desktop'
 import { useProfile } from './lib/profile'
 import { noteOpenedFrom, registerDevice } from './lib/push'
-import Invites from './screens/Invites'
 import Now, { HoldMenu } from './screens/Now'
-import Onboarding from './screens/Onboarding'
-import Person from './screens/Person'
-import Search from './screens/Search'
-import { PrivacyPolicy, Terms } from './screens/Legal'
-import Settings, { settingsPage } from './screens/Settings'
-import Start from './screens/Start'
 import Title from './screens/Title'
 import Watchlist from './screens/Watchlist'
 import { watchForStaleResume } from './lib/update'
 import { checkStamp } from './lib/stamp'
 import { useLaunched } from './lib/launch'
 import { HoldProvider, OfflinePill, TabBar, ToastProvider } from './ui'
+
+// Screens Home doesn't need at launch load as their own files, so the app starts sooner: they are asked for as soon
+// as the app has started (the tabs mount at once) or when first opened, and show nothing until they are in.
+const Dev = lazy(() => import('./screens/Dev'))
+const Desktop = lazy(() => import('./screens/Desktop'))
+const Invites = lazy(() => import('./screens/Invites'))
+const Onboarding = lazy(() => import('./screens/Onboarding'))
+const Person = lazy(() => import('./screens/Person'))
+const Search = lazy(() => import('./screens/Search'))
+const Start = lazy(() => import('./screens/Start'))
+const Settings = lazy(() => import('./screens/Settings'))
+const SettingsPage = lazy(() => import('./screens/Settings').then((m) => ({ default: ({ page }: { page: Parameters<typeof m.settingsPage>[0] }) => m.settingsPage(page) })))
+const PrivacyPolicy = lazy(() => import('./screens/Legal').then((m) => ({ default: m.PrivacyPolicy })))
+const Terms = lazy(() => import('./screens/Legal').then((m) => ({ default: m.Terms })))
+const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>
 
 /** The screen for each route (see lib/routes): a new route that TypeScript doesn't see here fails to build. */
 function renderRoute(r: Route): React.ReactNode {
@@ -33,7 +40,7 @@ function renderRoute(r: Route): React.ReactNode {
     case 'browse-section': return <BrowseSection section={r.section} kind={r.kind} />
     case 'browse-category': return <BrowseCategory id={r.id} kind={r.kind} />
     case 'browse-grid': return <BrowseGrid id={r.id} row={r.row} kind={r.kind} />
-    case 'settings': return r.page === 'invites' ? <Invites /> : r.page ? settingsPage(r.page) : <Settings />
+    case 'settings': return r.page === 'invites' ? <Invites /> : r.page ? <SettingsPage page={r.page} /> : <Settings />
     case 'privacy': return <PrivacyPolicy />
     case 'terms': return <Terms />
     case 'onboarding': return <main className="page" />
@@ -41,10 +48,10 @@ function renderRoute(r: Route): React.ReactNode {
     case 'tab': case 'invite': case 'unknown': return <Title id={NaN} />
   }
 }
-const renderPage = (path: string) => renderRoute(routeOf(path))
+const renderPage = (path: string) => <Later>{renderRoute(routeOf(path))}</Later>
 
 const ROOT: Record<Tab, React.ReactNode> = {
-  now: <Now />, browse: <Browse />, watchlist: <Watchlist />, search: <Search />,
+  now: <Now />, browse: <Browse />, watchlist: <Watchlist />, search: <Later><Search /></Later>,
 }
 
 /** First run, once the profile says onboarding hasn't happened. Also at /onboarding (Settings › Testing). */
@@ -58,9 +65,9 @@ function FirstRun() {
   const [replay, setReplay] = useState(false)
   // admins only (Settings › Testing): for anyone else the address shows nothing
   if (path === '/onboarding' && isAdmin && !replay) setReplay(true)
-  if (replay) return <Onboarding replay onLeave={home} onDone={() => setReplay(false)} />
+  if (replay) return <Later><Onboarding replay onLeave={home} onDone={() => setReplay(false)} /></Later>
   if (!profile || profile.onboarded_at || done) return null
-  return <Onboarding onDone={() => setDone(true)} />
+  return <Later><Onboarding onDone={() => setDone(true)} /></Later>
 }
 
 
@@ -120,18 +127,18 @@ function Gate() {
   useEffect(() => { if (session === null) setEntering(false) }, [session])
   if (session === undefined) return null // black, like the launch screen
   if (session === null) sawSignedOut.current = true
-  if (location.pathname === '/dev' && !session) return <NavProvider><div className="pane solo"><Dev /></div></NavProvider>
+  if (location.pathname === '/dev' && !session) return <NavProvider><div className="pane solo"><Later><Dev /></Later></div></NavProvider>
   // the policy and terms can be read without an account
-  if (!session && location.pathname === '/privacy') return <div className="pane solo"><PrivacyPolicy signedIn={false} /></div>
-  if (!session && location.pathname === '/terms') return <div className="pane solo"><Terms signedIn={false} /></div>
+  if (!session && location.pathname === '/privacy') return <div className="pane solo"><Later><PrivacyPolicy signedIn={false} /></Later></div>
+  if (!session && location.pathname === '/terms') return <div className="pane solo"><Later><Terms signedIn={false} /></Later></div>
   if (!session || (sawSignedOut.current && !entering)) {
-    return <Start onSignedIn={() => { history.replaceState(null, '', '/'); setEntering(true) }} />
+    return <Later><Start onSignedIn={() => { history.replaceState(null, '', '/'); setEntering(true) }} /></Later>
   }
   return <NavProvider><Shell /></NavProvider>
 }
 
 export default function App() {
   // a computer gets one page, whatever the address
-  if (isDesktop()) return <Desktop />
+  if (isDesktop()) return <Later><Desktop /></Later>
   return <AuthProvider><ToastProvider><Gate /></ToastProvider></AuthProvider>
 }
