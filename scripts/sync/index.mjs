@@ -748,6 +748,8 @@ async function reconcile(runStart) {
   await db.query(`delete from public.tmdb_search_cache where fetched_at < now() - interval '1 day'`);
   // Invites: joined or expired ones leave the Sent list after 30 days.
   await db.query(`delete from public.invites where coalesce(joined_at, expires_at) < now() - interval '30 days'`);
+  // error reports from the app are kept 30 days (privacy policy)
+  await db.query(`delete from public.client_errors where at < now() - interval '30 days'`).catch(() => {});
   // Sign-in log (who signed in when, with IP address): 30 days, as the privacy policy says.
   try {
     const a = await db.query(`delete from auth.audit_log_entries where created_at < now() - interval '30 days'`);

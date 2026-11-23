@@ -50,6 +50,12 @@ if (first) {
   console.log(`\nWHOLE DATABASE since the first sync (${new Date(first).toISOString().slice(0, 10)}, ${days.toFixed(1)} days): ~${mb(Number(total) / days)}/day on average (includes the first big catalogue load)`);
 }
 
+// What went wrong on members' phones lately (client_errors)
+const appErrors = (await db.query(`select kind, message, count(*) n, max(at) last, array_agg(distinct path) paths, max(build) build
+  from public.client_errors where at > now() - interval '14 days' group by kind, message order by max(at) desc limit 20`).catch(() => ({ rows: [] }))).rows;
+console.log(`\nAPP ERRORS, last 14 days (${appErrors.length})`);
+for (const r of appErrors) console.log(`${new Date(r.last).toISOString().slice(0, 16)}  ${String(r.n).padStart(3)}x  ${r.kind.padEnd(7)} ${r.build}  ${r.paths.join(',').slice(0, 40).padEnd(40)}  ${r.message.slice(0, 120)}`);
+
 // What could be smaller or faster
 const idx = (await db.query(`select s.relname t, s.indexrelname i, pg_relation_size(s.indexrelid) b, s.idx_scan scans
   from pg_stat_user_indexes s where s.schemaname = 'public' order by pg_relation_size(s.indexrelid) desc limit 30`)).rows;
