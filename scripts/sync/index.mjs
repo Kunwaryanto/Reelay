@@ -3,11 +3,12 @@
 // 1. Services: map TMDB's Swedish providers to ours.
 // 2. Where things stream: TMDB discover lists every title on each of our services in Sweden
 //    (data from JustWatch). That list alone decides availability, every night.
-// 3. Title details (text, images, cast and crew): fetched for titles we don't have yet, plus the
-//    SYNC_REFRESH_PER_RUN titles whose details are oldest, so the whole catalogue is refreshed about
-//    every two weeks. SYNC_REFRESH=all refetches every title (slow: hours).
+// 3. Title details (text, images, cast and crew): fetched for titles we don't have yet, plus up to
+//    SYNC_REFRESH_PER_RUN known titles that are due by their tier (public.title_refresh: new titles weekly,
+//    recent ones every two weeks, older ones every 60 days). SYNC_REFRESH=all refetches every title (slow: hours).
 // 4. Leaving dates: Streaming Availability's list of titles leaving in Sweden.
-// 5. Scores: IMDb's daily ratings file, then MDBList for Rotten Tomatoes and Letterboxd.
+// 5. Scores: IMDb's daily ratings file (every title, every night), then MDBList for Rotten Tomatoes and Letterboxd
+//    and OMDb for missing Tomatometers, each due by the title's tier (new every 2-3 days, recent weekly, older 90 days).
 // 6. Letterboxd: the diary feeds of connected members (full runs only), then for Home: TMDB's weekly trending
 //    lists and its recommendations for films members rated 4 or higher.
 // 7. Full runs only: offers that are gone lose their rows, "added"/"left" events are written by
@@ -246,6 +247,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     d.backdrop_path ?? null,
     logo?.file_path ?? null,
     d.popularity ?? 0,
+    /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? first : null,
   ];
   // Top 10 cast, plus directors (films) or creators (series).
   const cast = film
@@ -265,11 +267,11 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     const t = await c.query(
       `insert into public.titles (tmdb_id, kind, imdb_id, wikidata_id, title, original_title, year, end_year,
          runtime_min, seasons, last_season_on, overview, genres, original_language, countries, age_rating,
-         poster_path, backdrop_path, logo_path, popularity, keep_reason, synced_at)
+         poster_path, backdrop_path, logo_path, popularity, released_on, keep_reason, synced_at)
        values ($1,$2,
          case when exists (select 1 from public.titles o where o.imdb_id = $3 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $3 end,
          case when exists (select 1 from public.titles o where o.wikidata_id = $4 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $4 end,
-         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'streaming', now())
+         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'streaming', now())
        on conflict (tmdb_id, kind) do update set
          imdb_id = excluded.imdb_id, wikidata_id = excluded.wikidata_id, title = excluded.title,
          original_title = excluded.original_title, year = excluded.year, end_year = excluded.end_year,
@@ -277,7 +279,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
          overview = excluded.overview, genres = excluded.genres, original_language = excluded.original_language,
          countries = excluded.countries, age_rating = excluded.age_rating, poster_path = excluded.poster_path,
          backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path, popularity = excluded.popularity,
-         synced_at = now()
+         released_on = excluded.released_on, synced_at = now()
        returning id`,
       row,
     );
@@ -569,15 +571,16 @@ const saveMdbScores = async (t, ratings, missing = false) => {
 async function syncMdblist() {
   const key = env('MDBLIST_API_KEY', false);
   if (!key) return log('MDBList: no key, skipped');
-  // The queue: never fetched first, then anything older than 30 days; within each, titles on someone's Watchlist,
-  // then the most popular.
+  // The queue: never fetched first, then what is due by its tier (public.title_refresh: new every 2 days, recent
+  // weekly, older every 90 days; 3 hours' slack, as the sync doesn't start at the same minute every night); within
+  // each, new before recent before older, titles on someone's Watchlist, then the most popular.
   const todo = (await db.query(
-    `select t.id, t.kind, t.imdb_id from public.titles t left join public.scores s on s.title_id = t.id
-     where t.imdb_id is not null and (s.mdblist_synced_at is null or s.mdblist_synced_at < now() - interval '30 days'
-       -- once: titles fetched before the audience score was stored (22 Nov, 16:50 UTC) are fetched again for it
-       -- (not the ones dated back as unknown to MDBList: those wait their week)
-       or (s.rt_audience is null and s.mdblist_synced_at between '2026-11-15' and '2026-11-22T16:50:00Z'))
+    `select t.id, t.kind, t.imdb_id from public.titles t join public.title_refresh r on r.title_id = t.id
+       left join public.scores s on s.title_id = t.id
+     where t.imdb_id is not null
+       and (s.mdblist_synced_at is null or s.mdblist_synced_at < now() - public.refresh_every(r.tier, 'scores') + interval '3 hours')
      order by (s.mdblist_synced_at is null) desc,
+              case r.tier when 'new' then 0 when 'recent' then 1 else 2 end,
               exists (select 1 from public.watchlist w where w.title_id = t.id) desc,
               t.popularity desc nulls last`,
   )).rows;
@@ -688,9 +691,13 @@ async function syncMdblist() {
 async function reconcile(runStart) {
   // The very first full run sees everything for the first time: that isn't "new".
   const firstRun = (await db.query('select not exists (select 1 from public.availability where since < current_date) as first')).rows[0].first;
+  // Nor is a service's own first night (one added to Reelay later): its whole catalogue was already there.
+  await db.query(`update public.services s set first_synced_on = current_date
+    where s.first_synced_on is null and exists (select 1 from public.availability a where a.service_id = s.id)`);
   const added = firstRun ? { rowCount: 0 } : await db.query(
     `insert into public.availability_events (title_id, service_id, event)
-     select title_id, service_id, 'added' from public.availability where since = current_date
+     select a.title_id, a.service_id, 'added' from public.availability a join public.services s on s.id = a.service_id
+     where a.since = current_date and s.first_synced_on < current_date
      on conflict do nothing`,
   );
   const left = await db.query(
@@ -740,11 +747,14 @@ async function syncOmdb() {
   if (!key) return log('OMDb: no key, skipped');
   const todo = (await db.query(
     `select t.id, t.imdb_id, t.title from public.titles t join public.scores s on s.title_id = t.id
+       join public.title_refresh r on r.title_id = t.id
      where t.kind = 'film' and t.imdb_id is not null and s.rt_critics is null
-       and (s.omdb_synced_at is null or s.omdb_synced_at < now() - interval '30 days')
+       -- due by tier: a new film's reviews arrive within days (every 3 days), recent every 2 weeks, older every 90
+       and (s.omdb_synced_at is null or s.omdb_synced_at < now() - public.refresh_every(r.tier, 'omdb') + interval '3 hours')
      -- Watchlist first; then films with enough IMDb votes that Rotten Tomatoes has likely reviewed them (most asks
      -- that came back empty were small films); the rest are still asked, last. Each group by popularity.
-     order by exists (select 1 from public.watchlist w where w.title_id = t.id) desc,
+     order by case r.tier when 'new' then 0 when 'recent' then 1 else 2 end,
+              exists (select 1 from public.watchlist w where w.title_id = t.id) desc,
               (coalesce(s.imdb_votes, 0) >= $2) desc, t.popularity desc nulls last
      limit $1`, [OMDB_PER_RUN, OMDB_MIN_VOTES])).rows;
   if (!todo.length) return log('OMDb: nothing to fetch');
@@ -945,8 +955,19 @@ async function main() {
 
   const fresh = keys.filter((k) => !have.has(k));
   const known = keys.filter((k) => have.has(k));
-  const stale = REFRESH_ALL ? known : [...known].sort((a, b) => have.get(a) - have.get(b)).slice(0, FULL ? REFRESH_PER_RUN : LIMIT);
-  log(`titles: ${keys.length} streaming, ${fresh.length} new, ${stale.length} of ${known.length} known ones refreshed`);
+  // known titles due by their tier (new first); and, once, this and last year's titles that don't have their
+  // release day yet, so their tier is right from the next night
+  const knownSet = new Set(known);
+  const due = REFRESH_ALL ? known : (await db.query(
+    `select case t.kind when 'film' then 'movie' else 'tv' end || ':' || t.tmdb_id as key
+     from public.titles t join public.title_refresh r on r.title_id = t.id
+     where t.synced_at < now() - public.refresh_every(r.tier, 'details') + interval '3 hours'
+        or (t.released_on is null and t.year >= extract(year from current_date) - 1 and t.synced_at < '2026-11-24')
+     order by (t.released_on is null and t.year >= extract(year from current_date) - 1) desc,
+              case r.tier when 'new' then 0 when 'recent' then 1 else 2 end, t.synced_at`,
+  )).rows.map((r) => r.key).filter((k) => knownSet.has(k));
+  const stale = due.slice(0, FULL ? REFRESH_PER_RUN : LIMIT);
+  log(`titles: ${keys.length} streaming, ${fresh.length} new, ${stale.length} of ${due.length} due (of ${known.length} known) refreshed`);
   let done = 0;
   const todo = [...fresh, ...stale];
   const results = await pool(todo.map((key) => ({ key })), 8, async ({ key }) => {

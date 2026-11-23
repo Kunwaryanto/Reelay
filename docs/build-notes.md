@@ -483,3 +483,14 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 
 - 1.5 s after Home has arrived, the title pages of the first hero slide and the first Picked for you card load
   (data and top picture), so they open at once.
+
+## Refresh by tier (23 Nov)
+
+- `public.title_refresh` gives each title a tier. New: released, a new season, or arrived on a service in the last
+  30 days. Recent: the same within a year, or watchlisted, trending, or leaving within 30 days. Older: the rest.
+- Due by tier (`public.refresh_every`): Rotten Tomatoes and Letterboxd (MDBList) every 2 days / weekly / 90 days;
+  the OMDb Tomatometer backup every 3 days / 2 weeks / 90 days while missing; details 7 / 14 / 60 days. IMDb stays
+  nightly for everything (one free file). About 840 score lookups and 750 detail refreshes a night (was 2,500).
+- `titles.released_on` holds the release or first air day from TMDB.
+- "Added" events: a service's first full night (`services.first_synced_on`) isn't arrivals; the 30,000 events of
+  20 Nov and the 6,900 of 23 Nov (the five new services) were removed, so New on streaming shows real arrivals.
