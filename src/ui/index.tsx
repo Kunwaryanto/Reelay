@@ -481,8 +481,9 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
       if (!start) return
       const dx = e.touches[0].clientX - start.x, dy = e.touches[0].clientY - start.y
       if (!pulling) {
-        // the first movement decides: straight down from the top is a pull, anything else is the page's own
-        if (!(dy > 0 && dy > Math.abs(dx) && el.scrollTop <= 0)) { start = null; return }
+        // the first movement decides: clearly down from the top is a pull, anything else is the page's own (a swipe
+        // back often starts a little downward, and must stay a swipe)
+        if (!(dy > 0 && dy > Math.abs(dx) * 1.5 && el.scrollTop <= 0)) { start = null; return }
         pulling = true
         el.dataset.ptr = ''
         hold = (ind.current ? parseFloat(getComputedStyle(ind.current).top) || 0 : 0) + HOLD

@@ -61,6 +61,8 @@ button { font: inherit; color: inherit; }
 .stack[data-active='false'] { visibility: hidden; pointer-events: none; }
 .pane { position: relative; flex: none; width: 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; view-timeline: --pane inline; }
 .pane-in { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+/* A swipe back that is heading out: the strip can only come to rest on the page under it (nav.tsx). */
+.pane[data-going] { scroll-snap-align: none; }
 .pane.solo { overflow: hidden; background: var(--bg); }
 .pane.solo { position: absolute; inset: 0; }
 /* The page you leave slides at a third of the speed and dims, like iOS. */

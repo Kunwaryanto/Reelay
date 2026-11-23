@@ -531,3 +531,12 @@ Measured on the database before and after:
   with each other). TMDB is asked again by tier: new every 2 weeks, recent 2 months, older 6 months.
 - Until a title's list is built, `similar_titles` scores it live, so every title page has the better row at once.
 - On the title page the member's services come first and films they've logged on Letterboxd are left out.
+
+## Swipe back (24 Nov)
+
+- A swipe back decides like iOS: if the finger is moving right when it lets go (or the page is past halfway), the
+  page closes, even after a short swipe; turning back left, or holding still short of halfway, keeps it. While it's
+  heading out the top page loses its snap point (`data-going`), so Safari already knows where to stop.
+- The page is dropped only once the strip is exactly at rest, so the end of the movement can't restart.
+- Pull to refresh takes a touch only when it starts clearly downward (1.5 times more down than sideways), so a
+  swipe back that begins a little downward stays a swipe.
