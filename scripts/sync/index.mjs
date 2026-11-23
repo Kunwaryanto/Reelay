@@ -256,7 +256,14 @@ async function saveTitleOnce({ kind, d }, dropIds) {
   const crew = film
     ? (d.credits?.crew ?? []).filter((c) => c.job === 'Director').map((c, i) => ({ p: c, role: 'director', order: i }))
     : (d.created_by ?? []).map((c, i) => ({ p: { ...c, known_for_department: 'Writing' }, role: 'creator', order: i }));
-  const credits = [...cast, ...crew].filter((cr) => cr.p?.id && cr.p.name);
+  // one row per person and role (someone listed twice in the cast keeps their first part)
+  const credits = [];
+  const seen = new Set();
+  for (const cr of [...cast, ...crew]) {
+    if (!cr.p?.id || !cr.p.name || seen.has(`${cr.p.id}:${cr.role}`)) continue;
+    seen.add(`${cr.p.id}:${cr.role}`);
+    credits.push(cr);
+  }
   // People in one statement, always in the same order, so two saves rarely wait on each other.
   const people = [...new Map(credits.map((cr) => [cr.p.id, cr.p])).values()].sort((a, b) => a.id - b.id);
 
@@ -285,22 +292,37 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     );
     const titleId = t.rows[0].id;
 
-    await c.query('delete from public.credits where title_id = $1', [titleId]);
+    // Cast and crew: only what changed is written (a refresh used to delete and re-add every row, which left
+    // tens of thousands of dead rows a night). People are updated only when their name, picture or department
+    // changed; credits that are gone are deleted, new ones added, changed ones updated.
+    let personIds = [];
     if (people.length) {
-      const saved = await c.query(
+      await c.query(
         `insert into public.people (tmdb_id, name, profile_path, known_for)
          select * from unnest($1::int[], $2::text[], $3::text[], $4::text[])
          on conflict (tmdb_id) do update set name = excluded.name, profile_path = excluded.profile_path,
            known_for = coalesce(excluded.known_for, public.people.known_for)
-         returning id, tmdb_id`,
+         where (public.people.name, public.people.profile_path, public.people.known_for)
+           is distinct from (excluded.name, excluded.profile_path, coalesce(excluded.known_for, public.people.known_for))`,
         [people.map((p) => p.id), people.map((p) => p.name), people.map((p) => p.profile_path ?? null), people.map((p) => p.known_for_department ?? null)],
       );
-      const idOf = new Map(saved.rows.map((r) => [r.tmdb_id, r.id]));
+      const ids = await c.query('select id, tmdb_id from public.people where tmdb_id = any($1::int[])', [people.map((p) => p.id)]);
+      const idOf = new Map(ids.rows.map((r) => [r.tmdb_id, r.id]));
+      personIds = credits.map((cr) => idOf.get(cr.p.id));
+    }
+    const roles = credits.map((cr) => cr.role);
+    await c.query(
+      `delete from public.credits c where c.title_id = $1
+         and (c.person_id, c.role) not in (select * from unnest($2::bigint[], $3::text[]))`,
+      [titleId, personIds, roles],
+    );
+    if (credits.length) {
       await c.query(
         `insert into public.credits (title_id, person_id, role, character, sort_order)
          select $1, * from unnest($2::bigint[], $3::text[], $4::text[], $5::int[])
-         on conflict do nothing`,
-        [titleId, credits.map((cr) => idOf.get(cr.p.id)), credits.map((cr) => cr.role), credits.map((cr) => cr.character || null), credits.map((cr) => cr.order ?? 0)],
+         on conflict (title_id, person_id, role) do update set character = excluded.character, sort_order = excluded.sort_order
+         where (public.credits.character, public.credits.sort_order) is distinct from (excluded.character, excluded.sort_order)`,
+        [titleId, personIds, roles, credits.map((cr) => cr.character || null), credits.map((cr) => cr.order ?? 0)],
       );
     }
     await c.query('commit');
@@ -991,6 +1013,8 @@ async function main() {
   if (FULL) await syncTrending().catch((e) => log('trending failed:', e.message));
   if (FULL) await syncRecs().catch((e) => log('recommendations failed:', e.message));
   if (FULL) await reconcile(runStart);
+  // the Start screen's poster wall, made once a night (public.start_wall reads it)
+  if (FULL) await db.query('select public.refresh_start_wall()').catch((e) => log('start wall failed:', e.message));
   // after reconcile, so today's arrivals are in the events; a failure here never fails the sync
   if (FULL) await sendNotifications(db, log).catch((e) => log('notifications failed:', e.message));
   const counts = (await db.query(
