@@ -414,3 +414,14 @@ A mix of what is happening on the member's services and what is theirs. Everythi
 - Order: New · Trending films · Trending series · Leaving soon · Now streaming from your watchlist · From your watchlist · Short enough for tonight · Because you liked · Because you saved · Picked for you · Friends liked · More with · New films · New series · theme · two genres · decade.
 - The nightly sync now asks TMDB for recommendations for every saved title as well as every film rated 4+ (`title_recs` keeps films and series apart).
 
+
+## When Home loads (23 Nov)
+
+- Home is kept on the phone with the sync it was built from. On opening, the app asks only for `data_stamp` (one row, set
+  at the end of every sync run). Same sync and same day: the saved Home is shown and nothing else is loaded.
+- New sync or a new day: Home is built while the launch screen is up, for up to 1.5 s, so today's Home is the first thing
+  seen. Slower than that, or offline: the saved Home is shown and stays put; the new one is put in place the next time
+  the Home tab comes to the front, on pull to refresh, or at the next open.
+- Saving or removing a title, or a Letterboxd import, builds Home again quietly; it goes in when the member is back on
+  the Home tab, never under their eyes. Back to the app after 5 minutes away: checked again, and put in at once only if
+  the page hasn't been touched.

@@ -1,15 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { SERVICE_NAME, kindWord, leavingNote, loadMyServices, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
-import { useLetterboxd } from '../lib/letterboxd'
+import { useHome } from '../lib/homeData'
+import { useSaved } from '../lib/saved'
+import { useLetterboxd, useWatched } from '../lib/letterboxd'
 import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
-import { useDimOnScroll, useNavActions } from '../lib/nav'
+import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { warmBrowse } from './Browse'
 import { readQueryData, useQuery } from '../lib/query'
-import { useSaved } from '../lib/saved'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
 import { PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
@@ -302,15 +303,25 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
 
 export default function Now() {
   const { push, setTab } = useNavActions()
+  const { tab, path } = useNav()
   // Home is built for this member: their services, and whether films they have logged are left out
   const uid = useAuth().session?.user.id
   const services = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
   const lb = useLetterboxd()
   const hide = lb.account?.hide_watched ?? true
   const svc = services.data
-  const settled = svc !== undefined && lb.account !== undefined
-  const q = useQuery(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), { maxAge: 10 * 60 * 1000 })
+  // the watchlist shapes several rows: a short signature of it tells Home when to build again
+  // (and so do the films logged on Letterboxd: an import changes them)
+  const { ids: savedIds, loaded: savedLoaded } = useSaved()
+  const watched = useWatched()
+  const mine = useMemo(() => {
+    let h = 5381
+    for (const id of [...savedIds].sort((a, b) => a - b)) h = ((h * 33) ^ id) >>> 0
+    return `${savedIds.length}:${h}:${watched.size}`
+  }, [savedIds, watched])
+  const settled = svc !== undefined && lb.account !== undefined && savedLoaded
+  const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), mine, tab === 'now' && path === '/')
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const fresh = useNewVersion()
