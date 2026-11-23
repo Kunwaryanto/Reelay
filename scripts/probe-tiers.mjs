@@ -14,4 +14,8 @@ await q('added events by day and service:', `select happened_on, service_id, cou
 await q('events by day and kind:', `select happened_on, event, count(*) n from public.availability_events group by 1,2 order by 1,2`);
 await q('services first seen:', `select service_id, min(since) first, count(*) n from public.availability group by 1 order by 2`);
 await q('mdblist done:', `select count(*) filter (where mdblist_synced_at is not null) done, count(*) filter (where mdblist_synced_at > now() - interval '1 day') today from public.scores`);
+await q('tiers:', `select tier, count(*) n, count(*) filter (where t.imdb_id is not null) with_imdb from public.title_refresh r join public.titles t on t.id = r.title_id group by 1 order by 1`);
+await q('scores due per night (MDBList):', `select round(sum(extract(epoch from interval '1 day') / extract(epoch from public.refresh_every(tier, 'scores')))) n from public.title_refresh r join public.titles t on t.id = r.title_id where t.imdb_id is not null`);
+await q('details due per night:', `select round(sum(extract(epoch from interval '1 day') / extract(epoch from public.refresh_every(tier, 'details')))) n from public.title_refresh`);
+await q('added events left:', `select happened_on, count(*) n from public.availability_events where event = 'added' group by 1 order by 1`);
 await db.end();
