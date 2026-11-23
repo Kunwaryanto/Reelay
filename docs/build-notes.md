@@ -522,3 +522,12 @@ Measured on the database before and after:
 - Browser tests (`tests/e2e`, `docs/testing.md`) run on every push.
 - Accessibility: Picked for you cards are links inside list items; the small top-bar title is hidden from
   assistive tech, as each page has its own heading.
+
+## More like this (24 Nov)
+
+- Each streaming title has its own list of up to 15 alike titles in `title_similar`, built by the nightly sync:
+  TMDB's recommendations that stream here first, then `similar_backup` (same director, creator or lead actors;
+  shared genres; same original language, more so if not English; era; rating; kids' and animated titles only
+  with each other). TMDB is asked again by tier: new every 2 weeks, recent 2 months, older 6 months.
+- Until a title's list is built, `similar_titles` scores it live, so every title page has the better row at once.
+- On the title page the member's services come first and films they've logged on Letterboxd are left out.

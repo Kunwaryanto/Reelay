@@ -62,6 +62,11 @@ def route(r):
     if '/rest/v1/rpc/restore_invite' in u: return r.fulfill(status=204, body='')
     if '/rest/v1/invites' in u: return r.fulfill(json=INV)
     if '/rest/v1/availability' in u: return r.fulfill(json=[{"leaves_on":"2026-11-21","title":card(20+i,"2026-11-%02d"%(21+i*3))} for i in range(6)])
+    if '/rest/v1/rpc/similar_titles' in u: return r.fulfill(json=[{"id":i,"pos":k+1} for k,i in enumerate(MODE.get('similar',range(3,15)))])
+    if '/rest/v1/titles' in u and 'id=in.' in u and 'original_language' not in u:
+        from urllib.parse import unquote
+        ids=re.search(r'id=in\.\(([\d,]+)\)',unquote(u)).group(1).split(',')
+        return r.fulfill(json=[card(int(x)) for x in ids][::-1])  # any order: the app puts them back in the list's
     if '/rest/v1/rpc/search_titles' in u:
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])

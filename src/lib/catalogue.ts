@@ -91,6 +91,8 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
 }
 
 export async function loadTitle(id: number): Promise<TitleDetail | null> {
+  // More like this is asked for at the same time: its list doesn't depend on the title's details
+  const similar = supabase.rpc('similar_titles', { p_id: id })
   const title = unwrap(await supabase.from('titles').select(
     'id,tmdb_id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
     'availability(*,service:services(*)),' +
@@ -99,8 +101,16 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
     'awards(id,award,year,short_category,won,person_name,rank)',
   ).eq('id', id).maybeSingle()) as unknown as (Omit<TitleDetail, 'more'>) | null
   if (!title) return null
+  // the titles most like this one (title_similar, built nightly; until then scored live), in order, streaming only
   let more: Card[] = []
-  if (title.genres.length) {
+  const sim = await similar
+  const order = (sim.data as { id: number; pos: number }[] | null) ?? []
+  if (order.length) {
+    const pos = new Map(order.map((r) => [Number(r.id), r.pos]))
+    const cards = unwrap(await supabase.from('titles').select(CARD).in('id', [...pos.keys()])) as unknown as Card[]
+    more = cards.sort((a, b) => (pos.get(a.id) ?? 99) - (pos.get(b.id) ?? 99))
+  } else if (sim.error && title.genres.length) {
+    // the list can't be read (an older database): the most popular titles in the same first genre, as before
     more = (unwrap(await supabase.from('titles').select(CARD).contains('genres', [title.genres[0]]).eq('kind', title.kind)
       .neq('id', id).order('popularity', { ascending: false }).limit(12)) as unknown as Card[])
   }

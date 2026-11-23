@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { paths } from '../lib/routes'
 import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
-import { firstName, fullDate, looseDate, times, useTitleLogs, type TitleLogs } from '../lib/letterboxd'
+import { firstName, fullDate, looseDate, times, useTitleLogs, useWatched, type TitleLogs } from '../lib/letterboxd'
+import { useServicesQuery } from '../lib/profile'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import { titlePage } from '../lib/pages'
@@ -97,6 +98,15 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
 
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
+  // More like this in your order: what's on your services first (each group keeps its likeness order), and films
+  // you've logged on Letterboxd left out, as Home does
+  const mine = useServicesQuery().data
+  const watched = useWatched()
+  const more = useMemo(() => {
+    const on = new Set(mine ?? [])
+    const list = t.more.filter((c) => c.kind !== 'film' || !watched.has(c.id))
+    return on.size ? [...list.filter((c) => c.availability.some((a) => on.has(a.service_id))), ...list.filter((c) => !c.availability.some((a) => on.has(a.service_id)))] : list
+  }, [t.more, mine, watched])
   // opened from a notification: where it streams lights up once, then settles
   const [flash] = useState(() => takeOpenedFrom(paths.title(t.id)))
   const [open, setOpen] = useState(false)
@@ -213,10 +223,10 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </section>
       )}
 
-      {t.more.length >= 3 && (
+      {more.length >= 3 && (
         <section className="block">
           <SectionHeader title="More like this" />
-          <PosterRow>{t.more.map((c) => <TitleCard key={c.id} card={c} />)}</PosterRow>
+          <PosterRow>{more.map((c) => <TitleCard key={c.id} card={c} />)}</PosterRow>
         </section>
       )}
 
