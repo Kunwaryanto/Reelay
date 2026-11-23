@@ -2,6 +2,10 @@
 name: probe-ids
 on:
   workflow_dispatch:
+    inputs:
+      status_only:
+        type: string
+        default: ""
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -20,3 +24,5 @@ jobs:
           npx supabase link --project-ref "$PROJECT_REF"
           echo "POOLER_URL=$(cat supabase/.temp/pooler-url)" >> "$GITHUB_ENV"
       - run: node scripts/probe-ids.mjs
+        env:
+          STATUS_ONLY: ${{ inputs.status_only }}

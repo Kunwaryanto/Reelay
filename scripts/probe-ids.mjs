@@ -6,6 +6,11 @@ const pw = encodeURIComponent(process.env.SUPABASE_DB_PASSWORD);
 const cs = process.env.POOLER_URL.replace(/^(postgres(?:ql)?:\/\/[^@:]+)@/, `$1:${pw}@`);
 const db = new pg.Client({ connectionString: cs, ssl: { rejectUnauthorized: false } });
 await db.connect();
+{
+  const r = (await db.query(`select pg_database_size(current_database()) b, current_setting('default_transaction_read_only') ro`)).rows[0];
+  console.log(`STATUS database ${(Number(r.b) / 1048576).toFixed(1)} MB, read-only: ${r.ro}`);
+  if (process.env.STATUS_ONLY) { await db.end(); process.exit(0) }
+}
 const kb = (b) => (Number(b) / 1048576).toFixed(2) + ' MB';
 // columns holding a title or person id: the ids themselves, foreign keys to them, and the similar-titles arrays
 const cols = (await db.query(`
