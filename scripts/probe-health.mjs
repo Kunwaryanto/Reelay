@@ -10,7 +10,8 @@ await db.query('begin');
 await db.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: uid, role: 'authenticated' })]);
 const time = async (label, sql, args = []) => {
   const p = await db.query(`explain (analyze, buffers) ${sql}`, args);
-  console.log(label.padEnd(36), p.rows.at(-1)['QUERY PLAN']);
+  const buf = p.rows.map((r) => r['QUERY PLAN']).find((l) => /Buffers:/.test(l))?.trim() ?? '';
+  console.log(label.padEnd(36), p.rows.at(-1)['QUERY PLAN'], '|', buf);
 };
 for (let i = 0; i < 2; i++) {
   console.log(`-- round ${i + 1}`);
@@ -23,6 +24,8 @@ for (let i = 0; i < 2; i++) {
   await time('filter count: language', `select count(*) from public.titles t where t.kind = 'film' and t.original_language = 'sv' and exists (select 1 from public.availability a where a.title_id = t.id)`);
   await time('leaving, a country', `select t.id from public.titles t where t.countries @> '{SE}' and exists (select 1 from public.availability a where a.title_id = t.id and a.leaves_on between current_date and current_date + 30) order by t.popularity desc limit 16`);
 }
+console.log('extensions available:', (await db.query(`select name, installed_version from pg_available_extensions where name in ('pg_prewarm','pg_cron')`)).rows);
+console.log('stats reset / up since:', (await db.query(`select pg_postmaster_start_time() up, (select stats_reset from pg_stat_database where datname = current_database()) reset`)).rows[0]);
 const lines = (await db.query(`explain (analyze) select * from public.home_people(20000, $1, true)`, [svc])).rows.map((r) => r['QUERY PLAN']);
 console.log('\nhome_people plan:\n' + lines.filter((l) => /actual/.test(l)).slice(0, 40).join('\n'));
 await db.query('rollback');
