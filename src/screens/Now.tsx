@@ -287,7 +287,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
         const art = card.backdrop_path ? { src: tmdbImage(card.backdrop_path, 'w780'), srcSet: `${tmdbImage(card.backdrop_path, 'w780')} 780w, ${tmdbImage(card.backdrop_path, 'w1280')} 1280w`, sizes: '90vw' } : null
         const service = card.availability[0]?.service_id
         return (
-          <PageLink key={card.id} to={paths.title(card.id)} role="listitem" className="spot press">
+          <div key={card.id} role="listitem" className="spot-item"><PageLink to={paths.title(card.id)} className="spot press">
             {art && <NearImage {...art} />}
             <span className="spot-text">
               {card.reason && <small>{card.reason}</small>}
@@ -295,7 +295,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
               {/* the service, unless the reason already names one ("New on Netflix") */}
               <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
             </span>
-          </PageLink>
+          </PageLink></div>
         )
       })}
     </NearRow>

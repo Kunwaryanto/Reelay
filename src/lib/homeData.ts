@@ -21,6 +21,9 @@ const sleep = (ms: number) => new Promise<undefined>((r) => setTimeout(() => r(u
 // the stamp, asked once for the whole app when it opens or comes back (Home asks at the same moment)
 const loadStamp = () => (recentlyChecked() ? Promise.resolve(currentStamp()) : checkStamp())
 
+/** The saved Home can be shown as it is: built today, from the latest sync, and nothing it is built from changed since. */
+const current = (key: string, s: Saved | undefined, stamp: string | null) => !!s && s.day === today() && s.stamp === stamp && !isDirty(key)
+
 export type HomeQuery = {
   data: HomeData | undefined
   loading: boolean
@@ -55,7 +58,6 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
     if (key) setQueryData<Saved>(key, { data, stamp, day }, true, ['watchlist', 'letterboxd'])
     return { data, day }
   }, [key])
-  const current = (s: Saved | undefined, stamp: string | null) => !!s && s.day === today() && s.stamp === stamp && !!key && !isDirty(key)
 
   // Opening (and a change of key: services or the switch, made in Settings while Home isn't in front)
   useEffect(() => {
@@ -74,10 +76,10 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
         // slow or offline: the saved Home, and a new one later if the sync has run since
         show({ data: saved.data, day: saved.day })
         const later = await stampP
-        if (later !== null && !current(saved, later)) build(later).then(keep, () => {})
+        if (later !== null && !current(key, saved, later)) build(later).then(keep, () => {})
         return
       }
-      if (saved && current(saved, stamp ?? null)) { show({ data: saved.data, day: saved.day }); return }
+      if (saved && current(key, saved, stamp ?? null)) { show({ data: saved.data, day: saved.day }); return }
       const built = build(stamp ?? null)
       const got = await Promise.race([built.catch(() => null), sleep(Math.max(0, WAIT - (Date.now() - started)))])
       if (got) { show(got); return }
@@ -115,7 +117,7 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
       touched.current = false
       const saved = readQueryData<Saved>(key)
       loadStamp().then(async (stamp) => {
-        if (stamp === null || current(saved, stamp)) return
+        if (stamp === null || current(key, saved, stamp)) return
         const v = await build(stamp)
         if (!touched.current && activeRef.current) setView(v)
         else pending.current = v

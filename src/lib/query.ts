@@ -39,8 +39,33 @@ function save(key: string, data: unknown, persist: boolean, extra: Pick<Entry, '
   const entry: Entry = { data, at: Date.now(), ...extra }
   memory.set(key, entry)
   if (!persist) return
-  try { localStorage.setItem(PREFIX + key, JSON.stringify(entry)) } catch { /* storage full or blocked: memory only */ }
+  const text = JSON.stringify(entry)
+  try { localStorage.setItem(PREFIX + key, text) } catch {
+    // full (Safari gives a site about 5 MB): let the oldest quarter go and try once more; else memory only
+    prune({ keep: Math.floor(savedKeys().length * 0.75) })
+    try { localStorage.setItem(PREFIX + key, text) } catch { /* memory only */ }
+  }
 }
+
+// ---- Keeping what's saved on the phone small ---------------------------------------------------------------------
+// Every page opened is saved (title pages, people, lists, old versions of Home), so without a limit the site's
+// storage fills up, after which nothing new is saved and pages stop opening at once or offline. What hasn't been
+// used for a month goes, and only the newest MAX_SAVED stay; checked a few seconds after each start.
+const MAX_SAVED = 400
+const MONTH = 30 * 24 * 60 * 60 * 1000
+const savedKeys = () => { try { return Object.keys(localStorage).filter((k) => k.startsWith(PREFIX)) } catch { return [] } }
+export function prune({ keep = MAX_SAVED, olderThan = MONTH }: { keep?: number; olderThan?: number } = {}) {
+  try {
+    const all = savedKeys().map((k) => {
+      let at = 0
+      try { at = (JSON.parse(localStorage.getItem(k) ?? 'null') as Entry | null)?.at ?? 0 } catch { /* unreadable: goes first */ }
+      return { k, at }
+    }).sort((a, b) => b.at - a.at)
+    const now = Date.now()
+    all.forEach(({ k, at }, i) => { if (i >= keep || now - at > olderThan) localStorage.removeItem(k) })
+  } catch { /* storage blocked */ }
+}
+if (typeof window !== 'undefined') setTimeout(() => prune(), 5000)
 
 // Screens showing a key re-render when another screen writes it (see setQueryData).
 const watchers = new Map<string, Set<() => void>>()

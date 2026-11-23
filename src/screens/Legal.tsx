@@ -25,6 +25,7 @@ const KEEPS: [string, string, string][] = [
   ['Your settings', 'Region, language and which notifications you want', 'Contract · until you delete your account'],
   ['A notification address per device', 'Only if you turn notifications on', 'Contract · until you turn them off, remove the device or delete your account'],
   ['Invite details', 'The person who invited you sees your email once you join', 'Legitimate interest (art. 6(1)(f)) · 30 days after you join'],
+  ['Error reports', 'When something fails in the app: what went wrong, the screen, the app version and your phone’s browser, linked to your account, to find and fix the bug', 'Legitimate interest · 30 days'],
   ['Technical logs', 'IP address, time and browser when you load the site, sign in or get a sign-in email', 'Legitimate interest · website logs 1 hour, database logs 1 day, sign-in history and email logs 30 days'],
 ]
 const HANDLERS: [string, string][] = [

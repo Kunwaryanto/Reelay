@@ -512,3 +512,13 @@ Measured on the database before and after:
 - GIN indexes on `titles.genres` and `titles.countries`.
 - The Start wall is built each night into `start_wall_posters` (`refresh_start_wall`).
 - The sync writes cast and crew by difference (it used to delete and re-add them on every refresh).
+
+## Robustness (23 Nov)
+
+- Saved data on the phone is pruned a few seconds after each start: unused for 30 days goes, newest 400 stay;
+  when storage is full the oldest quarter goes and the save is tried again.
+- A screen that fails to draw shows "Something went wrong." with Reload instead of a black screen; it and any
+  uncaught error are reported to `client_errors` (signed in only, once per message, 10 per session, 30 days).
+- Browser tests (`tests/e2e`, `docs/testing.md`) run on every push.
+- Accessibility: Picked for you cards are links inside list items; the small top-bar title is hidden from
+  assistive tech, as each page has its own heading.

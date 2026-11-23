@@ -171,6 +171,9 @@ export default function Watchlist() {
 }
 
 /** One saved title. Swipe left to reveal Remove; a tap opens the title. */
+/** How far a swiped row stays open (px): its Remove button's width. */
+const OPEN = -88
+
 function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
   fresh?: boolean
   row: Row; group: string; showKind: boolean; note: string | null; where: string | null; onNotify: () => void
@@ -190,7 +193,6 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
   // letting go there removes it: the row slides away and the list closes up. Swiped right it gives a little.
   const li = useRef<HTMLLIElement>(null)
   const g = useRef<{ x: number; y: number; from: number; on: boolean; at: number; full: boolean; trail: [number, number][] } | null>(null)
-  const OPEN = -88
   const place = (x: number) => { li.current?.style.setProperty('--x', `${x}px`); li.current?.style.setProperty('--r', String(-x)) }
   useLayoutEffect(() => { place(open ? OPEN : 0) }, [open])
   const remove = () => {

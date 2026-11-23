@@ -135,6 +135,8 @@ function Row({ h, near, onOpen, before }: { h: Hit; near?: boolean; onOpen: () =
   )
 }
 
+const readKeyboardHeight = () => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }
+
 export default function Search() {
   const { push, setTab } = useNavActions()
   const { tab } = useNav()
@@ -289,7 +291,8 @@ export default function Search() {
     return () => el.removeEventListener('touchstart', down)
   }, [])
   // How far the keyboard travels (as last measured): Search rises that far with it when it opens.
-  const kb = useMemo(() => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }, [drawer, typing])
+  // read on every render (it's one small value): the keyboard may differ from the last one, so it's never kept
+  const kb = readKeyboardHeight()
   // Leaving the app closes the keyboard without telling the page. Let go of the field then, and drop it back to
   // rest at once (no animation): iOS takes its app-switcher picture right away, and coming back starts from that
   // picture, so it must already show Search at rest, not halfway down. Animations come back once the app is shown

@@ -163,7 +163,8 @@ function TopBar({ title, glass, shown = true }: { title: string; glass?: boolean
       <div className="top-fade" aria-hidden="true"><i /><i /><i /></div>
       <div className="top-row">
         <div className="top-back"><BackButton glass={glass} /></div>
-        <span className="top-title" data-shown={shown}>{title}</span>
+        {/* the page's own heading (in its <main>) is what assistive tech reads: this small copy is for the eye */}
+        <span className="top-title" data-shown={shown} aria-hidden="true">{title}</span>
       </div>
     </header>
   )
