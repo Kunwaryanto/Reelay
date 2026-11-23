@@ -17,6 +17,15 @@ const tables = (await db.query(`
 console.log('\nBIGGEST TABLES (total = data + indexes)');
 for (const r of tables) console.log(`${(r.s + '.' + r.t).padEnd(42)} ${mb(r.total).padStart(9)}  data ${mb(r.heap).padStart(8)}  indexes ${mb(r.idx).padStart(8)}  ~${r.est} rows`);
 
+// Empty space: what the rows themselves take against what the table takes on disk. Updates leave old copies that
+// Postgres reuses, so some is normal; above about 30% the `Database compact` workflow wins it back.
+console.log('\nEMPTY SPACE (public tables over 1 MB; above ~30%, run Database compact)');
+for (const r of tables.filter((x) => x.s === 'public' && Number(x.heap) > 1048576)) {
+  const live = Number((await db.query(`select coalesce(sum(pg_column_size(x.*)), 0) + count(*) * 4 b from public.${r.t} x`)).rows[0].b);
+  const empty = Math.max(0, 100 - (100 * live) / Number(r.heap));
+  console.log(`${r.t.padEnd(30)} data ${mb(r.heap).padStart(8)}  rows ${mb(live).padStart(8)}  empty ${empty.toFixed(0).padStart(3)}%${empty > 30 ? '  <- compact' : ''}`);
+}
+
 const bySchema = (await db.query(`select n.nspname s, sum(pg_total_relation_size(c.oid)) b from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where c.relkind in ('r','m','t') group by 1 order by 2 desc limit 8`)).rows;
 console.log('\nBY SCHEMA'); for (const r of bySchema) console.log(r.s.padEnd(20), mb(r.b));
