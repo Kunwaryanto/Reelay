@@ -13,7 +13,7 @@ import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
-import { PageLink, PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { NearImage, NearRow, PageLink, PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
@@ -110,12 +110,12 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
           )
         })}
       </div>
-      {/* the pictures sit behind the page, pinned to the top of the screen */}
+      {/* the pictures sit behind the page, pinned to the top of the screen; the next slide's is asked for ahead */}
       <PinnedArt>
         {items.map((h, i) => {
           const art = tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')
           return art && <img key={h.id} className="hero-art" data-on={i === index} src={art} alt="" draggable={false}
-            style={{ '--from': `${8 * dir}%` } as CSSProperties} fetchPriority={i === 0 ? 'high' : undefined} loading={i === 0 ? undefined : 'lazy'} />
+            style={{ '--from': `${8 * dir}%` } as CSSProperties} fetchPriority={i === 0 ? 'high' : undefined} loading={i <= index + 1 ? undefined : 'lazy'} />
         })}
       </PinnedArt>
       {n > 1 && (
@@ -280,13 +280,13 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
 /** Titles given room between the rows, side by side: each card has its wide picture, why it is here, and where it plays. */
 function Spotlight({ cards }: { cards: HomeCard[] }) {
   return (
-    <div className="spot-row noscroll" role="list">
+    <NearRow className="spot-row noscroll" role="list">
       {cards.map((card) => {
-        const art = tmdbImage(card.backdrop_path, 'w780')
+        const art = card.backdrop_path ? { src: tmdbImage(card.backdrop_path, 'w780'), srcSet: `${tmdbImage(card.backdrop_path, 'w780')} 780w, ${tmdbImage(card.backdrop_path, 'w1280')} 1280w`, sizes: '90vw' } : null
         const service = card.availability[0]?.service_id
         return (
           <PageLink key={card.id} to={paths.title(card.id)} role="listitem" className="spot press">
-            {art && <img src={art} alt="" loading="lazy" draggable={false} />}
+            {art && <NearImage {...art} />}
             <span className="spot-text">
               {card.reason && <small>{card.reason}</small>}
               <b>{card.title}</b>
@@ -296,7 +296,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
           </PageLink>
         )
       })}
-    </div>
+    </NearRow>
   )
 }
 

@@ -1167,6 +1167,12 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .spot-row .spot { flex: none; width: calc(100% - 2 * var(--margin) - 32px); scroll-snap-align: start; }
 .spot { position: relative; display: block; aspect-ratio: 16 / 10; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; }
 .spot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+/* a wide picture arrives like a poster: plain until decoded, then the picture and what is written on it fade in together */
+.near-img { position: absolute; inset: 0; }
+.near-img > img { opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
+.near-img[data-ready='true'] > img { opacity: 1; }
+.spot-text { transition: opacity var(--dur-image-in) var(--ease-out); }
+.spot:has(.near-img[data-ready='false']) .spot-text { opacity: 0; }
 .spot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.82) 100%); }
 .spot-text { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; }
 .spot-text small { font: var(--type-meta); font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

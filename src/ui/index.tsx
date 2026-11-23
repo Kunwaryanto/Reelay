@@ -315,21 +315,43 @@ export function PageLink({ to, onClick, handlers, children, ...rest }: { to: str
 }
 
 export function PosterRow({ children }: { children: ReactNode }) {
+  return <NearRow className="row-scroll noscroll"><div className="row-track">{children}</div></NearRow>
+}
+
+/**
+ * A row that scrolls sideways: everything in it counts as near once the row is a screen and a half away (its
+ * pictures off to the side can't be seen by the page from inside the row's own scroll). Every row of pictures is
+ * one of these, so its pictures (Cover, NearImage) are in before the row is seen.
+ */
+export function NearRow({ children, ...rest }: { children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null)
-  const [near, setNear] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || near) return
-    // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setNear(true) },
-      { root: el.closest('.page'), rootMargin: '150% 0px' })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [near])
+  const near = useNearScreen(ref)
   return (
     <NearContext.Provider value={near}>
-      <div ref={ref} className="row-scroll noscroll"><div className="row-track">{children}</div></div>
+      <div ref={ref} {...rest}>{children}</div>
     </NearContext.Provider>
+  )
+}
+
+/**
+ * A wide picture (a backdrop) that behaves like a poster: asked for a screen and a half ahead, shown once decoded
+ * with the same fade, and painted at once if it was seen before. Its box says `data-ready`, so what sits on the
+ * picture can wait for it too.
+ */
+export function NearImage({ src, srcSet, sizes }: { src: string | null | undefined; srcSet?: string; sizes?: string }) {
+  const inRow = useContext(NearContext)
+  const box = useRef<HTMLSpanElement>(null)
+  const near = useNearScreen(box, inRow) || inRow
+  const [known] = useState(() => wasDecoded(src))
+  const [ready, setReady] = useState(!src || known)
+  const pic = useRef<HTMLImageElement>(null)
+  useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
+  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => { markDecoded(src); setReady(true) }) }
+  return (
+    <span ref={box} className="near-img" data-ready={ready}>
+      {src && <img ref={pic} src={src} srcSet={srcSet} sizes={sizes} alt="" draggable={false}
+        loading={known || near ? undefined : 'lazy'} decoding={known ? 'sync' : 'async'} onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
+    </span>
   )
 }
 
