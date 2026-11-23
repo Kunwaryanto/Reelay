@@ -20,7 +20,7 @@ import { NearImage, NearRow, PageLink, PinnedArt, GearIcon, Icon, IconButton, Lo
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
   // the service is left out when the line above already names one ("New on Netflix")
-  const parts = [service && !c.reason?.startsWith('New on') ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
+  const parts = [service && !/^(New|Now) on/.test(c.reason ?? '') ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
   if (c.kind === 'series' && c.seasons) parts.push(c.seasons === 1 ? '1 season' : `${c.seasons} seasons`)
   else if (c.genres?.[0]) parts.push(c.genres[0])
   return parts.filter(Boolean).join(' · ')
@@ -293,7 +293,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
               {card.reason && <small>{card.reason}</small>}
               <b>{card.title}</b>
               {/* the service, unless the reason already names one ("New on Netflix") */}
-              <span>{[kindWord(card.kind), card.year, service && !card.reason?.startsWith('New on') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
+              <span>{[kindWord(card.kind), card.year, service && !/^(New|Now) on/.test(card.reason ?? '') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
             </span>
           </PageLink></div>
         )

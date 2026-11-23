@@ -229,6 +229,7 @@ export const SERVICE_NAME: Record<string, string> = {
   netflix: 'Netflix', 'hbo-max': 'HBO Max', 'svt-play': 'SVT Play', viaplay: 'Viaplay', 'disney-plus': 'Disney+',
   'prime-video': 'Prime Video', 'apple-tv': 'Apple TV', skyshowtime: 'SkyShowtime', 'tv4-play': 'TV4 Play',
   mubi: 'MUBI', crunchyroll: 'Crunchyroll', curiosity: 'Curiosity Stream', 'pluto-tv': 'Pluto TV',
+  cineasterna: 'Cineasterna', 'draken-film': 'Draken Film', 'triart-play': 'TriArt Play', hayu: 'hayu', britbox: 'BritBox',
 }
 
 // Where "Open in" goes when the catalogue has no direct link: the service's own search for the title.

@@ -39,7 +39,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 8
+export const HOME_VERSION = 9
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -241,9 +241,10 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   }
   if (alt.length) spot(altList, () => altReason)
   const runtimeOf = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`)
-  spot(playable.filter((t) => arrivedSaved.has(t.id)), (t) => `On your watchlist · now on ${svcName(arrivedSaved.get(t.id)!)}`)
+  // the card says it's yours by what it is (you saved it); the reason only says what's new
+  spot(playable.filter((t) => arrivedSaved.has(t.id)), (t) => `Now on ${svcName(arrivedSaved.get(t.id)!)}`)
   spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
-  spot(playable.filter(isShort), (t) => `On your watchlist · ${runtimeOf(t.runtime_min!)}`)
+  spot(playable.filter(isShort), (t) => `Only ${runtimeOf(t.runtime_min!)}`)
   spot(rowNew, (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
   spot(rowTheme, () => (themed === 'awards' ? 'Award winner' : 'Hidden gem'))
   spot(rowLeaving, (t) => leavesIn(leavesOn.get(t.id)) ?? 'Leaving soon')
