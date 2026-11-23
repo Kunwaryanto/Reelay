@@ -891,6 +891,11 @@ async function syncRecs() {
   log(`recommendations: ${saved} of ${todo.length} liked or saved titles asked about`);
 }
 
+// The app keeps what it has loaded until this moves (see data_stamp): set at the end of every run that changes data.
+async function stamp() {
+  await db.query('update public.data_stamp set finished_at = now() where id = 1').catch((e) => log('stamp failed:', e.message));
+}
+
 async function main() {
   // SYNC_ONLY=home: just what Home needs beyond the catalogue (the Home data workflow)
   if (ONLY === 'home') {
@@ -898,6 +903,7 @@ async function main() {
     await syncTrending();
     await syncLetterboxd();
     await syncRecs();
+    await stamp();
     await db.end();
     return;
   }
@@ -918,6 +924,7 @@ async function main() {
          where ${cond} order by t.popularity desc nulls last limit 8`)).rows;
       log(`  ${label}, most popular:`, ex.map((r) => `${r.title} (${r.year}, ${r.kind}, ${r.imdb_id}) ${r.rt_critics ?? '–'}/${r.rt_audience ?? '–'}`).join(' · '));
     }
+    await stamp();
     await db.end();
     return;
   }
@@ -976,6 +983,7 @@ async function main() {
             pg_size_pretty(pg_database_size(current_database())) db_size`,
   )).rows[0];
   log('database now:', JSON.stringify(counts));
+  await stamp();
   await db.end();
 }
 
