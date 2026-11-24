@@ -64,3 +64,11 @@ export function tabBarShown(r: Route): boolean {
   if (r.name === 'tab') return r.tab !== 'search'
   return !['settings', 'privacy', 'terms', 'onboarding'].includes(r.name)
 }
+
+/** The invite link the app was opened with (/i/<token>), read once as the app starts, so nothing that changes the
+ *  address later (nav.tsx puts a signed-in member on their tab) can lose it before the lazily loaded Start reads it. */
+export const INVITE_TOKEN: string = (() => {
+  if (typeof location === 'undefined') return ''
+  const r = routeOf(location.pathname)
+  return r.name === 'invite' ? r.token : ''
+})()

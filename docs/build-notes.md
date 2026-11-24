@@ -613,3 +613,11 @@ Measured on the database before and after:
 
 - `SettingsButton` (src/ui) is the one Settings button: Home and Watchlist use it, and it carries the white update
   dot when a new version is out. The dot springs in when it appears, also while the button is on screen.
+
+## Invite links say Join (24 Nov)
+
+- An invite link showed "Sign in" (greyed) until the server had checked the invite, which can take a few seconds
+  the first time (the function starts cold). It now says "Join Reelay" from the first frame and can be tapped at
+  once: sending the email redeems the invite, and the server says then if it has expired or been used.
+- The invite code is read once as the app starts (`INVITE_TOKEN` in routes.ts), so nothing that changes the address
+  later can lose it.
