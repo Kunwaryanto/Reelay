@@ -3,7 +3,7 @@ import { useServicesQuery } from '../lib/profile'
 import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
-import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingFor, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
@@ -293,7 +293,7 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
               {card.reason && <small>{card.reason}</small>}
               <b>{card.title}</b>
               {/* the service, unless the reason already names one ("New on Netflix") */}
-              <span>{[kindWord(card.kind), card.year, service && !/^(New|Now) on/.test(card.reason ?? '') ? SERVICE_NAME[service] ?? service : null].filter(Boolean).join(' · ')}</span>
+              <span>{metaLine(card, service && !/^(New|Now) on/.test(card.reason ?? '') ? SERVICE_NAME[service] ?? service : null)}</span>
             </span>
           </PageLink></div>
         )

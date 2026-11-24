@@ -13,11 +13,12 @@ export type Card = {
   logo_path?: string | null
   genres?: string[]
   seasons?: number | null
+  runtime_min?: number | null
   availability: Avail[]
 }
 export type Row = { id: string; title: string; items: Card[]; notes?: 'leaving' }
 
-const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
+const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -150,7 +151,7 @@ export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
   type Sc = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
   type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'rt' | 'lb' | 'notify' | 'added_at'> & { scores: Sc | Sc[] | null }) | null }
   const rows = unwrap(await supabase.from('watchlist')
-    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
+    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
     .order('added_at', { ascending: false }) as never) as Raw[]
   return rows.filter((r) => r.title).map((r) => {
     const { scores, ...t } = r.title!
@@ -288,6 +289,24 @@ export function leavingFor(what: { availability: { leaves_on?: string | null }[]
 }
 
 export const kindWord = (kind: Card['kind']) => (kind === 'film' ? 'Film' : 'Series')
+
+/** Runtime in the short form for poster cards and lists: 2h 6m, 2h, 45m. */
+export function shortRuntime(min: number | null | undefined): string | null {
+  if (!min) return null
+  const h = Math.floor(min / 60), m = min % 60
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`
+}
+
+/** How long it is: a film's short runtime, a series' seasons; the plain kind when that isn't known. */
+export function lengthOf(t: { kind: 'film' | 'series'; runtime_min?: number | null; seasons?: number | null }): string {
+  if (t.kind === 'film') return shortRuntime(t.runtime_min) ?? 'Film'
+  return t.seasons ? (t.seasons === 1 ? '1 season' : `${t.seasons} seasons`) : 'Series'
+}
+
+/** The meta line under a title everywhere outside the title page: year first, then its length, then any extras. */
+export function metaLine(t: { kind: 'film' | 'series'; year: number | null; runtime_min?: number | null; seasons?: number | null }, ...extra: (string | null | undefined | false)[]): string {
+  return [t.year, lengthOf(t), ...extra].filter(Boolean).join(' · ')
+}
 
 export function runtime(min: number | null): string | null {
   if (!min) return null

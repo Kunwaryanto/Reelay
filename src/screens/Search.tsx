@@ -5,7 +5,7 @@ import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { SERVICE_NAME, kindWord, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
 import { useWatched } from '../lib/letterboxd'
@@ -43,7 +43,7 @@ function toFilters(x: Extra, services: string[] | null, hide: number[] | null = 
 }
 
 const nameOf = (id: string) => SERVICE_NAME[id] ?? id
-const metaOf = (h: Hit) => [kindWord(h.kind), h.year, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden'].filter(Boolean).join(' · ')
+const metaOf = (h: Hit) => metaLine({ ...h, runtime_min: h.runtime }, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden')
 
 // Answers from the last few minutes, so a search made again (or one of the three ideas, fetched ahead) shows at once.
 const KEEP = 5 * 60 * 1000
@@ -97,7 +97,7 @@ function useSearch(typed: string, removed: string[], extra: Filters) {
   }
 }
 
-const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
+const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, runtime_min: h.runtime, seasons: h.seasons, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
 
 /** True once `on` has lasted `ms`: a quick answer never flashes a loading state. */
 function useLate(on: boolean, ms: number) {
@@ -212,7 +212,7 @@ export default function Search() {
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
   const change = (text: string) => { setQ(text); setRemoved([]); if (!text) setExtra({}) }
   const open = (h: Hit) => {
-    remember({ t: 'title', id: h.id, text: h.title, sub: [kindWord(h.kind), h.year].filter(Boolean).join(' · '), poster_path: h.poster_path })
+    remember({ t: 'title', id: h.id, text: h.title, sub: metaLine({ ...h, runtime_min: h.runtime }), poster_path: h.poster_path })
     input.current?.blur()
     push(paths.title(h.id))
   }

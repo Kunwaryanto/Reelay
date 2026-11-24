@@ -17,6 +17,7 @@ export type Hit = {
   genres: string[]
   lang: string | null
   runtime: number | null
+  seasons: number | null
 }
 
 export type Filters = {
@@ -135,12 +136,12 @@ const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
-  genres: string[] | null; original_language: string | null; runtime_min: number | null
+  genres: string[] | null; original_language: string | null; runtime_min: number | null; seasons: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
   scores: Score | Score[] | null
 }
 type Score = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)'
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,scores(imdb_rating,rt_critics,letterboxd)'
 /** a filter on a score only counts titles that have that score */
 const scored = (f: Filters) => !!(f.minRating || f.minRt || f.minLb)
 
@@ -151,7 +152,7 @@ function toHit(r: Raw): Hit {
     id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
-    rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null,
+    rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null, seasons: r.seasons ?? null,
   }
 }
 

@@ -30,7 +30,7 @@ export const DEPT: Record<Role, string> = { cast: 'Acting', director: 'Directing
 
 async function loadPerson(id: number): Promise<PersonData | null> {
   const { data, error } = await supabase.from('people')
-    .select('id,name,profile_path,known_for,credits(role,character,title:titles(id,kind,title,year,poster_path,availability(service_id,leaves_on)))')
+    .select('id,name,profile_path,known_for,credits(role,character,title:titles(id,kind,title,year,runtime_min,seasons,poster_path,availability(service_id,leaves_on)))')
     .eq('id', id).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) return null

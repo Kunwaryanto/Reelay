@@ -15,7 +15,7 @@ def jwt():
 SESSION={"access_token":jwt(),"token_type":"bearer","expires_in":86400,"expires_at":int(time.time())+86400,"refresh_token":"r","user":{"id":"u1","email":"lukas@example.com","aud":"authenticated","role":"authenticated","app_metadata":{},"user_metadata":{},"created_at":"2026-01-01T00:00:00Z"}}
 NAMES=['Black Doves','The Sinner','John Wick: Chapter 4','The Gilded Age','North of North','Paranoid','Titanic','Fargo','Maigret','A Very Long Title That Should Truncate Nicely','Tár','Amélie']
 SV=['netflix','viaplay','hbo-max','svt-play','skyshowtime','disney-plus','prime-video','apple-tv']
-def card(i,leave=None): return {"id":i,"kind":"film" if i%3==0 else "series","title":NAMES[i%len(NAMES)],"year":1995+i,"poster_path":f"/p{i}.jpg","backdrop_path":f"/b{i}.jpg","logo_path":None if i%2 else f"/l{i}.png","genres":["Crime","Drama"],"seasons":3,"availability":[{"service_id":SV[i%len(SV)],"leaves_on":leave}]}
+def card(i,leave=None): return {"id":i,"kind":"film" if i%3==0 else "series","title":NAMES[i%len(NAMES)],"year":1995+i,"poster_path":f"/p{i}.jpg","backdrop_path":f"/b{i}.jpg","logo_path":None if i%2 else f"/l{i}.png","genres":["Crime","Drama"],"seasons":(i%9)+1 if i%3 else None,"runtime_min":80+i*7%90 if i%3==0 else None,"availability":[{"service_id":SV[i%len(SV)],"leaves_on":leave}]}
 def svg(seed,w,h,label=''):
     c=int(hashlib.md5(seed.encode()).hexdigest()[:6],16); a=f'#{c:06x}'; b=f'#{(c*7)%0xffffff:06x}'
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="{a}"/><stop offset="1" stop-color="{b}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><text x="50%" y="50%" fill="#fff" font-size="{h//8}" text-anchor="middle" font-family="sans-serif">{label}</text></svg>'
@@ -63,10 +63,9 @@ def route(r):
     if '/rest/v1/invites' in u: return r.fulfill(json=INV)
     if '/rest/v1/availability' in u: return r.fulfill(json=[{"leaves_on":"2026-11-21","title":card(20+i,"2026-11-%02d"%(21+i*3))} for i in range(6)])
     if '/rest/v1/rpc/similar_titles' in u: return r.fulfill(json=[{"id":i,"pos":k+1} for k,i in enumerate(MODE.get('similar',range(3,15)))])
-    if '/rest/v1/titles' in u and 'id=in.' in u and 'original_language' not in u:
-        from urllib.parse import unquote
-        ids=re.search(r'id=in\.\(([\d,]+)\)',unquote(u)).group(1).split(',')
-        return r.fulfill(json=[card(int(x)) for x in ids][::-1])  # any order: the app puts them back in the list's
+    from urllib.parse import unquote
+    _ids = re.search(r'[?&]id=in\.\(([\d,]+)\)', unquote(u)) if '/rest/v1/titles' in u and 'original_language' not in u else None
+    if _ids: return r.fulfill(json=[card(int(x)) for x in _ids.group(1).split(',')][::-1])  # any order: the app puts them back in the list's
     if '/rest/v1/rpc/search_titles' in u:
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])

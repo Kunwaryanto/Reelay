@@ -24,7 +24,7 @@ type Ctx = {
   addMany: (ids: number[]) => Promise<void>
 }
 /** What a screen saving a title already shows of it: enough for its Watchlist row. */
-export type Shown = Pick<Card, 'id' | 'kind' | 'title' | 'year' | 'poster_path' | 'availability'>
+export type Shown = Pick<Card, 'id' | 'kind' | 'title' | 'year' | 'poster_path' | 'availability' | 'runtime_min' | 'seasons'>
 const C = createContext<Ctx | null>(null)
 export const useSaved = () => useContext(C)!
 
@@ -50,7 +50,7 @@ export function SavedProvider({ children }: { children: ReactNode }) {
     setLocal((l) => ({ ...l, [id]: next }))
     if (next && card) {
       updateQueryData<SavedTitle[]>(`watchlist-titles:${userId}`, (rows) => rows.some((r) => r.id === id) ? rows
-        : [{ id, kind: card.kind, title: card.title, year: card.year, poster_path: card.poster_path, availability: card.availability ?? [], rating: null, notify: next.notify, added_at: new Date().toISOString() }, ...rows])
+        : [{ id, kind: card.kind, title: card.title, year: card.year, runtime_min: card.runtime_min ?? null, seasons: card.seasons ?? null, poster_path: card.poster_path, availability: card.availability ?? [], rating: null, notify: next.notify, added_at: new Date().toISOString() }, ...rows])
     }
     const job = next ? saveTitle(userId, id, next.notify) : unsaveTitle(userId, id)
     return job.then(() => { if (!next !== !prev) changed('watchlist') }, () => {

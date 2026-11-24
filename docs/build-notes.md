@@ -549,3 +549,10 @@ Measured on the database before and after:
   scores without the empty space (VACUUM FULL). First run: 170.5 MB → 121.8 MB, each table locked 1–8 seconds.
 - Measured and skipped: 4-byte ids (saves under 1%: padding) and reordering columns. Ready if we pass ~350 MB:
   keep directors, creators and the top 3 actors, fetch full cast and person pages from TMDB (about 40 MB).
+
+## Poster meta: year and length (24 Nov)
+
+- The line under a title (posters, search results, watchlist rows, spotlight) is year first, then how long it is:
+  `2008 · 2h 6m`, `2013 · 11 seasons`, `2026 · 30m`; `Film`/`Series` only when the length isn't known.
+  `metaLine` and `lengthOf` in `catalogue.ts` write it; card queries load `runtime_min` and `seasons`.
+- The title page and the hold menu keep the full form ("Film · 2026 · 1 h 52 min"): there's room to read it.

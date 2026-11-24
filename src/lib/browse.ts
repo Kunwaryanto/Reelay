@@ -132,8 +132,8 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
 const today = () => inDays(0)
 
-const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
-const ART = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
+const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'
+const ART = 'id,kind,title,year,runtime_min,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 
 type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean }
 

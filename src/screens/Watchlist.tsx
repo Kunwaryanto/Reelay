@@ -5,7 +5,7 @@ import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
-  SERVICE_NAME, kindWord, leavingFor, loadPicks, loadWatchlistTitles,
+  SERVICE_NAME, leavingFor, metaLine, loadPicks, loadWatchlistTitles,
   type Card, type SavedTitle,
 } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -151,7 +151,7 @@ export default function Watchlist() {
           </div>
           <ul key={kind} className={switched ? 'pill-in' : undefined}>
             {s.rows.map((r) => (
-              <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} showKind={kind === 'all'} note={s.id === 'leaving' ? note(r) : null}
+              <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
                 where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming in Sweden' : null}
                 onNotify={() => saved.toggleNotify(r.t.id)}
@@ -174,9 +174,9 @@ export default function Watchlist() {
 /** How far a swiped row stays open (px): its Remove button's width. */
 const OPEN = -88
 
-function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
+function WatchRow({ row, fresh, group, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
   fresh?: boolean
-  row: Row; group: string; showKind: boolean; note: string | null; where: string | null; onNotify: () => void
+  row: Row; group: string; note: string | null; where: string | null; onNotify: () => void
   open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
 }) {
   const { t, service } = row
@@ -184,8 +184,8 @@ function WatchRow({ row, fresh, group, showKind, note, where, open, setOpen, onO
   // a held row closes its swipe first
   const onHold = useHold(() => setOpen(false))
   const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
-  const year = t.year ? String(t.year) : ''
-  const meta = [showKind ? kindWord(t.kind) : '', year].filter(Boolean).join(' · ') + (group !== 'off' && service ? ` · ${nameOf(service)}` : '')
+  // year first, then how long it is (runtime or seasons, which also says film or series)
+  const meta = metaLine(t, group !== 'off' && service ? nameOf(service) : null)
 
   // Swipe left, like a row in iOS Mail. The row follows the finger exactly (its position is written straight to
   // the element, not through React, and starts from where the finger was when the swipe was recognised, so it

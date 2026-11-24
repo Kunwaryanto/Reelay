@@ -11,7 +11,7 @@ import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
 import { useWatchedMark } from '../lib/letterboxd'
-import { SERVICE_NAME, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
 import { useRequestFailed } from '../lib/query'
 import { notePressed } from '../lib/press'
@@ -211,7 +211,7 @@ export function TitleCard({ card, note, eager }: { card: Card; note?: string | n
   const onHold = useHold()
   const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.cover')!))
   const link = usePageLink(paths.title(card.id))
-  const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
+  const meta = note ?? metaLine(card)
   const watched = useWatchedMark(card.id)
   // near the screen: its long-press facts are fetched with the rest of its row
   const box = useRef<HTMLAnchorElement>(null)
