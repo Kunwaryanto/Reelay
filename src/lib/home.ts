@@ -39,7 +39,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 10
+export const HOME_VERSION = 11
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -97,9 +97,21 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   let leavingQ = supabase.from('availability').select(`leaves_on,service_id,title:titles!inner(${H})`)
     .gte('leaves_on', today()).lte('leaves_on', inDays(30)).order('leaves_on').limit(60)
   if (mine) { arrivalsQ = arrivalsQ.in('service_id', svc); leavingQ = leavingQ.in('service_id', svc) }
-  const themed = day % 2 === 0 ? 'awards' : 'gems'
+  // An award row every day, taking turns by day between these (all well over 7 titles on a usual set of services);
+  // Hidden gems every other day.
+  const AWARD_ROWS = [
+    { id: 'oscar-winners', title: 'Oscar winners', award: 'Oscars' },
+    { id: 'emmy-winners', title: 'Emmy-winning series', award: 'Emmys', kind: 'series' as Kind },
+    { id: 'best-picture', title: 'Best Picture winners', award: 'Oscars', category: 'Best Picture' },
+    { id: 'globe-winners', title: 'Golden Globe winners', award: 'Golden Globes' },
+  ]
+  const awardRow = AWARD_ROWS[day % AWARD_ROWS.length]
+  const gemsDay = day % 2 === 1
+  let awardsQ = supabase.from('awards').select(`award,short_category,rank,year,title:titles!inner(${H})`).eq('won', true).eq('award', awardRow.award)
+  if (awardRow.category) awardsQ = awardsQ.eq('category', awardRow.category)
+  if (awardRow.kind) awardsQ = awardsQ.eq('title.kind', awardRow.kind)
 
-  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, theme, savedRecs, people] = await Promise.all([
+  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people] = await Promise.all([
     titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     soft<Arrival>(on(arrivalsQ, 'title.availability.service_id') as never),
@@ -112,11 +124,11 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     soft<{ genre: string }>(supabase.rpc('home_taste') as never),
     soft<Card>(titles('film').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
     soft<Card>(titles('series').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
-    themed === 'awards'
-      ? soft<{ title: Card }>(on(supabase.from('awards').select(`year,title:titles!inner(${H})`).eq('won', true).order('year', { ascending: false }).limit(80), 'title.availability.service_id') as never).then((r) => r.map((x) => x.title))
-      // the IMDb rating and votes are on the title (kept in step with scores), so this reads in rating order
-      : soft<Card>(on(supabase.from('titles').select(H)).gte('imdb_rating', 7.5).gte('imdb_votes', 2000).lte('imdb_votes', 30000)
-        .order('imdb_rating', { ascending: false }).limit(40) as never),
+    // best category first, newest first within it
+    soft<{ award: string; short_category: string; rank: number; year: number; title: Card }>(on(awardsQ.order('rank').order('year', { ascending: false }).limit(300), 'title.availability.service_id') as never),
+    // the IMDb rating and votes are on the title (kept in step with scores), so this reads in rating order
+    gemsDay ? soft<Card>(on(supabase.from('titles').select(H)).gte('imdb_rating', 7.5).gte('imdb_votes', 2000).lte('imdb_votes', 30000)
+        .order('imdb_rating', { ascending: false }).limit(40) as never) : Promise.resolve([] as Card[]),
     soft<{ source: string; source_id: number; title_id: number; rank: number }>(supabase.rpc('home_saved', { p_day: day, ...rpcArgs }) as never),
     soft<{ person_id: number; name: string; title_id: number }>(supabase.rpc('home_people', { p_day: day, ...rpcArgs }) as never),
   ])
@@ -210,6 +222,16 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const rowNewF = take(newF)
   const rowNewS = take(newS)
   const rowTheme = take(theme, 20, true)
+  // each title once, under it its top category in this award and how many more it won there: "Best Picture +3"
+  const awardCards: HomeCard[] = []
+  const wins = new Map<number, { top: string; n: number }>()
+  for (const w of awardWins) {
+    if (!w.title) continue
+    const got = wins.get(w.title.id)
+    if (got) got.n++
+    else { wins.set(w.title.id, { top: w.short_category, n: 1 }); awardCards.push(w.title) }
+  }
+  const rowAwards = take(awardCards.map((t) => ({ ...t, note: `${wins.get(t.id)!.top}${wins.get(t.id)!.n > 1 ? ` +${wins.get(t.id)!.n - 1}` : ''}` })), 20, true)
   const rowGenres = picks.map((c, i) => ({ c, items: take(mix(genreLists[i] as Card[][]), 20, true) }))
   const rowDecade = take(mix(decadeLists), 20, true)
 
@@ -251,7 +273,8 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
   spot(playable.filter(isShort), (t) => `Only ${shortRuntime(t.runtime_min)}`)
   spot(rowNew, (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
-  spot(rowTheme, () => (themed === 'awards' ? 'Award winner' : 'Hidden gem'))
+  spot(rowAwards, () => `${awardRow.award === 'Oscars' ? 'Oscar' : awardRow.award === 'Emmys' ? 'Emmy' : 'Golden Globe'} winner`)
+  spot(rowTheme, () => 'Hidden gem')
   spot(rowLeaving, (t) => leavesIn(leavesOn.get(t.id)) ?? 'Leaving soon')
   spot(rowTrendS, () => 'Trending this week')
   spot(rowTrendF, () => 'Trending this week', 2)
@@ -286,7 +309,8 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     row('people', people.length ? `More with ${people[0].name}` : '', rowPeople, people, people.length ? paths.person(people[0].person_id) : undefined),
     row('new-films', 'New films', rowNewF, newF, paths.grid('new-releases', 'list', 'film')),
     row('new-series', 'New series', rowNewS, newS, paths.grid('new-releases', 'list', 'series')),
-    themed === 'awards' ? row('awards', 'Award winners', rowTheme, theme, paths.grid('award-winners', 'list')) : row('gems', 'Hidden gems', rowTheme, theme, paths.grid('hidden-gems', 'list')),
+    row(awardRow.id, awardRow.title, rowAwards, awardCards, paths.grid('award-winners', 'list')),
+    row('gems', 'Hidden gems', rowTheme, theme, paths.grid('hidden-gems', 'list')),
     ...rowGenres.map(({ c, items }, i) => row(c.id, c.label, items, mix(genreLists[i] as Card[][]), paths.category(c.id))),
     row(decade.id, decade.label, rowDecade, mix(decadeLists), paths.category(decade.id)),
   ]

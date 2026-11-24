@@ -575,3 +575,12 @@ Measured on the database before and after:
 - "Now streaming from your watchlist" and "Short enough for tonight" are folded into From your watchlist: what just
   arrived leads, with "Now on Netflix" under the poster. Runtimes are under every poster now; the spotlight still
   picks a short one ("Only 1h 40m"). Friends liked shows once 7 friends' ratings qualify.
+
+## Awards (24 Nov)
+
+- The awards table was empty: the sync that fills it was never written. `syncAwards` now reads Wikidata (Oscars,
+  Primetime Emmys, Golden Globes; technical, honorary and special awards left out): 8,137 wins and nominations,
+  592 titles with a win (552 on Lukas's services). Weekly on Sundays; the `Awards` workflow runs it by hand.
+- Home has an award row every day, in turn: Oscar winners, Emmy-winning series, Best Picture winners, Golden Globe
+  winners. Under each poster: its top category in that award and how many more it won ("Best Picture +3").
+  Hidden gems shows every other day. The title page's Awards section now has data too.

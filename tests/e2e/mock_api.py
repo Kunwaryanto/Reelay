@@ -177,7 +177,8 @@ def hroute2(r):
     if 'rpc/home_people' in u: return r.fulfill(json=[{"person_id":7,"name":"Denis Villeneuve","title_id":380+i} for i in range(6)] if CASE['personal'] else [])
     if 'rpc/home_friends' in u: return r.fulfill(json=[{"title_id":320+i,"name":["Anna Berg","Erik","Maja"][i%3],"rating":5-0.5*(i%3)} for i in range(6)] if CASE['personal'] else [])
     if 'rpc/home_taste' in u: return r.fulfill(json=[{"genre":"Thriller","average":4.2,"films":12},{"genre":"Science Fiction","average":4.1,"films":9},{"genre":"Drama","average":3.9,"films":30}] if CASE['personal'] else [])
-    if '/awards' in u: return r.fulfill(json=[{"year":2025-i,"title":card(400+i)} for i in range(10)])
+    # wins in today's award: one title can have several (the row shows it once, with "+n")
+    if '/awards' in u: return r.fulfill(json=[{"award":"Oscars","short_category":["Best Picture","Best Director","Best Actress"][i%3],"rank":1+i%3,"year":2025-i,"title":card(400+i//2)} for i in range(20)])
     if '/watchlist' in u and 'titles!inner' in u: return r.fulfill(json=[{"added_at":"2026-11-20","title":dict(card(500+i), kind='film' if i>=4 else card(500+i)['kind'], runtime_min=[95,88,140,130,92,85,99,150,97,120,91,110][i%12])} for i in range(12)] if CASE['personal'] else [])
     if '/titles' in u and '&id=in.' in u and 'backdrop_path' in u:
         ids=[int(x) for x in re.search(r'&id=in\.\(([\d,]+)\)',u).group(1).split(',')]; return r.fulfill(json=[card(i) for i in ids])

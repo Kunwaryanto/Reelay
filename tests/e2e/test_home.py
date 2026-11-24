@@ -49,3 +49,17 @@ def test_every_row_has_at_least_seven(app):
     assert counts
     for title, n in counts: assert n >= 7, (title, n)
     assert not any(t.startswith('Friends') for t, _ in counts)   # the mock's friends have 6 titles: left out
+
+
+def test_award_row_shows_the_award(app):
+    import re
+    import mock_api as m
+    from conftest import TOP
+    pg = app()
+    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    rows = pg.evaluate(f"[...({TOP}).querySelectorAll('section.row')].map(s => [s.querySelector('h2')?.textContent, [...s.querySelectorAll('.card-meta')].map(e => e.textContent)])")
+    award = [r for r in rows if re.search(r'Oscar|Emmy|Golden Globe|Best Picture', r[0] or '')]
+    assert award, [r[0] for r in rows]
+    notes = award[0][1]
+    assert len(notes) >= 7 and all(re.match(r'Best \w+( \+\d+)?$', n) for n in notes), notes
+    assert any('+1' in n for n in notes), notes   # each title once, with its other wins counted
