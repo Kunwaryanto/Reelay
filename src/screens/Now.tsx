@@ -37,16 +37,32 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
 
   const go = (d: number) => { setDir(d); setIndex((i) => (i + d + n) % n) }
 
+  // The white bar is the timer: the next slide comes when the bar's own fill ends (onAnimationEnd below), so the
+  // two can never disagree. It only runs while the hero can be seen. Whenever it comes back into view (the app
+  // reopened, back from a page on top, back to this tab) the current slide starts over with a full five seconds,
+  // so nothing changes the moment you look, and a finger on it holds the bar where it is.
+  const section = useRef<HTMLElement>(null)
+  const nav = useNav()
+  const [seen, setSeen] = useState(true)
+  const [run, setRun] = useState(0)
   useEffect(() => {
-    if (paused || n < 2) return
-    const t = setTimeout(() => go(1), 5000)
+    const look = () => {
+      const el = section.current
+      const now = !document.hidden && !!el && !el.closest('[inert]') && el.closest('.stack')?.getAttribute('data-active') !== 'false'
+      setSeen((was) => { if (now && !was) setRun((r) => r + 1); return now })
+    }
+    look()
+    document.addEventListener('visibilitychange', look)
+    return () => document.removeEventListener('visibilitychange', look)
+  }, [nav.tab, nav.path])
+  const still = paused || !seen
+  // reduced motion draws no bar: a plain timer instead, on the same rules
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  useEffect(() => {
+    if (!reduced || still || n < 2) return
+    const t = setTimeout(() => { setDir(1); setIndex((i) => (i + 1) % n) }, 5000)
     return () => clearTimeout(t)
-  })
-  useEffect(() => {
-    const vis = () => setPaused(document.hidden)
-    document.addEventListener('visibilitychange', vis)
-    return () => document.removeEventListener('visibilitychange', vis)
-  }, [])
+  }, [reduced, still, n, index, run])
 
   // Touch: a sideways swipe changes the picture. It is read from touch events and claimed on its first sideways
   // move, because on a page that was pushed in (a category) the whole strip of pages scrolls sideways too: the
@@ -85,7 +101,7 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
   }, [n])
 
   return (
-    <section className="hero" aria-label="On now" aria-roledescription="carousel">
+    <section ref={section} className="hero" aria-label="On now" aria-roledescription="carousel">
       <div className="hero-stage" ref={stage}
         // with a mouse (touch is handled above)
         onPointerDown={(e) => { if (e.pointerType === 'touch') return; x0.current = e.clientX; swiped.current = false; setPaused(true) }}
@@ -122,7 +138,10 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
       </PinnedArt>
       {n > 1 && (
         <div className="hero-dots" aria-hidden="true">
-          {items.map((h, i) => <span key={h.id} data-on={i === index}>{i === index && <i key={index} style={{ animationPlayState: paused ? 'paused' : 'running' }} />}</span>)}
+          {items.map((h, i) => <span key={h.id} data-on={i === index}>{i === index && (
+            <i key={`${index}:${run}`} style={{ animationPlayState: still ? 'paused' : 'running' }}
+              onAnimationEnd={(e) => { if (e.target === e.currentTarget && !still) go(1) }} />
+          )}</span>)}
         </div>
       )}
     </section>

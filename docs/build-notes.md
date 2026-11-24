@@ -556,3 +556,10 @@ Measured on the database before and after:
   `2008 · 2h 6m`, `2013 · 11 seasons`, `2026 · 30m`; `Film`/`Series` only when the length isn't known.
   `metaLine` and `lengthOf` in `catalogue.ts` write it; card queries load `runtime_min` and `seasons`.
 - The title page and the hold menu keep the full form ("Film · 2026 · 1 h 52 min"): there's room to read it.
+
+## Hero timer (24 Nov)
+
+- The white bar is the timer: the next slide comes when the bar's fill ends, so the bar can't sit full while the
+  slide waits. It runs only while the hero can be seen (app open, its tab showing, no page on top), and each time
+  it comes back into view the current slide starts over with a full 5 seconds: nothing switches the moment you look.
+  A finger on it holds the bar. With reduced motion there's no bar, and a plain 5-second timer follows the same rules.
