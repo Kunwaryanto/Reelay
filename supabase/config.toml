@@ -456,3 +456,8 @@ verify_jwt = false
 # Checks the session it is sent itself, like delete-account.
 [functions.letterboxd-import]
 verify_jwt = false
+
+# Checks the session it is sent itself, like delete-account. Needs the TMDB_READ_TOKEN function secret (set by the
+# Supabase functions workflow from the GitHub secret).
+[functions.tmdb]
+verify_jwt = false
