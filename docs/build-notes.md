@@ -701,3 +701,9 @@ Measured on the database before and after:
   South Korea, Japan, India, Australia, Canada) in Search and on Explore pages; the chip reads "From Sweden".
   Lists filtered on the phone (the fixed Browse lists, Watchlist) don't offer it: their titles don't carry countries.
 - Name searches now also apply decades and country to their results.
+
+## Search: Leaving soon starts on your services (24 Nov)
+
+- The Leaving soon suggestion (before typing) reads "On your services" for a member with services: tapping it
+  searches with My services on (a chip that can be taken off), and its poster is the top title on their services.
+  The other suggestions turn My services off.

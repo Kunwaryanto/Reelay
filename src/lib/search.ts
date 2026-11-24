@@ -381,16 +381,21 @@ export function guess(typed: string, removed: string[]): { tokens: Token[]; kind
 /** For "Popular right now" under an empty result. */
 export const loadPopular = () => byFilters({}, 3)
 
-export type Idea = { query: string; title: string; sub: string; poster_path: string | null }
+/** `mine`: the search starts with My services on (for a member with services). */
+export type Idea = { query: string; title: string; sub: string; poster_path: string | null; mine?: boolean }
 const IDEAS: [string, string, string, Filters][] = [
   ['leaving soon', 'Leaving soon', 'Last chance', { leaving: true }],
   ['swedish series', 'Swedish series', 'From Sweden', { lang: 'sv', kind: 'series' }],
   ['90s films', '90s films', 'Classics', { kind: 'film', from: 1990, to: 1999 }],
 ]
+/** Leaving soon is about what the member can still watch: on their services, when they have any. */
+const MINE_IDEAS = new Set(['leaving soon'])
 /** The three suggestions before typing, each with the poster of its top result. */
-export async function loadIdeas(): Promise<Idea[]> {
-  const tops = await Promise.all(IDEAS.map(([, , , f]) => byFilters(f, 1)))
-  return IDEAS.map(([query, title, sub], i) => ({ query, title, sub, poster_path: tops[i][0]?.poster_path ?? null })).filter((_, i) => tops[i].length > 0)
+export async function loadIdeas(picked: string[] = []): Promise<Idea[]> {
+  const on = (q: string) => picked.length > 0 && MINE_IDEAS.has(q)
+  const tops = await Promise.all(IDEAS.map(([q, , , f]) => byFilters(on(q) ? { ...f, services: picked } : f, 1)))
+  return IDEAS.map(([query, title, sub], i) => ({ query, title, sub: on(query) ? 'On your services' : sub, mine: on(query), poster_path: tops[i][0]?.poster_path ?? null }))
+    .filter((_, i) => tops[i].length > 0)
 }
 
 // ---- Recents (on this phone) ---------------------------------------------------

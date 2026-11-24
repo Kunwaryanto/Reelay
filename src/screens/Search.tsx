@@ -58,7 +58,7 @@ const keep = (key: string, found: Found) => {
   if (answers.size > 30) answers.delete(answers.keys().next().value!)
 }
 /** Fetch a search ahead of time (the ideas on the first page). */
-const warm = (text: string) => { const key = keyOf(text, []); if (!kept(key)) search(text, []).then((found) => keep(key, found), () => {}) }
+const warm = (text: string, extra: Filters = {}) => { const key = keyOf(text, [], extra); if (!kept(key)) search(text, [], extra).then((found) => keep(key, found), () => {}) }
 
 /** Run the search a moment after typing stops; keep showing the last results until the new ones arrive. */
 function useSearch(typed: string, removed: string[], extra: Filters) {
@@ -210,9 +210,9 @@ export default function Search() {
   const [hour] = useState(() => new Date().getHours())
 
   const mineQ = useServicesQuery()
-  const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, FRESH.catalogue)
-  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
+  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}`, () => loadIdeas(picked), FRESH.catalogue)
+  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
   // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
@@ -251,7 +251,7 @@ export default function Search() {
   const tokens = early?.tokens ?? found?.tokens ?? []
   const skeleton = useLate(waiting && !found, 150)
   // the three ideas are fetched ahead, so tapping one has nothing to wait for
-  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
+  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query, c.mine ? { services: picked } : {})) }, [ideas.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = useMemo(() => (hiding ? (found?.hits ?? []).filter((h) => !seen.has(h.id)) : found?.hits ?? []), [found, hiding, seen])
   const mine = all
@@ -460,7 +460,7 @@ export default function Search() {
               <ul>
                 {(ideas.data ?? []).map((c) => (
                   <li key={c.query}>
-                    <button type="button" className="s-idea" onClick={() => run(c.query)}>
+                    <button type="button" className="s-idea" onClick={() => { setOnlyMine(!!c.mine); run(c.query) }}>
                       <span className="s-thumb">{c.poster_path && <img src={tmdbImage(c.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                       <span className="s-recent-text"><b>{c.title}</b><small>{c.sub}</small></span>
                     </button>
