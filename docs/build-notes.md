@@ -714,3 +714,11 @@ Measured on the database before and after:
   cut with … when it doesn't fit.
 - When the page hides anything (more than four awards, a "+N", or a line cut on this phone's width), the heading has
   View all and every row opens the sheet at that award. When nothing is hidden, the rows are plain.
+
+## Corner logos: more even; titles never clipped (24 Nov)
+
+- Logos are sized by box area with a light correction for thin ones (area ∝ 1/√ink), instead of equal ink: Prime
+  Video and other wide thin logos no longer look big, and dense round ones (Pluto, Crunchyroll) no longer small.
+  6.5–11.5 px tall, at most 34 wide. SVT Play and SkyShowtime follow the same rule.
+- Services without a logo show their name in 7 px semibold, as written ("Cineasterna"), not 800 capitals.
+- Title page: the name has no line limit any more, so nothing is clipped (the 4 px of room is gone).

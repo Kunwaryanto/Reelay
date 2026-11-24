@@ -143,7 +143,7 @@ button { font: inherit; color: inherit; }
   mask-image: linear-gradient(90deg, transparent 0%, #000 26%, #000 74%, transparent 100%), linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%); mask-composite: add; }
 .cover-mark { position: absolute; top: 8px; right: 9px; height: 12px; display: flex; align-items: center; }
 .mark { display: block; filter: brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); }
-.mark-text { font: var(--type-mark); letter-spacing: 0.02em; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+.mark-text { font: var(--type-mark); letter-spacing: 0.01em; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 .card { width: 147px; flex: none; display: flex; flex-direction: column; color: #fff; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .card-title { margin-top: 12px; font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-meta { margin-top: 2px; font: var(--type-meta); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -212,9 +212,9 @@ button { font: inherit; color: inherit; }
 .title-art[data-poster='true'] { object-position: center top; }
 .title-head { position: relative; margin: 0 var(--margin); display: flex; align-items: flex-start; gap: 12px; }
 /* two-line titles are set tight, like the large headings in Search and onboarding (22px lines); the 2px above and
-   below keep a one-line title exactly where it was, centred on the 26px buttons beside it. The last line's g, j, p
-   and y reach below its 22px line: 4px more at the bottom (taken back by the margin) keeps them from being cut */
-.title-head h1 { flex: 1; min-width: 0; margin: 2px 0 -2px; padding-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
+   below keep a one-line title exactly where it was, centred on the 26px buttons beside it. No line limit, so nothing
+   is ever clipped (a fourth line needs about 70 characters) */
+.title-head h1 { flex: 1; min-width: 0; margin: 2px 0; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
 .title-actions { flex: none; display: flex; align-items: center; gap: 6px; height: 26px; }
 .title-actions .icon-btn { margin: -6px; }
 .pill-open { height: var(--button-inline); padding: 0 10px 0 12px; border: 0; border-radius: var(--radius-pill-28); background: #fff; color: #000; display: flex; align-items: center; gap: 4px; font: var(--type-text); font-weight: 600; cursor: pointer; }

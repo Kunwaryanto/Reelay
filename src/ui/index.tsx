@@ -134,15 +134,18 @@ const MARK_SHAPE: Record<string, [ratio: number, ink: number]> = {
   'hbo-max': [1.39, 0.59], mubi: [1, 0.41], netflix: [3.7, 0.43], 'pluto-tv': [1.34, 0.49], 'prime-video': [3.24, 0.24],
   'triart-play': [3.42, 0.15], viaplay: [4.13, 0.3],
 }
-/** Every logo shows the same amount of visible logo (about 60 px² of ink), so thin ones aren't weaker than solid
- *  ones: 7–13 px tall, at most 36 px wide. */
+/** Logos look the same size when their box is about the same area, a little larger for thin, light ones: the area
+ *  goes with 1/√ink (equal ink, as before, made wide thin logos such as Prime Video look big and dense round ones
+ *  such as Pluto small). 6.5–11.5 px tall, at most 34 px wide. */
 function markSize(ratio: number, ink: number): [number, number] {
-  let h = Math.min(13, Math.max(7, Math.sqrt(60 / ink / ratio))), w = h * ratio
-  if (w > 36) { w = 36; h = w / ratio }
+  let h = Math.min(11.5, Math.max(6.5, Math.sqrt(115 / (ratio * Math.sqrt(ink))))), w = h * ratio
+  if (w > 34) { w = 34; h = w / ratio }
   return [Math.round(w * 10) / 10, Math.round(h * 10) / 10]
 }
 const MARK_IMG: Record<string, [string, number, number]> = {
-  'svt-play': [svgUrl(svtPlaySvg), 19.3, 8], skyshowtime: [svgUrl(skyShowtimeSvg), 20.3, 8], 'tv4-play': [svgUrl(tv4PlaySvg), 10, 10],
+  // SVT Play and SkyShowtime are sized by the same rule (their shape and ink measured from the files); TV4's file has
+  // room around the logo, so it keeps its own size
+  'svt-play': [svgUrl(svtPlaySvg), ...markSize(2.42, 0.37)], skyshowtime: [svgUrl(skyShowtimeSvg), ...markSize(2.54, 0.38)], 'tv4-play': [svgUrl(tv4PlaySvg), 10, 10],
   ...Object.fromEntries(Object.entries(MARK_SHAPE).flatMap(([id, [r, ink]]) => {
     const src = MARK_FILES[`../assets/marks/${id}.png`]
     return src ? [[id, [src, ...markSize(r, ink)]]] : []
@@ -152,7 +155,7 @@ const MARK_IMG: Record<string, [string, number, number]> = {
 export function ServiceMark({ service }: { service: string }) {
   const mark = MARK_IMG[service]
   if (mark) return <img className="mark" src={mark[0]} alt="" style={{ width: mark[1], height: mark[2] }} />
-  return <span className="mark-text">{(SERVICE_NAME[service] ?? service).toUpperCase()}</span>
+  return <span className="mark-text">{SERVICE_NAME[service] ?? service}</span>
 }
 
 // A poster row near the screen (about a screen and a half ahead) loads all its posters, so they're usually ready
