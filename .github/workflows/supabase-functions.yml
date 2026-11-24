@@ -21,6 +21,6 @@ jobs:
       - name: Function secrets
         env:
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
-        run: npx supabase secrets set --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" TMDB_READ_TOKEN="$TMDB_READ_TOKEN"
+        run: npx supabase secrets set --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --yes TMDB_READ_TOKEN="$TMDB_READ_TOKEN"
       - name: Deploy
         run: npx supabase functions deploy --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --use-api --yes
