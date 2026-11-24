@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { paths } from '../lib/routes'
 import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Award, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
+import { titleHero } from '../lib/pictures'
 import { firstName, fullDate, looseDate, times, useTitleLogs, useWatched, type TitleLogs } from '../lib/letterboxd'
 import { useServicesQuery } from '../lib/profile'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
@@ -226,13 +227,14 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
     ['English title', t.title_en && t.title_en !== t.title ? t.title_en : ''],
     ['Language', t.original_language ? LANG[t.original_language] ?? t.original_language.toUpperCase() : ''],
   ] as [string, string][]).filter((d) => d[1])
-  const art = tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')
+  const hero = titleHero(t)
+  const art = hero.src
   const long = (t.overview?.length ?? 0) > 170
 
   return (
     <>
       <section className="title-top" aria-labelledby="t-title">
-        {art && <PinnedArt><img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" /></PinnedArt>}
+        {art && <PinnedArt><img className="title-art" data-poster={hero.poster} src={art} alt="" fetchPriority="high" /></PinnedArt>}
         <div className="title-head">
           <h1 id="t-title">{t.title}</h1>
           <div className="title-actions">

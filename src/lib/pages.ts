@@ -5,7 +5,7 @@
 import { CATEGORIES, categoryOf, loadCategory, loadCovers, rowsOf, titlesIn, type Category, type CategoryPage, type Kind, type RowDef, type SectionId, type Sort } from './browse'
 import { loadTitle, type Card, type TitleDetail } from './catalogue'
 import { tmdbImage } from './images'
-import { posterPicture, titleArt, warmPictures, type Picture } from './pictures'
+import { posterPicture, titleArt, titleHero, warmPictures, type Picture } from './pictures'
 import { prefetch, readQueryData, useQuery, type Freshness, type Query } from './query'
 import { supabase } from './supabase'
 import { routeOf, type Route } from './routes'
@@ -21,7 +21,7 @@ export type Page<T> = Freshness & {
 
 // ---- Title -------------------------------------------------------------------
 export const titlePage = (id: number): Page<TitleDetail | null> => ({
-  key: `title:${id}`, load: () => loadTitle(id), catalogue: true, fold: (t) => titleArt(t),
+  key: `title:${id}`, load: () => loadTitle(id), catalogue: true, fold: (t) => [{ src: titleHero(t).src }],
 })
 
 // ---- Person ------------------------------------------------------------------

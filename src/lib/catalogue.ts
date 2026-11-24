@@ -81,6 +81,9 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
   original_title: string | null
   /** TMDB's English title, when the title shown is a Nordic original */
   title_en?: string | null
+  /** the title page's picture, chosen by the sync (titleHero) */
+  hero_path?: string | null
+  hero_poster?: boolean
   end_year: number | null
   runtime_min: number | null
   overview: string | null
@@ -97,7 +100,7 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
   // More like this is asked for at the same time: its list doesn't depend on the title's details
   const similar = supabase.rpc('similar_titles', { p_id: id })
   const title = unwrap(await supabase.from('titles').select(
-    'id,tmdb_id,kind,title,original_title,title_en,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
+    'id,tmdb_id,kind,title,original_title,title_en,hero_path,hero_poster,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
     'availability(*,service:services(*)),' +
     'scores(imdb_rating,rt_critics,rt_audience,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +

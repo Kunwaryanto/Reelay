@@ -15,3 +15,21 @@ def test_a_nordic_title_lists_its_english_one(app):
         assert 'English title: The Celebration' in rows, rows
     finally:
         m.MODE.pop('title_en', None)
+
+def _art(pg):
+    return pg.evaluate("(() => { const i = document.querySelector('.title-art'); return [i.getAttribute('src'), i.dataset.poster] })()")
+
+def test_the_picture_chosen_by_the_sync(app):
+    # a textless poster at 780 wide, framed from the top; a textless backdrop at full size; else the backdrop as before
+    try:
+        m.MODE['hero'] = ['/textless-poster.jpg', True]
+        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2000)
+        assert _art(pg) == ['https://image.tmdb.org/t/p/w780/textless-poster.jpg', 'true'], _art(pg)
+        m.MODE['hero'] = ['/textless-backdrop.jpg', False]
+        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2000)
+        assert _art(pg) == ['https://image.tmdb.org/t/p/original/textless-backdrop.jpg', 'false'], _art(pg)
+        m.MODE.pop('hero')
+        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2000)
+        assert _art(pg)[0].startswith('https://image.tmdb.org/t/p/w1280/'), _art(pg)
+    finally:
+        m.MODE.pop('hero', None)

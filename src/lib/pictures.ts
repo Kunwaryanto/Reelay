@@ -44,5 +44,12 @@ export function wasDecoded(src: string | null | undefined) { return !!src && dec
 export function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
 
 /** A title page's top picture. */
+type HeroOf = { backdrop_path?: string | null; poster_path?: string | null; hero_path?: string | null; hero_poster?: boolean | null }
+/** The title page's picture: the one the sync chose (a textless poster at 780 wide, or a textless backdrop at full
+ *  size, sharp when the page crops it tall), else the backdrop, else the poster. `poster`: framed from the top. */
+export function titleHero(t: HeroOf | null | undefined): { src: string | undefined; poster: boolean } {
+  if (t?.hero_path) return { src: tmdbImage(t.hero_path, t.hero_poster ? 'w780' : 'original'), poster: !!t.hero_poster }
+  return { src: t ? tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780') : undefined, poster: !t?.backdrop_path }
+}
 export const titleArt = (t: { backdrop_path?: string | null; poster_path?: string | null } | null | undefined): Picture[] =>
   [{ src: t && (tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')) }]

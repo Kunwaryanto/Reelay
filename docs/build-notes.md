@@ -732,3 +732,9 @@ Measured on the database before and after:
   ("the") no longer looks up services for a thousand titles before keeping 30.
 - Order: exact name, streaming, starts with › contains › near miss, then fame (trending plus how well known), so
   The Godfather comes before this year's hits for "god". "&" and "and" are the same.
+
+## Title page picture chosen on purpose (24 Nov)
+
+- The sync picks the title page's picture from every poster and backdrop TMDB has: a textless poster first (the
+  page's tall shape, no title text, the art made for the title), else the best voted textless backdrop at least
+  1920 wide, loaded at full size so the tall crop stays sharp. Without either, the page shows what it did before.
