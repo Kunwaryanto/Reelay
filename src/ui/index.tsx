@@ -19,6 +19,7 @@ import { warmFacts } from '../lib/facts'
 import { usePageQuery, warmPage, type Page } from '../lib/pages'
 import type { Query } from '../lib/query'
 import { checkStamp } from '../lib/stamp'
+import { useNewVersion } from '../lib/update'
 import { allDecoded, decodePicture, markDecoded, wasDecoded, type Picture } from '../lib/pictures'
 export { posterPicture, titleArt, warmPictures, type Picture } from '../lib/pictures'
 
@@ -96,6 +97,19 @@ export const QuietButton = ({ children, className = '', ...rest }: BtnProps) => 
 /** 32px circle in a 44px tap area. `glass` over artwork, otherwise the subtle fill. */
 export function IconButton({ label, glass, children, ...rest }: BtnProps & { label: string; glass?: boolean }) {
   return <button type="button" className="icon-btn" aria-label={label} {...rest}><span data-glass={glass}>{children}</span></button>
+}
+
+/** The Settings button, wherever it is: with a white dot when a new version is ready. The dot springs in the
+ *  moment it appears, also while the button is on screen. */
+export function SettingsButton({ glass }: { glass?: boolean }) {
+  const { push } = useNavActions()
+  const fresh = useNewVersion()
+  return (
+    <span className="settings-btn">
+      <IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass={glass} onClick={() => push(paths.settings())}><GearIcon /></IconButton>
+      {fresh && <i aria-hidden="true" />}
+    </span>
+  )
 }
 
 export function BackButton({ glass }: { glass?: boolean }) {

@@ -608,3 +608,8 @@ Measured on the database before and after:
   swipe slid in a snapshot of Home, and on a page it competed with our own swipe for the same edge.
 - In the Home Screen app (`navigator.standalone`) the app now keeps one history entry: every page change replaces
   it, and going back is our swipe and back button only. In a browser, pages stay history entries.
+
+## Update dot on every Settings button (24 Nov)
+
+- `SettingsButton` (src/ui) is the one Settings button: Home and Watchlist use it, and it carries the white update
+  dot when a new version is out. The dot springs in when it appears, also while the button is on screen.
