@@ -90,3 +90,22 @@ def test_no_news_no_line(app):
         assert pg.evaluate(f"!({TOP}).querySelector('.news')")
     finally:
         m.MODE.pop('news', None)
+
+
+def test_news_forgets_what_was_seen(app):
+    # an arrival leaves the line once its page was opened; something leaving stays until it leaves
+    from conftest import TOP
+    m.MODE['leave'] = True
+    try:
+        pg = app()
+        line = lambda: pg.evaluate(f"(() => {{ const n = ({TOP}).querySelector('.news'); return n && [n.querySelector('b').textContent, n.querySelector('small').textContent] }})()")
+        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        head, sub = line()
+        assert head == '2 just arrived' and 'leaves' in sub, (head, sub)
+        for t in (500, 501, 505):
+            pg.goto(m.B + f'/title/{t}'); pg.wait_for_timeout(1200)
+        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        head, sub = line()
+        assert head == 'Leaving soon' and 'leaves' in sub, (head, sub)
+    finally:
+        m.MODE.pop('leave', None)

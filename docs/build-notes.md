@@ -746,3 +746,6 @@ Measured on the database before and after:
   heading size, and under it the titles and where ("Dune: Part Two on Netflix · The Holdovers leaves Viaplay in
   3 days"), cut with "…". No card, no heading. Arrivals count for 14 days on the member's services; leaving is within
   14 days. One title opens its page; more open the Watchlist. Nothing new: no line.
+- The line forgets what you've seen: an arrival goes once you've opened its title (or tapped the line to open the
+  Watchlist, which counts as seeing all of them). Something leaving stays until it leaves. A film you've logged on
+  Letterboxd goes. Remembered on the phone, so Safari and the Home Screen app each keep their own.

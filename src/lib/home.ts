@@ -25,19 +25,31 @@ export type HomeRow = {
   /** a row of large cards instead of posters, each with its reason */
   spotlight?: HomeCard[]
 }
-/** What is new on the member's watchlist, said in one line under the hero: what arrived on their services in the
- *  last two weeks, then what leaves them within two weeks. None when nothing has. */
-export type WatchNews = {
-  /** "2 just arrived", "Just arrived", "Leaving soon", "3 leaving soon" */
-  head: string
-  /** "Dune: Part Two on Netflix · The Holdovers leaves Viaplay in 3 days" */
-  sub: string
-  /** the posters, up to three, in the order of the line */
-  items: HomeCard[]
-  /** one title: its page; more: the Watchlist tab */
-  to: number | 'tab:watchlist'
+/** One title in the watchlist news under the hero: what arrived on the member's services in the last two weeks,
+ *  then what leaves them within two weeks. `what`: "on Netflix", "leaves Viaplay in 3 days". */
+export type NewsItem = { card: HomeCard; kind: 'arrived' | 'leaving'; what: string }
+export type HomeData = { hero: HomeCard[]; news: NewsItem[]; rows: HomeRow[] }
+
+/** The line as shown, from the news the member hasn't seen: an arrival goes once seen (opened), something leaving
+ *  stays until it leaves; anything they have watched goes. Null: no line. */
+export function newsLine(news: NewsItem[], seen: ReadonlySet<number>, watched: ReadonlySet<number>) {
+  const items = news.filter((n) => !watched.has(n.card.id) && !(n.kind === 'arrived' && seen.has(n.card.id)))
+  if (!items.length) return null
+  const arrived = items.filter((n) => n.kind === 'arrived').length
+  const going = items.length - arrived
+  return {
+    /** "2 just arrived", "Just arrived", "Leaving soon", "3 leaving soon" */
+    head: arrived ? (arrived === 1 ? 'Just arrived' : `${arrived} just arrived`) : going === 1 ? 'Leaving soon' : `${going} leaving soon`,
+    /** "Dune: Part Two on Netflix · The Holdovers leaves Viaplay in 3 days" */
+    sub: items.map((n) => `${n.card.title} ${n.what}`).join(' · '),
+    /** the posters, up to three, in the order of the line */
+    cards: items.slice(0, 3).map((n) => n.card),
+    /** every title in the line: tapping it counts as seeing them all */
+    ids: items.map((n) => n.card.id),
+    /** one title: its page; more: the Watchlist tab */
+    to: items.length === 1 ? items[0].card.id : ('tab:watchlist' as const),
+  }
 }
-export type HomeData = { hero: HomeCard[]; news?: WatchNews; rows: HomeRow[] }
 export type HomeAsk = {
   /** the member's services; empty: every service */
   services: string[]
@@ -51,7 +63,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 13
+export const HOME_VERSION = 14
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -230,27 +242,20 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
 
   // ---- Watchlist news: one line under the hero, in place of a row of the whole watchlist ----
   const recent = inDays(-14), soon = inDays(14)
-  const justArrived: HomeCard[] = []
+  const news: NewsItem[] = []
   for (const a of savedArrivals) {
     const t = playable.find((x) => x.id === a.title_id)
-    if (t && a.happened_on >= recent && !justArrived.some((x) => x.id === t.id)) justArrived.push({ ...t, reason: `on ${svcName(a.service_id)}` })
+    if (t && a.happened_on >= recent && !news.some((n) => n.card.id === t.id)) news.push({ card: t, kind: 'arrived', what: `on ${svcName(a.service_id)}` })
   }
-  const goingSaved: HomeCard[] = []
+  const going: (NewsItem & { on: string })[] = []
   for (const t of playable) {
-    if (justArrived.some((x) => x.id === t.id)) continue
+    if (news.some((n) => n.card.id === t.id)) continue
     const l = t.availability.filter((a) => a.leaves_on && a.leaves_on >= today() && a.leaves_on <= soon).sort((a, b) => a.leaves_on!.localeCompare(b.leaves_on!))[0]
     const when = l && leavesIn(l.leaves_on)
-    if (when) goingSaved.push({ ...t, reason: when.replace('Leaves', `leaves ${svcName(l.service_id)}`), note: l.leaves_on! })
+    if (when) going.push({ card: t, kind: 'leaving', what: when.replace('Leaves', `leaves ${svcName(l.service_id)}`), on: l.leaves_on! })
   }
-  goingSaved.sort((a, b) => a.note!.localeCompare(b.note!))
-  const newsItems = [...justArrived, ...goingSaved]
-  const news: WatchNews | undefined = newsItems.length ? {
-    head: justArrived.length ? (justArrived.length === 1 ? 'Just arrived' : `${justArrived.length} just arrived`)
-      : goingSaved.length === 1 ? 'Leaving soon' : `${goingSaved.length} leaving soon`,
-    sub: newsItems.map((t) => `${t.title} ${t.reason}`).join(' · '),
-    items: newsItems.slice(0, 3).map(({ note: _n, reason: _r, ...t }) => t),
-    to: newsItems.length === 1 ? newsItems[0].id : 'tab:watchlist',
-  } : undefined
+  going.sort((a, b) => a.on.localeCompare(b.on))
+  for (const { on: _on, ...n } of going) news.push(n)
   const rowBecause = take([...becauseCards].sort((a, b) => (rankOf.get(a.id) ?? 99) - (rankOf.get(b.id) ?? 99)))
   const rowFriends = take(friends.map((f) => friendCards.find((c) => c.id === f.title_id)).filter((c): c is Card => !!c)
     .map((c) => ({ ...c, note: `${first(friendOf.get(c.id)!.name)} ${Number(friendOf.get(c.id)!.rating).toFixed(1)}` })))

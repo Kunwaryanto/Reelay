@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { paths } from '../lib/routes'
 import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Award, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -11,6 +11,7 @@ import { titlePage } from '../lib/pages'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
+import { markNewsSeen } from '../lib/newsSeen'
 import { PageContent, PageLink, usePageFrame, PinnedArt, BackButton, GlassButton, Icon, Laurel, PosterRow, PosterWall, SectionHeader, Sheet, TitleCard } from '../ui'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
@@ -350,6 +351,8 @@ const part = (character: string) => character.replace(VOICE, '').trim()
 
 export default function Title({ id }: { id: number }) {
   const frame = usePageFrame(Number.isFinite(id) ? titlePage(id) : null)
+  // opened: an arrival in Home's watchlist news has been seen
+  useEffect(() => { if (Number.isFinite(id)) markNewsSeen(id) }, [id])
   const onScroll = useDimOnScroll()
   return (
     <>

@@ -4,10 +4,11 @@ import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
 import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
-import { HOME_VERSION, loadHome, type HomeCard, type HomeData, type WatchNews } from '../lib/home'
+import { HOME_VERSION, loadHome, type HomeCard, type HomeData, type NewsItem, newsLine } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
-import { useLetterboxd, watchedKey } from '../lib/letterboxd'
+import { useLetterboxd, useWatched, watchedKey } from '../lib/letterboxd'
+import { markNewsSeen, useNewsSeen } from '../lib/newsSeen'
 import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
@@ -318,22 +319,25 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
   )
 }
 
-/** What is new on the member's watchlist, in one line under the hero: no card, no heading; the line is its own. */
-function News({ news }: { news: WatchNews }) {
+/** What is new on the member's watchlist, in one line under the hero: no card, no heading; the line is its own.
+ *  An arrival leaves it once seen (its page opened, or the line tapped); something leaving stays until it leaves. */
+function News({ news }: { news: NewsItem[] }) {
   const { setTab } = useNavActions()
+  const line = newsLine(news, useNewsSeen(), useWatched())
+  if (!line) return null
   const inner = (
     <>
       <span className="news-stack" aria-hidden="true">
-        {news.items.map((t) => <Cover key={t.id} path={t.poster_path} sizes="44px" eager />)}
+        {line.cards.map((t) => <Cover key={t.id} path={t.poster_path} sizes="44px" eager />)}
       </span>
-      <span className="news-text"><b>{news.head}</b><small>{news.sub}</small></span>
+      <span className="news-text"><b>{line.head}</b><small>{line.sub}</small></span>
       <Icon name="chevron_right" size={20} />
     </>
   )
-  const label = `From your watchlist: ${news.head}. ${news.sub}`
-  return typeof news.to === 'number'
-    ? <PageLink to={paths.title(news.to)} className="news press" aria-label={label}>{inner}</PageLink>
-    : <button type="button" className="news press" aria-label={label} onClick={() => setTab('watchlist')}>{inner}</button>
+  const label = `From your watchlist: ${line.head}. ${line.sub}`
+  return typeof line.to === 'number'
+    ? <PageLink to={paths.title(line.to)} className="news press" aria-label={label}>{inner}</PageLink>
+    : <button type="button" className="news press" aria-label={label} onClick={() => { markNewsSeen(...line.ids); setTab('watchlist') }}>{inner}</button>
 }
 
 /** Decode a Home's first pictures (the first hero's art and title logo, the first row's first posters), so it can
@@ -467,7 +471,7 @@ export default function Now() {
       {show && q.data && (
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
-          {q.data.news && <News news={q.data.news} />}
+          {q.data.news?.length ? <News news={q.data.news} /> : null}
           {q.data.rows.map((row, r) => (
             row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
