@@ -97,7 +97,7 @@ def route(r):
               "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":"2026-12-31","link":"https://viaplay.com/film/old-style","service":{"name":"Viaplay","kind":"subscription"}},{"service_id":"netflix","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Netflix","kind":"subscription"}}],
               "scores":{"imdb_rating":7.8,"rt_critics":92,"letterboxd":None},
               "credits":[{"role":"cast","character":"Harry Ambrose","sort_order":i,"person":{"id":i,"name":n,"profile_path":None if i%2 else f"/c{i}.jpg"}} for i,n in enumerate(['Bill Pullman','Jessica Biel','Christopher Abbott','Carrie Coon','Matt Bomer'])]+[{"role":"creator","character":None,"sort_order":0,"person":{"id":99,"name":"Derek Simonds","profile_path":None}}],
-              "awards":[{"id":1,"award":"Emmys","year":2018,"short_category":"Lead Actress","won":False,"person_name":"Jessica Biel","rank":2}]})
+              "awards":MODE.get('awards',[{"id":1,"award":"Emmys","year":2018,"short_category":"Lead Actress","won":False,"person_name":"Jessica Biel","rank":2}])})
             return r.fulfill(json=t)
         n=5 if 'logo_path' in u.split('select=')[1].split('&')[0] else 12
         if 'limit=15' in u:
@@ -155,7 +155,7 @@ def new():
         if '/rest/v1/titles' in u and 'id=eq.' in u and 'overview' in u:
             t=card(3); t.update({"tmdb_id":603692,"kind":"film","title":"John Wick: Chapter 4","year":2023,"original_title":None,"end_year":None,"runtime_min":170,"seasons":None,"overview":"With the price on his head ever increasing, John Wick uncovers a path to defeating the High Table.","genres":["Action","Thriller"],"original_language":"en",
               "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Viaplay","kind":"subscription"}}],
-              "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":[]})
+              "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":MODE.get('awards',[])})
             return r.fulfill(json=t)
         return r.fallback()
     pg.route(re.compile(r'.*/rest/v1/titles.*'), tt)

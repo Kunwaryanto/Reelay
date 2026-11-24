@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { paths } from '../lib/routes'
-import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type TitleDetail } from '../lib/catalogue'
+import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Award, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { firstName, fullDate, looseDate, times, useTitleLogs, useWatched, type TitleLogs } from '../lib/letterboxd'
 import { useServicesQuery } from '../lib/profile'
@@ -96,6 +96,75 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
   )
 }
 
+/** One award in one category: the title's own and those given to people for it, together (wins and nominations apart). */
+type AwardGroup = { key: string; award: string; year: number; category: string; won: boolean; rank: number; people: string[] }
+function groupAwards(awards: Award[]): AwardGroup[] {
+  const groups = new Map<string, AwardGroup>()
+  for (const a of awards) {
+    const key = `${a.award}|${a.year}|${a.short_category}|${a.won}`
+    const g = groups.get(key) ?? { key, award: a.award, year: a.year, category: a.short_category, won: a.won, rank: a.rank, people: [] }
+    if (a.person_name && !g.people.includes(a.person_name)) g.people.push(a.person_name)
+    g.rank = Math.min(g.rank, a.rank)
+    groups.set(key, g)
+  }
+  return [...groups.values()]
+}
+const people = (names: string[]) => (names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', '))
+/** The page shows this many (wins first); more are in the sheet behind View all. */
+const AWARDS_SHOWN = 4
+
+function Awards({ awards }: { awards: Award[] }) {
+  const [open, setOpen] = useState(false)
+  // awards come sorted wins first, then the category's rank, newest first: the page keeps that order
+  const groups = useMemo(() => groupAwards(awards), [awards])
+  // the sheet: by ceremony, newest first; in each, wins first, then by rank
+  const ceremonies = useMemo(() => {
+    const by = new Map<string, AwardGroup[]>()
+    for (const g of [...groups].sort((a, b) => b.year - a.year || a.award.localeCompare(b.award) || Number(b.won) - Number(a.won) || a.rank - b.rank)) {
+      const k = `${g.award} ${g.year}`
+      by.set(k, [...(by.get(k) ?? []), g])
+    }
+    return [...by.entries()]
+  }, [groups])
+  const more = groups.length > AWARDS_SHOWN
+  const wins = groups.filter((g) => g.won).length
+  return (
+    <section className="block awards">
+      {more ? <SectionHeader title="Awards" viewAll={() => setOpen(true)} /> : <h2 className="block-title">Awards</h2>}
+      <ul className="rows">
+        {groups.slice(0, AWARDS_SHOWN).map((g) => (
+          <li key={g.key} className="row-plain">
+            <Laurel size={16} won={g.won} />
+            <span className="row-text"><b>{g.award} {g.year}</b><small>{[g.won ? 'Won' : 'Nominated', g.category, people(g.people)].filter(Boolean).join(' · ')}</small></span>
+          </li>
+        ))}
+      </ul>
+      {more && (
+        <Sheet open={open} onClose={() => setOpen(false)} label="Awards">
+          <div className="lb-head">
+            <h2>Awards</h2>
+            <span className="aw-sum">{wins > 0 ? `${wins} ${wins === 1 ? 'win' : 'wins'} · ` : ''}{groups.length} in all</span>
+          </div>
+          <div className="lb-list noscroll">
+            {ceremonies.map(([name, gs]) => (
+              <div key={name}>
+                <h3>{name}</h3>
+                <ul className="rows">
+                  {gs.map((g) => (
+                    <li key={g.key} className="row-plain">
+                      <Laurel size={16} won={g.won} />
+                      <span className="row-text"><b>{g.category}</b><small>{[g.won ? 'Won' : 'Nominated', people(g.people)].filter(Boolean).join(' · ')}</small></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Sheet>
+      )}
+    </section>
+  )
+}
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
   // More like this in your order: what's on your services first (each group keeps its likeness order), and films
@@ -189,19 +258,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </ul>
       </section>
 
-      {t.awards.length > 0 && (
-        <section className="block">
-          <h2 className="block-title">Awards</h2>
-          <ul className="rows">
-            {t.awards.map((a) => (
-              <li key={a.id} className="row-plain">
-                <Laurel size={16} won={a.won} />
-                <span className="row-text"><b>{a.award} {a.year}</b><small>{a.won ? 'Won' : 'Nominated'} · {a.short_category}{a.person_name ? `, ${a.person_name}` : ''}</small></span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {t.awards.length > 0 && <Awards awards={t.awards} />}
 
       {cast.length > 0 && (
         <section className="block">

@@ -1151,6 +1151,8 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .lb-list h3 { margin: 20px 0 4px; font: var(--type-text); font-weight: 500; color: var(--text-faint); }
 .lb-list .rows { margin: 0; }
 .lb-list .rows li.row-plain { min-height: var(--hit); }
+.aw-sum { font: var(--type-meta); color: var(--text-faint); }
+.awards .section-head { margin-bottom: 0; }
 .lb-list .lb-faces i { background: #262626; box-shadow: none; }
 .lb-score { font: var(--type-text); font-weight: 500; }
 
