@@ -1,11 +1,12 @@
 // Browse: the categories (genres, lists, decades, countries), and the lookups behind their pages.
 // A category is a set of filters over streaming titles; nothing here is stored in the database.
-import type { Card } from './catalogue'
+import { MIN_ROW, type Card } from './catalogue'
 import { supabase } from './supabase'
 
 export type Kind = Card['kind']
-export type SectionId = 'genres' | 'lists' | 'decades' | 'countries'
-export type Sort = 'popular' | 'rated' | 'newest' | 'leaving'
+/** 'home': lists that only Home's rows open (View all); they aren't shown in Browse */
+export type SectionId = 'genres' | 'lists' | 'decades' | 'countries' | 'home'
+export type Sort = 'popular' | 'rated' | 'newest' | 'leaving' | 'trending'
 
 type Rule = {
   genres?: string[]
@@ -19,6 +20,12 @@ type Rule = {
   votes?: [number, number?]
   /** leaving a service within 30 days */
   leaving?: boolean
+  /** arrived on a service within this many days */
+  arrived?: number
+  /** in this week's trending list */
+  trending?: boolean
+  /** has won an award */
+  awards?: boolean
 }
 
 export type Category = {
@@ -34,6 +41,8 @@ export type Category = {
   noun?: string
   /** lists open straight as a grid, sorted this way */
   list?: Sort
+  /** the list's name when it is opened for films or series only ("New films") */
+  labels?: Record<Kind, string>
 }
 
 const thisYear = new Date().getFullYear()
@@ -64,6 +73,12 @@ export const CATEGORIES: Category[] = [
   { id: 'hidden-gems', section: 'lists', label: 'Hidden gems', tint: '#1F4F6B', rule: { rating: 7.5, votes: [2000, 30000] }, list: 'rated' },
   { id: 'under-90', section: 'lists', label: 'Under 90 minutes', tint: '#2E5A3A', only: 'film', rule: { under: 90 }, list: 'popular' },
   { id: 'new-this-year', section: 'lists', label: 'New this year', tint: '#3E5A2E', rule: { from: thisYear }, list: 'popular' },
+
+  // the lists behind Home's rows (View all); not shown in Browse
+  { id: 'new-arrivals', section: 'home', label: 'New on streaming', tint: '#333', rule: { arrived: 30 }, list: 'popular' },
+  { id: 'trending', section: 'home', label: 'Trending', tint: '#333', rule: { trending: true }, list: 'trending', labels: { film: 'Trending films', series: 'Trending series' } },
+  { id: 'new-releases', section: 'home', label: 'New releases', tint: '#333', rule: { from: thisYear - 1 }, list: 'popular', labels: { film: 'New films', series: 'New series' } },
+  { id: 'award-winners', section: 'home', label: 'Award winners', tint: '#333', rule: { awards: true }, list: 'popular' },
 
   d('2020s', 2020, '#3E5A2E'), d('2010s', 2010, '#2F4F5F'), d('2000s', 2000, '#6B4A2A'), d('90s', 1990, '#5B3A6B'),
   d('80s', 1980, '#5A3A5A'), d('70s', 1970, '#6B5A2A'), d('60s', 1960, '#2F4F5F'),
@@ -117,8 +132,8 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
 const today = () => inDays(0)
 
-const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
-const ART = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
+const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'
+const ART = 'id,kind,title,year,runtime_min,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 
 type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean }
 
@@ -126,30 +141,36 @@ type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boole
 export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets }: Opts = {}): Promise<Card[]> {
   const r = cat.rule
   const k = kind ?? cat.only
-  const scored = sort === 'rated' || r.rating !== undefined || r.votes !== undefined
+  // The IMDb rating and votes are on the title itself (kept in step with scores by a trigger), so rated lists are
+  // read in rating order through an index and stop at `limit`, instead of joining and sorting every title's scores.
   // facets: what the filter drawer checks on the phone (genre, language, length, rating)
-  const extra = facets ? `,genres,original_language,runtime_min${scored ? '' : ',scores(imdb_rating,rt_critics,letterboxd)'}` : ''
-  let q = supabase.from('titles').select(`${art ? ART : CARD}${scored ? `,scores!inner(imdb_rating,imdb_votes${facets ? ',rt_critics,letterboxd' : ''})` : ''}${extra}`)
+  const extra = facets ? ',genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)' : ''
+  const joins = `${r.arrived ? ',availability_events!inner(event,happened_on)' : ''}${r.awards ? ',awards!inner(won)' : ''}`
+  let q = supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`)
   if (k) q = q.eq('kind', k)
   if (r.genres) q = q.overlaps('genres', r.genres)
   if (r.from !== undefined) q = q.gte('year', r.from)
   if (r.to !== undefined) q = q.lte('year', r.to)
   if (r.country) q = q.contains('countries', [r.country])
   if (r.under) q = q.eq('kind', 'film').gt('runtime_min', 40).lt('runtime_min', r.under)
-  if (r.rating !== undefined) q = q.gte('scores.imdb_rating', r.rating)
+  if (r.rating !== undefined) q = q.gte('imdb_rating', r.rating)
   if (r.votes) {
-    q = q.gte('scores.imdb_votes', r.votes[0])
-    if (r.votes[1]) q = q.lte('scores.imdb_votes', r.votes[1])
+    q = q.gte('imdb_votes', r.votes[0])
+    if (r.votes[1]) q = q.lte('imdb_votes', r.votes[1])
   } else if (sort === 'rated') {
     // enough votes for the rating to mean something; fewer for small categories (a country, an old decade)
-    q = q.gte('scores.imdb_votes', cat.section === 'genres' ? 20000 : 3000)
+    q = q.gte('imdb_votes', cat.section === 'genres' ? 20000 : 3000)
   }
   if (row === 'new') q = q.gte('year', thisYear - 1)
   if (row === 'leaving' || r.leaving) q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
   if (art) q = q.not('backdrop_path', 'is', null).not('logo_path', 'is', null)
+  if (r.arrived) q = q.eq('availability_events.event', 'added').gte('availability_events.happened_on', inDays(-r.arrived))
+  if (r.trending) q = q.not('trend_rank', 'is', null)
+  if (r.awards) q = q.eq('awards.won', true)
 
-  if (sort === 'rated') q = q.order('scores(imdb_rating)', { ascending: false })
+  if (sort === 'rated') q = q.order('imdb_rating', { ascending: false, nullsFirst: false })
   else if (sort === 'newest') q = q.order('year', { ascending: false, nullsFirst: false })
+  else if (sort === 'trending') q = q.order('trend_rank', { ascending: true, nullsFirst: false })
   const list = unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]
   // soonest first (the most popular `limit` of those leaving; the database can't order titles by a service's date)
   if (sort === 'leaving') {
@@ -159,20 +180,22 @@ export async function titlesIn(cat: Category, { kind, sort = 'popular', row, lim
   return list
 }
 
-export type CategoryPage = { hero: Card[]; rows: (RowDef & { items: Card[] })[] }
+/** `more`: the row has more titles than it shows (its View all is worth opening) */
+export type CategoryPage = { hero: Card[]; rows: (RowDef & { items: Card[]; more: boolean })[] }
+const ROW_SHOWS = 15
 
 export async function loadCategory(cat: Category, kind?: Kind): Promise<CategoryPage> {
   const defs = rowsOf(cat, kind)
   const [hero, ...lists] = await Promise.all([
     titlesIn(cat, { kind, limit: 3, art: true }),
-    ...defs.map((r) => titlesIn(cat, { kind: r.kind, sort: r.sort, row: r.id, limit: 15 })),
+    ...defs.map((r) => titlesIn(cat, { kind: r.kind, sort: r.sort, row: r.id, limit: ROW_SHOWS + 1 })),
   ])
-  return { hero, rows: defs.map((r, i) => ({ ...r, items: lists[i] })).filter((r) => r.items.length >= 3) }
+  return { hero, rows: defs.map((r, i) => ({ ...r, items: lists[i].slice(0, ROW_SHOWS), more: lists[i].length > ROW_SHOWS })).filter((r) => r.items.length >= MIN_ROW) }
 }
 
 /** One picture per category for the Browse cards: its most popular title's artwork, no title used twice. */
 export async function loadCovers(): Promise<Record<string, string | null>> {
-  const tops = await Promise.all(CATEGORIES.map((cat) =>
+  const tops = await Promise.all(CATEGORIES.map((cat) => cat.section === 'home' ? Promise.resolve([]) :
     supabaseTop(cat).catch(() => [] as { id: number; backdrop_path: string | null; poster_path: string | null }[])))
   const used = new Set<number>()
   const out: Record<string, string | null> = {}

@@ -1,7 +1,8 @@
 // What someone has set up: the services they have and the notifications they want.
 import { useAuth } from './auth'
-import { setQueryData, useQuery } from './query'
+import { FRESH, changed, setQueryData, useQuery } from './query'
 import { supabase } from './supabase'
+import { loadMyServices } from './catalogue'
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -29,7 +30,7 @@ export function useProfile() {
   const { session } = useAuth()
   const uid = session?.user.id
   const key = uid ? `profile:${uid}` : null
-  const q = useQuery<Profile>(key, () => loadProfile(uid!), { maxAge: 10 * 60 * 1000 })
+  const q = useQuery<Profile>(key, () => loadProfile(uid!), FRESH.mine())
   const update = async (patch: Partial<Profile>) => {
     if (!uid || !key || !q.data) return
     const before = q.data
@@ -40,14 +41,18 @@ export function useProfile() {
   return { profile: q.data, loaded: q.data !== undefined, update }
 }
 
+/** The services the member has picked, as a query (the one cache of them; screens read it here). */
+export function useServicesQuery() {
+  const uid = useAuth().session?.user.id
+  return useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, FRESH.mine('services'))
+}
+
 /** The services someone has picked, and a way to change them. The same list Watchlist, Search and Browse read. */
 export function useMyServices() {
   const { session } = useAuth()
   const uid = session?.user.id
   const key = uid ? `my-services:${uid}` : null
-  const q = useQuery<string[]>(key, async () =>
-    (unwrap(await supabase.from('user_services').select('service_id')) as { service_id: string }[]).map((r) => r.service_id),
-  { maxAge: 10 * 60 * 1000 })
+  const q = useServicesQuery()
   const mine = q.data ?? []
   const set = async (id: string, on: boolean) => {
     if (!uid || !key) return
@@ -58,6 +63,7 @@ export function useMyServices() {
       ? await supabase.from('user_services').upsert({ user_id: uid, service_id: id }, { ignoreDuplicates: true })
       : await supabase.from('user_services').delete().eq('user_id', uid).eq('service_id', id)
     if (res.error) { setQueryData(key, before); throw new Error(res.error.message) }
+    changed('services')
   }
   /** Replace the whole selection in one go (onboarding's Continue). */
   const setAll = async (ids: string[]) => {
@@ -72,6 +78,7 @@ export function useMyServices() {
     ])
     const failed = res.find((r) => r?.error)
     if (failed?.error) { setQueryData(key, before); throw new Error(failed.error.message) }
+    changed('services')
   }
   return { mine, loaded: q.data !== undefined, set, setAll }
 }
@@ -85,15 +92,19 @@ export function servicesLabel(names: string[]): string {
 
 /** Everything Reelay keeps about the signed-in person, for "Get a copy of my data". */
 export async function exportMyData(userId: string, email: string | null) {
-  const [profile, services, watchlist] = await Promise.all([
+  const [profile, services, watchlist, lbAccount, lbLogs] = await Promise.all([
     supabase.from('profiles').select('region,language,notify_leaving,notify_arrivals,notify_new_seasons,created_at').eq('user_id', userId).single(),
     supabase.from('user_services').select('service:services(name)'),
     supabase.from('watchlist').select('notify,added_at,title:titles(title,year,kind)').order('added_at'),
+    supabase.from('letterboxd_accounts').select('username,display_name,mark_watched,hide_watched,connected_at,synced_at').eq('user_id', userId).maybeSingle(),
+    supabase.from('letterboxd_logs').select('tmdb_id,film_name,film_year,watched_on,rating,rewatch').eq('user_id', userId).order('watched_on'),
   ])
   return {
     exported_at: new Date().toISOString(), email,
     settings: unwrap(profile), services: (unwrap(services as never) as { service: { name: string } | null }[]).map((s) => s.service?.name),
     watchlist: unwrap(watchlist as never),
+    // only when Letterboxd is connected
+    ...(lbAccount.data ? { letterboxd: { ...lbAccount.data, diary: lbLogs.data ?? [] } } : {}),
   }
 }
 

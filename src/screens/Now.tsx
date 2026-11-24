@@ -1,25 +1,30 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
-import { SERVICE_NAME, kindWord, leavingNote, loadNow, openLink, runtime, type Card } from '../lib/catalogue'
+import { useServicesQuery } from '../lib/profile'
+import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
+import { warmPage } from '../lib/pages'
+import { paths } from '../lib/routes'
+import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
+import { HOME_VERSION, loadHome, type HomeCard, type HomeData } from '../lib/home'
+import { useHome } from '../lib/homeData'
+import { useSaved } from '../lib/saved'
+import { useLetterboxd } from '../lib/letterboxd'
+import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
-import { useDimOnScroll, useNavActions } from '../lib/nav'
-import { warmBrowse } from './Browse'
-import { useQuery } from '../lib/query'
-import { useSaved } from '../lib/saved'
+import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
+import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
 import { useNewVersion } from '../lib/update'
-import { PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { NearImage, NearRow, PageLink, PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
-function heroMeta(c: Card): string {
+function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
-  const parts = [service ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
-  if (c.kind === 'series' && c.seasons) parts.push(c.seasons === 1 ? '1 season' : `${c.seasons} seasons`)
-  else if (c.genres?.[0]) parts.push(c.genres[0])
-  return parts.filter(Boolean).join(' · ')
+  // the service is left out when the line above already names one ("New on Netflix")
+  // where, how long (runtime or seasons, which also says film or series), what kind of thing: "On Netflix · 2h 6m · Action"
+  return [service && !/^(New|Now) on/.test(c.reason ?? '') ? `On ${SERVICE_NAME[service] ?? service}` : null, lengthOf(c), c.genres?.[0]].filter(Boolean).join(' · ')
 }
 
-export function Hero({ items }: { items: Card[] }) {
+export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
   const { push } = useNavActions()
   const [index, setIndex] = useState(0)
   const [dir, setDir] = useState(1)
@@ -30,16 +35,32 @@ export function Hero({ items }: { items: Card[] }) {
 
   const go = (d: number) => { setDir(d); setIndex((i) => (i + d + n) % n) }
 
+  // The white bar is the timer: the next slide comes when the bar's own fill ends (onAnimationEnd below), so the
+  // two can never disagree. It only runs while the hero can be seen. Whenever it comes back into view (the app
+  // reopened, back from a page on top, back to this tab) the current slide starts over with a full five seconds,
+  // so nothing changes the moment you look, and a finger on it holds the bar where it is.
+  const section = useRef<HTMLElement>(null)
+  const nav = useNav()
+  const [seen, setSeen] = useState(true)
+  const [run, setRun] = useState(0)
   useEffect(() => {
-    if (paused || n < 2) return
-    const t = setTimeout(() => go(1), 5000)
+    const look = () => {
+      const el = section.current
+      const now = !document.hidden && !!el && !el.closest('[inert]') && el.closest('.stack')?.getAttribute('data-active') !== 'false'
+      setSeen((was) => { if (now && !was) setRun((r) => r + 1); return now })
+    }
+    look()
+    document.addEventListener('visibilitychange', look)
+    return () => document.removeEventListener('visibilitychange', look)
+  }, [nav.tab, nav.path])
+  const still = paused || !seen
+  // reduced motion draws no bar: a plain timer instead, on the same rules
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  useEffect(() => {
+    if (!reduced || still || n < 2) return
+    const t = setTimeout(() => { setDir(1); setIndex((i) => (i + 1) % n) }, 5000)
     return () => clearTimeout(t)
-  })
-  useEffect(() => {
-    const vis = () => setPaused(document.hidden)
-    document.addEventListener('visibilitychange', vis)
-    return () => document.removeEventListener('visibilitychange', vis)
-  }, [])
+  }, [reduced, still, n, index, run])
 
   // Touch: a sideways swipe changes the picture. It is read from touch events and claimed on its first sideways
   // move, because on a page that was pushed in (a category) the whole strip of pages scrolls sideways too: the
@@ -78,7 +99,7 @@ export function Hero({ items }: { items: Card[] }) {
   }, [n])
 
   return (
-    <section className="hero" aria-label="On now" aria-roledescription="carousel">
+    <section ref={section} className="hero" aria-label="On now" aria-roledescription="carousel">
       <div className="hero-stage" ref={stage}
         // with a mouse (touch is handled above)
         onPointerDown={(e) => { if (e.pointerType === 'touch') return; x0.current = e.clientX; swiped.current = false; setPaused(true) }}
@@ -92,28 +113,33 @@ export function Hero({ items }: { items: Card[] }) {
         {items.map((h, i) => {
           const on = i === index
           return (
-            <a key={h.id} className="hero-slide" data-on={on} href={`/title/${h.id}`} aria-label={`${h.title}, ${heroMeta(h)}`}
+            <PageLink key={h.id} to={paths.title(h.id)} className="hero-slide" data-on={on} aria-label={`${h.title}, ${h.reason ? `${h.reason}, ` : ''}${heroMeta(h)}`}
               aria-hidden={!on} tabIndex={on ? 0 : -1} style={{ '--from': `${8 * dir}%` } as CSSProperties}
-              onClick={(e) => { e.preventDefault(); if (!swiped.current) push(`/title/${h.id}`) }}>
-              <div className="hero-text">
+              onClick={() => { if (!swiped.current) push(paths.title(h.id)) }}>
+              <div className="hero-text" data-reason={h.reason ? '' : undefined}>
                 {h.logo_path ? <img className="hero-logo" src={tmdbImage(h.logo_path, 'w500')} alt="" draggable={false} /> : <span className="hero-name">{h.title}</span>}
+                {/* why it is here: new on a service, leaving, on the watchlist, trending, liked by a friend */}
+                {h.reason && <span className="hero-reason">{h.reason}</span>}
                 <span className="hero-meta">{heroMeta(h)}</span>
               </div>
-            </a>
+            </PageLink>
           )
         })}
       </div>
-      {/* the pictures sit behind the page, pinned to the top of the screen */}
+      {/* the pictures sit behind the page, pinned to the top of the screen; the next slide's is asked for ahead */}
       <PinnedArt>
         {items.map((h, i) => {
           const art = tmdbImage(h.backdrop_path, 'w1280') ?? tmdbImage(h.poster_path, 'w780')
           return art && <img key={h.id} className="hero-art" data-on={i === index} src={art} alt="" draggable={false}
-            style={{ '--from': `${8 * dir}%` } as CSSProperties} fetchPriority={i === 0 ? 'high' : undefined} loading={i === 0 ? undefined : 'lazy'} />
+            style={{ '--from': `${8 * dir}%` } as CSSProperties} fetchPriority={i === 0 ? 'high' : undefined} loading={i <= index + 1 ? undefined : 'lazy'} />
         })}
       </PinnedArt>
       {n > 1 && (
         <div className="hero-dots" aria-hidden="true">
-          {items.map((h, i) => <span key={h.id} data-on={i === index}>{i === index && <i key={index} style={{ animationPlayState: paused ? 'paused' : 'running' }} />}</span>)}
+          {items.map((h, i) => <span key={h.id} data-on={i === index}>{i === index && (
+            <i key={`${index}:${run}`} style={{ animationPlayState: still ? 'paused' : 'running' }}
+              onAnimationEnd={(e) => { if (e.target === e.currentTarget && !still) go(1) }} />
+          )}</span>)}
         </div>
       )}
     </section>
@@ -193,7 +219,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   const openTitle = () => {
     if (!armed.current || leaving) return
     setLeaving(true)
-    push(`/title/${held.card.id}`)
+    push(paths.title(held.card.id))
     setTimeout(onClose, 220)
   }
 
@@ -212,7 +238,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   if (d?.imdb != null) scores.push(['IMDb', Number(d.imdb).toFixed(1)])
   if (d?.rt != null) scores.push(['RT', `${d.rt}%`])
   if (d?.lb != null) scores.push(['Letterboxd', Number(d.lb).toFixed(1)])
-  const leaves = card.availability[0] && leavingNote(card.availability[0].leaves_on)
+  const leaves = leavingFor(card)
   const leavesOn = leaves ? leaves.replace('Leaves', `Leaves ${SERVICE_NAME[card.availability[0].service_id] ?? card.availability[0].service_id}`) : null
   const headH = 26 + 20 + 26 + 18 + 26 + (leavesOn ? 24 : 0)
   const vw = window.innerWidth, vh = window.innerHeight
@@ -270,19 +296,67 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   )
 }
 
-// Where each row's "View all" goes: the Browse page for the same thing
-const MORE: Record<string, string> = {
-  leaving: '/browse/g/leaving-soon/list', rated: '/browse/g/highest-rated/list',
-  '2000s': '/browse/c/2000s', '90s': '/browse/c/90s', crime: '/browse/c/crime', comedy: '/browse/c/comedy', drama: '/browse/c/drama',
+/** Titles given room between the rows, side by side: each card has its wide picture, why it is here, and where it plays. */
+function Spotlight({ cards }: { cards: HomeCard[] }) {
+  return (
+    <NearRow className="spot-row noscroll" role="list">
+      {cards.map((card) => {
+        const art = card.backdrop_path ? { src: tmdbImage(card.backdrop_path, 'w780'), srcSet: `${tmdbImage(card.backdrop_path, 'w780')} 780w, ${tmdbImage(card.backdrop_path, 'w1280')} 1280w`, sizes: '90vw' } : null
+        const service = card.availability[0]?.service_id
+        return (
+          <div key={card.id} role="listitem" className="spot-item"><PageLink to={paths.title(card.id)} className="spot press">
+            {art && <NearImage {...art} />}
+            <span className="spot-text">
+              {card.reason && <small>{card.reason}</small>}
+              <b>{card.title}</b>
+              {/* the service, unless the reason already names one ("New on Netflix") */}
+              <span>{metaLine(card, service && !/^(New|Now) on/.test(card.reason ?? '') ? SERVICE_NAME[service] ?? service : null)}</span>
+            </span>
+          </PageLink></div>
+        )
+      })}
+    </NearRow>
+  )
+}
+
+/** Decode a Home's first pictures (the first hero's art and title logo, the first row's first posters), so it can
+ *  go on screen whole. Resolves when they're decoded or have failed. */
+function decodeFold(data: HomeData): Promise<void> {
+  const decode = (src: string | null | undefined, srcset?: string) => {
+    if (!src) return Promise.resolve()
+    const img = new Image()
+    // the same candidates as the card, so this is the file the card will show
+    if (srcset) { img.sizes = '147px'; img.srcset = srcset }
+    img.src = src
+    return img.decode().catch(() => {})
+  }
+  const first = data.hero[0]
+  const art = first ? tmdbImage(first.backdrop_path, 'w1280') ?? tmdbImage(first.poster_path, 'w780') : undefined
+  const posters = (data.rows[0]?.items ?? []).slice(0, 3)
+  return Promise.all([
+    decode(art), decode(tmdbImage(first?.logo_path, 'w500')),
+    ...posters.map((c) => decode(tmdbImage(c.poster_path, 'w342'), posterSrcSet(c.poster_path))),
+  ]).then(() => {})
 }
 
 export default function Now() {
-  const { push } = useNavActions()
-  const q = useQuery('now', loadNow, { maxAge: 10 * 60 * 1000 })
+  const { push, setTab } = useNavActions()
+  const { tab, path } = useNav()
+  // Home is built for this member: their services, and whether films they have logged are left out
+  const uid = useAuth().session?.user.id
+  const services = useServicesQuery()
+  const lb = useLetterboxd()
+  const hide = lb.account?.hide_watched ?? true
+  const svc = services.data
+  // the watchlist and Letterboxd shape several rows: Home builds again (quietly) when they change
+  const changes = useChanges(['watchlist', 'letterboxd'])
+  const savedLoaded = useSaved().loaded
+  const settled = svc !== undefined && lb.account !== undefined && savedLoaded
+  const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const fresh = useNewVersion()
-  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its
   // title logo, and the first posters of the first row. Ready within 300 ms: Now just rises.
   // Later than that: the wordmark rises on black and always finishes (900 ms) before fading into the page; still
@@ -295,19 +369,7 @@ export default function Now() {
     if (!q.data || foldKey === null) return
     let live = true
     const done = () => { if (live) setArtFor(foldKey) }
-    const decode = (src: string | null | undefined, srcset?: string) => {
-      if (!src) return Promise.resolve()
-      const img = new Image()
-      // the same candidates as the card, so this is the file the card will show
-      if (srcset) { img.sizes = '147px'; img.srcset = srcset }
-      img.src = src
-      return img.decode().catch(() => {})
-    }
-    const posters = (q.data.rows[0]?.items ?? []).slice(0, 3)
-    void Promise.all([
-      decode(firstArt), decode(tmdbImage(first?.logo_path, 'w500')),
-      ...posters.map((c) => decode(tmdbImage(c.poster_path, 'w342'), posterSrcSet(c.poster_path))),
-    ]).then(done)
+    void decodeFold(q.data).then(done)
     const t = setTimeout(done, 2500) // slow pictures don't hold the page back for ever
     return () => { live = false; clearTimeout(t) }
     // `foldKey` stands for the data
@@ -315,31 +377,56 @@ export default function Now() {
   }, [foldKey])
   const [icons, setIcons] = useState(false)
   useEffect(() => { let live = true; void iconsReady.then(() => { if (live) setIcons(true) }); return () => { live = false } }, [])
-  const ready = !!q.data && artFor === foldKey && icons
+  // once the page has shown, it never hides again: a new Home is only put in place with its pictures decoded
+  const [launched, setLaunched] = useState(false)
+  const ready = !!q.data && (launched || artFor === foldKey) && icons
   const readyRef = useRef(ready)
   readyRef.current = ready
-  const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>('wait')
+  // The start-up wordmark (index.html) is usually already rising when this mounts: Home takes it over as its own
+  // 'mark' phase, timed from when the page started rather than from now, and the page arrives under it.
+  const [booted] = useState(bootShowing)
+  const [phase, setPhase] = useState<'wait' | 'mark' | 'after' | 'late'>(booted ? 'mark' : 'wait')
   useEffect(() => {
-    const a = setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
-    const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), 1200)
-    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), 3300)
+    const since = booted ? performance.now() : 0
+    const a = booted ? undefined : setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
+    const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), Math.max(0, (booted ? BOOT_RISE_MS : 1200) - since))
+    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), Math.max(0, 3300 - since))
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
-  }, [])
+  }, [booted])
   const show = ready && phase !== 'mark'
+  if (show && !launched) setLaunched(true)
   // The wordmark stays mounted while it fades out over the arriving page (mounting it again would replay its rise).
   const [mark, setMark] = useState<'none' | 'on' | 'gone'>('none')
-  if (phase === 'mark' && mark === 'none') setMark('on')
+  if (phase === 'mark' && mark === 'none' && !booted) setMark('on')
   useEffect(() => {
     if (!show || mark !== 'on') return
     const t = setTimeout(() => setMark('gone'), 700)
     return () => clearTimeout(t)
   }, [show, mark])
+  // Back on a new day: the wordmark covers the page while today's Home is made, then fades over it
+  const [cover, setCover] = useState<'none' | 'on' | 'leaving'>('none')
+  if (q.waking && cover !== 'on') setCover('on')
+  if (!q.waking && cover === 'on') setCover('leaving')
+  useEffect(() => {
+    if (cover !== 'leaving') return
+    const t = setTimeout(() => setCover('none'), 700)
+    return () => clearTimeout(t)
+  }, [cover])
   // The tab bar arrives with the page, as part of the same movement.
   const failed = !!q.error
   useEffect(() => {
     if (failed || phase === 'late') { markLaunched(); return }
     if (show) markLaunched()
   }, [show, failed, phase])
+  // The two likeliest taps (the first hero slide, the first Picked for you card) load a moment after Home has
+  // arrived, so they open at once even without the press preload's head start
+  const heroId = q.data?.hero[0]?.id
+  const spotId = q.data?.rows.find((r) => r.spotlight)?.spotlight?.[0]?.id
+  useEffect(() => {
+    if (!show) return
+    const t = setTimeout(() => { for (const id of [heroId, spotId]) if (id) warmPage(paths.title(id)) }, 1500)
+    return () => clearTimeout(t)
+  }, [show, heroId, spotId])
   // the staged rise plays once, at launch
   const [launching, setLaunching] = useState(true)
   useEffect(() => { if (!show) return; const t = setTimeout(() => setLaunching(false), 1600); return () => clearTimeout(t) }, [show])
@@ -347,11 +434,12 @@ export default function Now() {
   return (
     <>
     <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
-      <h1 className="sr-only">Now</h1>
+      <h1 className="sr-only">Home</h1>
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
-      {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push('/settings')}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
+      {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push(paths.settings())}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
       {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
+      {cover !== 'none' && <div className="launch" data-leaving={cover === 'leaving' || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
         <div className="now-holders" aria-hidden="true">
           <div />
@@ -364,12 +452,13 @@ export default function Now() {
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.rows.map((row, r) => (
+            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
-              <SectionHeader title={row.title} onViewAll={MORE[row.id] ? () => push(MORE[row.id]) : undefined} onViewAllPress={MORE[row.id] ? () => warmBrowse(MORE[row.id]) : undefined} />
+              <SectionHeader title={row.title} viewAll={row.more === 'tab:watchlist' ? () => setTab('watchlist') : row.more} />
               <PosterRow>
                 {row.items.map((card) => {
-                  const note = row.notes === 'leaving' && !q.stale ? leavingNote(card.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0]) : undefined
-                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} onHold={(c, cover) => setHeld({ card: c, cover })} />
+                  const note = card.note ?? (row.notes === 'leaving' ? leavingFor(card, { stale: q.stale }) : undefined)
+                  return <TitleCard key={card.id} card={card} note={note} eager={r === 0} />
                 })}
               </PosterRow>
             </section>
@@ -377,7 +466,6 @@ export default function Now() {
           {q.data.rows.length === 0 && q.data.hero.length === 0 && <p className="empty">Nothing to show yet. The catalogue is still filling up.</p>}
         </div>
       )}
-      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
     </main>
     {indicator}
     </>

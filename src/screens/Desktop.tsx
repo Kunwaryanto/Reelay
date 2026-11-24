@@ -1,18 +1,9 @@
 // "Made for your phone": the one page any computer gets, whatever the address. The QR code opens Reelay on a phone.
 import qrcode from 'qrcode-generator'
 import { useMemo, useState } from 'react'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import { supabase } from '../lib/supabase'
 import { PosterWall, Wordmark } from '../ui'
-
-/** A computer: no touch screen, or a screen wider than any phone. `?app` in the address shows the app anyway (testing). */
-export function isDesktop(): boolean {
-  try {
-    if (new URLSearchParams(location.search).has('app')) sessionStorage.setItem('reelay:app-anyway', '1')
-    if (sessionStorage.getItem('reelay:app-anyway')) return false
-  } catch { /* storage blocked: decide by the screen alone */ }
-  return !matchMedia('(pointer: coarse)').matches || matchMedia('(min-width: 700px) and (min-height: 700px)').matches
-}
 
 async function loadWall(): Promise<string[]> {
   const { data, error } = await supabase.rpc('start_wall')
@@ -32,7 +23,7 @@ function qrPath(text: string): { d: string; size: number } {
 }
 
 export default function Desktop() {
-  const wall = useQuery<string[]>('wall', loadWall, { maxAge: 24 * 60 * 60 * 1000 })
+  const wall = useQuery<string[]>('wall', loadWall, FRESH.catalogue)
   const [ready, setReady] = useState(false)
   // from an invite link, the code carries the invite itself; always this site's own address
   const invited = /^\/i\/[A-Za-z0-9_-]+$/.test(location.pathname)

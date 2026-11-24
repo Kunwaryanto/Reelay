@@ -1,21 +1,22 @@
 // Search: the field sits at the bottom, above the keyboard. Before typing: a prompt and three ideas, with recents
 // in a drawer on the left. While typing: results with type pills, filter chips read from the words, and a sort sheet.
+import { useServicesQuery } from '../lib/profile'
+import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal, flushSync } from 'react-dom'
-import { useAuth } from '../lib/auth'
-import { SERVICE_NAME, kindWord, loadMyServices, type Card } from '../lib/catalogue'
+import { flushSync } from 'react-dom'
+import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
+import { useWatched } from '../lib/letterboxd'
 import { useNav, useNavActions } from '../lib/nav'
-import { useQuery } from '../lib/query'
+import { FRESH, useQuery } from '../lib/query'
 import {
   addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
 } from '../lib/search'
 import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen } from '../ui'
-import { HoldMenu } from './Now'
+import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 
@@ -27,8 +28,9 @@ type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; 
 const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
 /** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
 const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
-function toFilters(x: Extra, services: string[] | null): Filters {
+function toFilters(x: Extra, services: string[] | null, hide: number[] | null = null): Filters {
   const f: Filters = {}
+  if (hide?.length) f.hide = hide
   if (typeof x.decade === 'number') { if (x.decade === 0) f.to = 1979; else { f.from = x.decade; f.to = x.decade + 9 } }
   if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
   if (x.lang) f.lang = x.lang
@@ -41,7 +43,7 @@ function toFilters(x: Extra, services: string[] | null): Filters {
 }
 
 const nameOf = (id: string) => SERVICE_NAME[id] ?? id
-const metaOf = (h: Hit) => [kindWord(h.kind), h.year, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden'].filter(Boolean).join(' · ')
+const metaOf = (h: Hit) => metaLine({ ...h, runtime_min: h.runtime }, h.services[0] ? nameOf(h.services[0]) : 'Not streaming in Sweden')
 
 // Answers from the last few minutes, so a search made again (or one of the three ideas, fetched ahead) shows at once.
 const KEEP = 5 * 60 * 1000
@@ -95,7 +97,7 @@ function useSearch(typed: string, removed: string[], extra: Filters) {
   }
 }
 
-const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
+const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, runtime_min: h.runtime, seasons: h.seasons, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
 
 /** True once `on` has lasted `ms`: a quick answer never flashes a loading state. */
 function useLate(on: boolean, ms: number) {
@@ -117,49 +119,53 @@ const Skeleton = () => (
   </ul>
 )
 
-function Row({ h, near, onOpen, onHold }: { h: Hit; near?: boolean; onOpen: () => void; onHold: (card: Card, cover: HTMLElement) => void }) {
+function Row({ h, near, onOpen, before }: { h: Hit; near?: boolean; onOpen: () => void; before?: () => void }) {
+  const onHold = useHold(before)
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   const li = useRef<HTMLLIElement>(null)
   const close = useNearScreen(li, near)
   useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
     <li ref={li}>
-      <a className="s-row press-row" href={`/title/${h.id}`} {...hold.handlers} onPointerDown={(e) => { warmFacts([h.id], true); hold.handlers.onPointerDown(e) }} onClick={(e) => { e.preventDefault(); if (!hold.fired()) onOpen() }}>
+      <PageLink to={paths.title(h.id)} className="s-row press-row" handlers={joinHandlers(hold.handlers, { onPointerDown: () => warmFacts([h.id], true) })} onClick={() => { if (!hold.fired()) onOpen() }}>
         <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
-      </a>
+      </PageLink>
     </li>
   )
 }
 
+const readKeyboardHeight = () => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }
+
 export default function Search() {
-  const { session } = useAuth()
   const { push, setTab } = useNavActions()
   const { tab } = useNav()
-  const uid = session?.user.id
   const input = useRef<HTMLInputElement>(null)
   const [q, setQ] = useState('')
   const [removed, setRemoved] = useState<string[]>([])
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('best')
   const [onlyMine, setOnlyMine] = useState(false)
+  const [hideSeen, setHideSeen] = useState(false)
   const [extra, setExtra] = useState<Extra>({})
   const [sheet, setSheet] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [typing, setTyping] = useState(false)
   const [recents, setRecents] = useState(readRecents)
-  const [held, setHeld] = useState<{ card: Card; cover: HTMLElement } | null>(null)
-  const hold = (card: Card, cover: HTMLElement) => { input.current?.blur(); setHeld({ card, cover }) }
   const [online, setOnline] = useState(navigator.onLine)
   const { room, pending } = useKeyboardRoom(typing)
   const [hour] = useState(() => new Date().getHours())
 
-  const mineQ = useQuery<string[]>(uid ? `my-services:${uid}` : null, loadMyServices, { maxAge: 10 * 60 * 1000 })
-  const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, { maxAge: 60 * 60 * 1000 })
-  const popular = useQuery<Hit[]>('search-popular', loadPopular, { maxAge: 60 * 60 * 1000 })
+  const mineQ = useServicesQuery()
+  const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, FRESH.catalogue)
+  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
+  // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
+  const seen = useWatched()
+  const seenIds = useMemo(() => [...seen].sort((a, b) => a - b).slice(0, 400), [seen])
+  const hiding = hideSeen && seen.size > 0
 
   useEffect(() => {
     const set = () => setOnline(navigator.onLine)
@@ -181,7 +187,7 @@ export default function Search() {
 
   // chips from the words that the drawer has replaced
   const off = useMemo(() => [...removed, ...parseQuery(q).tokens.filter((t) => { const s = slot(t.key); return s !== null && extra[s] !== undefined }).map((t) => t.key)], [q, removed, extra])
-  const xf = useMemo(() => toFilters(extra, myOnly ? picked : null), [extra, myOnly, picked])
+  const xf = useMemo(() => toFilters(extra, myOnly ? picked : null, hiding ? seenIds : null), [extra, myOnly, picked, hiding, seenIds])
   const { found, error, waiting, retry } = useSearch(q, off, xf)
   const hasQ = q.trim().length > 0
   // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
@@ -194,7 +200,7 @@ export default function Search() {
   // the three ideas are fetched ahead, so tapping one has nothing to wait for
   useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
 
-  const all = found?.hits ?? []
+  const all = useMemo(() => (hiding ? (found?.hits ?? []).filter((h) => !seen.has(h.id)) : found?.hits ?? []), [found, hiding, seen])
   const mine = all
   const folks = found?.people ?? []
   const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
@@ -206,9 +212,9 @@ export default function Search() {
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
   const change = (text: string) => { setQ(text); setRemoved([]); if (!text) setExtra({}) }
   const open = (h: Hit) => {
-    remember({ t: 'title', id: h.id, text: h.title, sub: [kindWord(h.kind), h.year].filter(Boolean).join(' · '), poster_path: h.poster_path })
+    remember({ t: 'title', id: h.id, text: h.title, sub: metaLine({ ...h, runtime_min: h.runtime }), poster_path: h.poster_path })
     input.current?.blur()
-    push(`/title/${h.id}`)
+    push(paths.title(h.id))
   }
   const run = (text: string) => { change(text); setExtra({}); setKind(guess(text, [])?.kind ?? 'all'); setDrawer(false) }
 
@@ -222,13 +228,14 @@ export default function Search() {
     ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
     ...(extra.lang ? [{ key: 'x-lang', label: langName(extra.lang), drop: () => less({ lang: null }) }] : []),
     ...(myOnly ? [{ key: 'x-mine', label: 'My services', drop: () => setOnlyMine(false) }] : []),
+    ...(hiding ? [{ key: 'x-hide', label: 'Hide watched', drop: () => setHideSeen(false) }] : []),
   ]
   const filtersOn = tokens.filter((t) => !t.key.startsWith('genre:')).length + (tokens.some((t) => t.key.startsWith('genre:')) || extra.genres?.length ? 1 : 0)
     + xchips.filter((c) => !c.key.startsWith('x-genre:')).length
   // the drawer opens on how things stand: what it set itself, else what the words say
   const yearsToken = tokens.find((t) => t.key === 'years')
   const init: Draft = {
-    sort, mine: myOnly, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
+    sort, mine: myOnly, hide: hiding, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
     genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
     decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
     lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
@@ -238,13 +245,14 @@ export default function Search() {
   const countOf = (d: Draft): Count => {
     const keepYears = d.decade === null && yearsNote !== ''
     const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
-    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null)
+    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null, d.hide ? seenIds : null)
     const k = kind === 'film' || kind === 'series' ? kind : undefined
     return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
   }
   const apply = (d: Draft) => {
     setSort(d.sort as Sort)
     setOnlyMine(d.mine)
+    setHideSeen(d.hide)
     setExtra((x) => {
       const next: Extra = { ...x, rating: d.rating || undefined, rt: d.rt || undefined, lb: d.lb || undefined, length: d.length ?? undefined }
       if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres
@@ -283,7 +291,8 @@ export default function Search() {
     return () => el.removeEventListener('touchstart', down)
   }, [])
   // How far the keyboard travels (as last measured): Search rises that far with it when it opens.
-  const kb = useMemo(() => { try { return Number(localStorage.getItem('reelay:kb-height')) || 300 } catch { return 300 } }, [drawer, typing])
+  // read on every render (it's one small value): the keyboard may differ from the last one, so it's never kept
+  const kb = readKeyboardHeight()
   // Leaving the app closes the keyboard without telling the page. Let go of the field then, and drop it back to
   // rest at once (no animation): iOS takes its app-switcher picture right away, and coming back starts from that
   // picture, so it must already show Search at rest, not halfway down. Animations come back once the app is shown
@@ -350,12 +359,12 @@ export default function Search() {
         <ul>
           {recents.map((r, i) => (
             <li key={r.t === 'q' ? `q:${r.text}` : `t:${r.id}`}>
-              <button type="button" className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(`/title/${r.id}`) } }}>
+              <PageButton to={r.t === 'title' ? paths.title(r.id) : null} className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(paths.title(r.id)) } }}>
                 {r.t === 'title'
                   ? <span className="s-thumb">{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                   : <span className="s-thumb-icon"><Icon name="search" size={20} /></span>}
                 <span className="s-recent-text"><b>{r.text}</b>{r.t === 'title' && <small>{r.sub}</small>}</span>
-              </button>
+              </PageButton>
               <button type="button" className="s-recent-x" aria-label={`Remove ${r.text}`} onClick={() => forget(recents.filter((_, j) => j !== i))}><Icon name="close" size={18} /></button>
             </li>
           ))}
@@ -426,11 +435,11 @@ export default function Search() {
                 <ul className="s-results s-people">
                   {shownPeople.map((p) => (
                     <li key={p.id}>
-                      <a className="s-person" href={`/person/${p.id}`} onClick={(e) => { e.preventDefault(); input.current?.blur(); push(`/person/${p.id}`) }}>
+                      <PageLink to={paths.person(p.id)} className="s-person" onClick={() => { input.current?.blur(); push(paths.person(p.id)) }}>
                         <span className="avatar" aria-hidden="true">{p.profile_path ? <img src={tmdbImage(p.profile_path, 'w185')} alt="" loading="lazy" /> : p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>
                         <span className="wl-text"><b>{p.name}</b>{p.known_for && <small>{p.known_for}</small>}</span>
                         <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)' }} />
-                      </a>
+                      </PageLink>
                     </li>
                   ))}
                 </ul>
@@ -439,7 +448,7 @@ export default function Search() {
               {skeleton && <Skeleton />}
               {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
               <ul className="s-results" key={kind} data-waiting={waiting}>
-                {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} onHold={hold} />)}
+                {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} before={() => input.current?.blur()} />)}
               </ul>
 
               {nothing && online && (
@@ -450,7 +459,7 @@ export default function Search() {
                   {nothing.popular && (popular.data ?? []).length > 0 && (
                     <>
                       <h3>Popular right now</h3>
-                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} onHold={hold} />)}</ul>
+                      <ul className="s-results">{popular.data!.map((h) => <Row key={h.id} h={h} onOpen={() => open(h)} before={() => input.current?.blur()} />)}</ul>
                     </>
                   )}
                 </section>
@@ -463,7 +472,7 @@ export default function Search() {
         <div className="tabbar-fade s-fade" aria-hidden="true" data-pending={pending}><i /><i /><i /></div>
         <form className="s-field" role="search" data-pending={pending}
           onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) remember({ t: 'q', text: q.trim() }); input.current?.blur() }}>
-          <div className="s-input" ref={box}>
+          <div className="s-input" ref={box} data-own-focus="">
             <Icon name="search" size={20} />
             <input ref={input} type="search" enterKeyHint="search" aria-label="Search films and series" placeholder="Films and series"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
@@ -480,11 +489,10 @@ export default function Search() {
         </form>
       </div>
 
-      {held && createPortal(<HoldMenu held={held} onClose={() => setHeld(null)} />, document.body)}
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
-      {createPortal(<FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
+      <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
         services={picked.map(nameOf)} noun={kind === 'film' ? ['film', 'films'] : kind === 'series' ? ['series', 'series'] : ['result', 'results']}
-        countOf={countOf} apply={apply} />, document.getElementById('root') ?? document.body)}
+        countOf={countOf} apply={apply} />
     </main>
   )
 }

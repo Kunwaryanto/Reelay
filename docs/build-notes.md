@@ -201,7 +201,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - **No Your services yet:** `user_services` is empty until that screen is built, so every service counts as yours. The sections then read "Leaving soon", "Streaming now" and "Not streaming in Sweden", and the switch reads "Only what’s streaming". Once services are picked the designed names and the services label appear on their own.
 - Leaving soon = leaves within 30 days on one of your services.
 - Swipe a row left for Remove (opens past 44px); the bell on a not-streaming row turns Notify on and off.
-- The sort sheet is mounted in `#root` (not the body) so it covers the tab bar; in the body, iOS scrolled the document when the sheet took focus. A sheet without a field focuses itself, not its first button.
+- Every sheet draws itself in `#root` (the shared `Sheet` does it; screens don't portal sheets) so it covers the tab bar; on the body, iOS scrolled the document when the sheet took focus and it opened at the top. A sheet without a field focuses itself, not its first button.
 - Pick wall: 49 posters (7 × 7, so the tilted wall reaches every corner when panned) from the same recent/classic × film/series mix as Now. Adding waits for the saves, then loads the list.
 - Not built yet: long press on a row, the "New season" note, the link from the services label to Your services.
 
@@ -362,7 +362,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 ## Top picture, rebuilt (21 Nov): pinned behind the page
 
 - The picture is no longer inside the scrolling page. It sits behind it in a frame pinned to the top of the screen (`PinnedArt`), so when iOS bounces the page down or it is pulled to refresh, the picture doesn't move and nothing is corrected per frame.
-- Scrolling up: the frame leaves at the page's speed and the picture inside drifts back 170 px over 540 px (about two thirds of the page's speed). Both run on the page's scroll timeline.
+- Scrolling up: the frame leaves at the page's speed and the picture inside drifts back 170 px over 540 px (about two thirds of the page's speed). Both follow a 540 px marker at the top of the page as it leaves the screen (a view timeline; since 22 Nov). Measured against the page's whole scroll, Safari ran the picture about 4% fast while a finger scrolled and snapped it back at rest once the page had grown after loading.
 - The shade, title and dots stay in the page and move with it. The picture no longer grows on a pull; it stays still and the page slides down over it.
 - Keyboard closing on Search: the field sinks over 340 ms with cubic-bezier(0.4, 0, 0.2, 1), a soft start and landing, instead of matching the keyboard's abrupt 180 ms fall.
 
@@ -372,3 +372,231 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Browse lists: sorts Highest rated / Newest / Most popular (the list's own first); a list that already is a genre, decade or length doesn't offer that filter. Filters apply to the list as loaded (up to 90 titles); changing the sort loads the list again, so its count shows after.
 - Watchlist: sorts Recently added / Leaving soonest / Highest rated / A–Z; all filters.
 - "Only on my services" is hidden while no services are picked, as in Search.
+
+## Letterboxd (22 Nov, staging)
+
+- **Settings › Letterboxd**: one sentence of intro (it reads the public diary nightly, marks watched films, friends see each other's ratings). Not connected: a field with the placeholder "Letterboxd username" and a small grey Connect pill inside it, with "Films only. Your diary must be public." under it; an unknown member gets an inline error there. Connected: the username with "N films · read HH:MM" and a Profile link, the Mark watched films switch (no subtitle), Import your history, and Disconnect with "Removes your films and ratings from Reelay." Copy is kept to one short line per row.
+- **Posters**: a film the person has logged gets a bare white check top left (the service mark stays top right); the picture is not dimmed. The switch (Mark watched films) is off until the member turns it on.
+- **Title page, scores**: IMDb · Critics · Audience · Letterboxd, so four fit on one line (Critics and Audience are Rotten Tomatoes).
+- **Title page, who watched it** (films only): one 44px row under the scores, with an even 32px of visible space above and below (24px and 22px margins; the row's own air makes up the rest), as part of the top block with up to three initials (yours white, first). "You and 7 friends have watched it" / "You and Anna have watched it" / "3 friends have watched it" / "Anna and Erik have watched it" / "You’ve watched it twice" / "You watched it 12 Mar 2025". Second line: "You 4.0 · Friends 3.7"; with one friend their own rating instead of an average. No row when nobody has.
+- **The sheet**: opens from the row when someone else has watched it or you have more than one log. Everyone and Friends averages, your logs (date, stars as a number; "Rewatch"/"First watch" only when there are several), then friends, most recent first ("3 days ago", "12 Mar", "Feb 2024"; "Watched twice · last …"; "no rating"). Open goes to the film on Letterboxd.
+- **Hide watched**: a switch in the Sort and filter drawer (Search, Browse lists, Watchlist), only when connected with something logged.
+- **Import your history**: a third row on the connected page. It opens a sheet with two steps, each with its own small button on the right: Download (opens letterboxd.com/data/export/, which downloads the ZIP) and Choose file. The white button is the step to do next: Download first, Choose file once Download has been tapped. While it runs the row reads "Importing your history…" with "Reading the file" then "Matching N films"; after, "Imported 22 Nov · N films". A wrong file shows an error on the row. The ZIP is opened on the phone; only the film rows are sent.
+- Friends are everyone on Reelay who has connected.
+
+## Home (22 Nov, staging; the first tab, renamed from Now)
+
+A mix of what is happening on the member's services and what is theirs. Everything is limited to their services when they have picked some. A title is shown once (a row skips what a row above has); a row needs three titles; a row that fails to load is left out.
+
+- **Hero**, up to 7 slides, each with a reason line above the meta: "New on Netflix", "On your watchlist" or "Leaves in 3 days", "Trending film this week", "Trending series this week", "Anna rated it 4.5", "Leaves tomorrow".
+- **Each liked film is named once on the page**: the Because row uses one film the member rated 4+, the spotlight's "Because you liked" card another (the next day's), and the hero none. With only one such film, the spotlight leaves Because out. With a reason line the logo sits 16px higher. A thin day is filled from trending up to 5.
+- **Rows, in order**: New on your services (arrivals of the last 30 days, newest first) · Trending films · Trending series (TMDB's weekly lists; not numbered, they aren't Swedish viewing figures) · Leaving soon · From your watchlist (what can be played, leaving first) · Because you liked X (a different X each day, from films rated 4+) · the spotlight card · Friends liked (films other members rated 4+; the line under the poster is "Anna 4.5") · New films · New series (released this year or last) · Award winners or Hidden gems (alternate days) · two genres (the member's best-rated genres take turns; without ratings every genre does) · one decade (80s to 2010s in turn).
+- **Spotlight**: a carousel of up to five 16:10 cards (the next one peeking in, snapping), each with the wide picture, its own reason line, the title, and kind · year · service. One each from Because, Friends, New, the theme row, Leaving soon and Trending, never a hero title; shown when there are two or more. Row title "Picked for you". On each card: the reason (12px, white, medium) directly above the title with no gap, then the meta.
+- **Hero reason**: the reason and the meta under it are both 12px (the meta size), the reason white and medium, the meta grey; a reason too long for one line is cut with an ellipsis.
+- **Featured titles in the rows**: a title in the hero or the spotlight can also be in a row, but never in its first four places: it moves to just after them, so each row starts with something the page hasn't shown yet.
+- **Hide watched films on Home** (Settings › Letterboxd, on by default): leaves logged films out of the recommendation rows (Because, Friends, the theme, genre and decade rows). New, Trending, Leaving soon and the watchlist row show everything.
+- Without services, a watchlist or Letterboxd: New this month, both Trending rows, Leaving soon, the spotlight, New films and series, and the rotating rows across every service.
+
+## View all (23 Nov)
+
+- One rule everywhere: a row offers View all only when its whole list has more than the row shows. A row that already holds everything has none.
+- Each Home row says where its list opens: New on your services → New on streaming, Trending films/series → Trending (films or series), Leaving soon → Leaving soon, From your watchlist → the Watchlist tab, New films/series → New releases (films or series), Award winners and Hidden gems → their lists, genre and decade rows → their Browse category page. Picked for you, Because you liked and Friends liked have no list of their own (the row is the list).
+- The lists behind Home's rows open on Browse's list page (grid, type pills, filter drawer) and cover every service; Home's rows are limited to your services because those come first, not because the rest is hidden.
+- Browse category pages: each row asks for one more title than it shows, and offers View all only when that one came back.
+
+## Home from the watchlist (23 Nov)
+
+- **Because you saved X**: like Because you liked, from a title on the watchlist (films and series; a different one each day). TMDB's recommendations of the same kind, on the member's services, not already saved.
+- **More with X**: a director, creator or one of the first five billed actors behind three or more titles the member saved or rated 4+; their other titles on the member's services (at least three). View all opens the person when there are more.
+- **Now streaming from your watchlist** (saved titles that arrived on a service in the last 30 days) and **Short enough for tonight** (saved films of 40–100 minutes): up to 10 each, shown from 3. A title in one of them isn't repeated in From your watchlist.
+- **Spotlight**: up to six cards. After the second liked film come the watchlist's own finds, whether or not their rows are shown: "On your watchlist · now on Netflix" and "On your watchlist · 1 h 28 min".
+- **Taste**: genre rows follow the genres the member rates highest; with fewer than three, the genres they save most fill in.
+- Order: New · Trending films · Trending series · Leaving soon · Now streaming from your watchlist · From your watchlist · Short enough for tonight · Because you liked · Because you saved · Picked for you · Friends liked · More with · New films · New series · theme · two genres · decade.
+- The nightly sync now asks TMDB for recommendations for every saved title as well as every film rated 4+ (`title_recs` keeps films and series apart).
+
+
+## When Home loads (23 Nov)
+
+- Home is kept on the phone with the sync it was built from. On opening, the app asks only for `data_stamp` (one row, set
+  at the end of every sync run). Same sync and same day: the saved Home is shown and nothing else is loaded.
+- New sync or a new day: Home is built while the launch screen is up, for up to 1.5 s, so today's Home is the first thing
+  seen. Slower than that, or offline: the saved Home is shown and stays put; the new one is put in place the next time
+  the Home tab comes to the front, on pull to refresh, or at the next open.
+- Saving or removing a title, or a Letterboxd import, builds Home again quietly; it goes in when the member is back on
+  the Home tab, never under their eyes. Back to the app after 5 minutes away: checked again, and put in at once only if
+  the page hasn't been touched.
+
+## Preloading pages (23 Nov)
+
+- One list of pages (`src/lib/pages.ts`): title, person, a Browse category, a grid (View all), a Browse section. Each
+  says what it loads, what that is saved as and which pictures are above the fold; the page itself reads through it.
+- Every link to a page preloads it on press (still for 80 ms, or lifted without moving): `PageLink`, `PageButton`,
+  `ViewAll` and the poster card. `push` preloads as well, for anything opened another way.
+- Now covered too: Home's hero and spotlight, Watchlist rows, Search results, recent searches and people, a title's
+  cast, and View all on Browse sections.
+- Off production, a page opened by a tap without having been preloaded logs `[pages] … opened without being preloaded`.
+
+## Shared systems (23 Nov)
+
+- **Routes** (`src/lib/routes.ts`): every address is read by `routeOf` and built by `paths`. The app shell picks the
+  screen (`renderRoute`), pages.ts what it loads (`pageOf`), and `tabBarShown` whether the tab bar shows.
+- **Page frame**: title, person, Browse category, grid and section pages wait, fail ("Couldn't load"), show "isn't
+  available" and fade in through `usePageFrame` and `PageContent`.
+- **Freshness**: catalogue content (titles, people, lists, covers, search ideas, pictures for walls) is kept until the
+  nightly sync has run, not on timers; the stamp is asked on opening and after five minutes away. The member's own
+  things (services, watchlist, Letterboxd) are reloaded when they change them (`changed`), and Home rebuilds from
+  the same signal.
+- **Long press**: one menu for the whole app, opened by any poster or row.
+- **Leaving notes**: one function (`leavingFor`) for rows, grids, the hold menu, Watchlist and the title page.
+
+## Pull to refresh (23 Nov)
+
+- On Home, Title, Person, Watchlist, the Browse tab, categories, View all lists and Browse sections. Not on Search,
+  Settings and its pages, onboarding, Privacy, Terms or sheets.
+- A pull asks whether the nightly sync has run, then reloads what the page shows (Watchlist: the list, its titles and
+  your services; Home: a full rebuild). Offline, the page stays as it is and the Offline pill shows.
+
+## Start-up size (23 Nov)
+
+- The app's start-up code went from 208 kB to 151 kB (gzip). Search, Settings, Person, Onboarding, Start, the legal
+  pages, Invites, Dev and the desktop page load as their own files (`lazy` in App), asked for as soon as the app has
+  started or when first opened.
+- The Supabase client is built from `@supabase/auth-js` and `@supabase/postgrest-js` only (`src/lib/supabase.ts`),
+  set up as supabase-js sets up its own (same session key, so nobody is signed out). Realtime, Storage and Functions
+  aren't used; Edge Functions are called with fetch. The Edge Functions themselves still use supabase-js.
+
+## Wordmark from the first frame (23 Nov)
+
+- The launch wordmark is in index.html (`#boot`, the brand file put in at build time by a small Vite plugin), so it
+  rises from the first frame instead of after a black wait while the code loads. Home takes it over as its own
+  wordmark phase (timed from when the page started: shown once its rise is done, 1.2 s, and Home is ready), and
+  it fades as Home arrives. Signed out, on a computer or opened at another address, it fades at once.
+
+## Pictures kept on the phone (23 Nov)
+
+- The service worker keeps TMDB pictures (posters, backdrops, logos, portraits) after first use, the newest 900
+  (`reelay-pictures-v1`), fetched with CORS so they count at their real size. iOS often empties a Home Screen
+  app's ordinary cache between opens; with these, a cold start shows its pictures without downloading them again.
+- The privacy policy says the app keeps copies of what it shows on the device (updated 23 Nov).
+
+## Likeliest taps (23 Nov)
+
+- 1.5 s after Home has arrived, the title pages of the first hero slide and the first Picked for you card load
+  (data and top picture), so they open at once.
+
+## Refresh by tier (23 Nov)
+
+- `public.title_refresh` gives each title a tier. New: released, a new season, or arrived on a service in the last
+  30 days. Recent: the same within a year, or watchlisted, trending, or leaving within 30 days. Older: the rest.
+- Due by tier (`public.refresh_every`): Rotten Tomatoes and Letterboxd (MDBList) every 2 days / weekly / 90 days;
+  the OMDb Tomatometer backup every 3 days / 2 weeks / 90 days while missing; details 7 / 14 / 60 days. IMDb stays
+  nightly for everything (one free file). About 840 score lookups and 750 detail refreshes a night (was 2,500).
+- `titles.released_on` holds the release or first air day from TMDB.
+- "Added" events: a service's first full night (`services.first_synced_on`) isn't arrivals; the 30,000 events of
+  20 Nov and the 6,900 of 23 Nov (the five new services) were removed, so New on streaming shows real arrivals.
+
+## Faster reads (23 Nov)
+
+Measured on the database before and after:
+
+| Read | Before | After |
+|---|---|---|
+| Search | 0.4-2.2 s | 9-110 ms |
+| Rated lists (Top, Classics, a genre or country by rating) | 0.3-1.4 s | 6-26 ms |
+| Filter counts (genre, years) | 0.4 s | 9 ms |
+| Start wall | 0.1-1.1 s | under 1 ms |
+
+- `search_titles` finds its candidates through the trigram index (substring, and word similarity at 0.4 with `<%`).
+- `titles.imdb_rating` and `imdb_votes` are copies of the scores (a trigger keeps them in step, writing only on
+  change); lists sort and filter on them through `titles_rating`. Use them, not `scores!inner`, to sort or narrow.
+- GIN indexes on `titles.genres` and `titles.countries`.
+- The Start wall is built each night into `start_wall_posters` (`refresh_start_wall`).
+- The sync writes cast and crew by difference (it used to delete and re-add them on every refresh).
+
+## Robustness (23 Nov)
+
+- Saved data on the phone is pruned a few seconds after each start: unused for 30 days goes, newest 400 stay;
+  when storage is full the oldest quarter goes and the save is tried again.
+- A screen that fails to draw shows "Something went wrong." with Reload instead of a black screen; it and any
+  uncaught error are reported to `client_errors` (signed in only, once per message, 10 per session, 30 days).
+- Browser tests (`tests/e2e`, `docs/testing.md`) run on every push.
+- Accessibility: Picked for you cards are links inside list items; the small top-bar title is hidden from
+  assistive tech, as each page has its own heading.
+
+## More like this (24 Nov)
+
+- Each streaming title has its own list of up to 15 alike titles in `title_similar`, built by the nightly sync:
+  TMDB's recommendations that stream here first, then `similar_backup` (same director, creator or lead actors;
+  shared genres; same original language, more so if not English; era; rating; kids' and animated titles only
+  with each other). TMDB is asked again by tier: new every 2 weeks, recent 2 months, older 6 months.
+- Until a title's list is built, `similar_titles` scores it live, so every title page has the better row at once.
+- On the title page the member's services come first and films they've logged on Letterboxd are left out.
+
+## Swipe back (24 Nov)
+
+- A swipe back decides like iOS: if the finger is moving right when it lets go (or the page is past halfway), the
+  page closes, even after a short swipe; turning back left, or holding still short of halfway, keeps it. While it's
+  heading out the top page loses its snap point (`data-going`), so Safari already knows where to stop.
+- The page is dropped only once the strip is exactly at rest, so the end of the movement can't restart.
+- Pull to refresh takes a touch only when it starts clearly downward (1.5 times more down than sideways), so a
+  swipe back that begins a little downward stays a swipe.
+
+## Database storage (24 Nov)
+
+- The sync wrote every title's popularity every night for tiny changes, and each write copies the whole row: titles
+  was half empty. Popularity is now written only when it moves 15% (and at least half a point).
+- `Database compact` (run by hand, waits for the nightly sync) rewrites titles, credits, people, availability and
+  scores without the empty space (VACUUM FULL). First run: 170.5 MB → 121.8 MB, each table locked 1–8 seconds.
+- Measured and skipped: 4-byte ids (saves under 1%: padding) and reordering columns. Ready if we pass ~350 MB:
+  keep directors, creators and the top 3 actors, fetch full cast and person pages from TMDB (about 40 MB).
+
+## Poster meta: year and length (24 Nov)
+
+- The line under a title (posters, search results, watchlist rows, spotlight) is year first, then how long it is:
+  `2008 · 2h 6m`, `2013 · 11 seasons`, `2026 · 30m`; `Film`/`Series` only when the length isn't known.
+  `metaLine` and `lengthOf` in `catalogue.ts` write it; card queries load `runtime_min` and `seasons`.
+- The hero line is where, how long, what kind: `On Netflix · 2h 6m · Action`, `On Netflix · 8 seasons · Crime` (the
+  service is left out when the reason above already names it).
+- The title page and the hold menu keep the full form ("Film · 2026 · 1 h 52 min"): there's room to read it.
+
+## Hero timer (24 Nov)
+
+- The white bar is the timer: the next slide comes when the bar's fill ends, so the bar can't sit full while the
+  slide waits. It runs only while the hero can be seen (app open, its tab showing, no page on top), and each time
+  it comes back into view the current slide starts over with a full 5 seconds: nothing switches the moment you look.
+  A finger on it holds the bar. With reduced motion there's no bar, and a plain 5-second timer follows the same rules.
+
+## Rows of 7 or more (24 Nov)
+
+- `MIN_ROW = 7`: Home, Browse and More like this leave out a row with fewer titles.
+- Home rows fill up: a title another row already shows can come again after the first 4 places (a row needs 4 new
+  ones of its own). Because you liked/saved add the source's own More like this list after TMDB's; More with
+  <person> counts every credit.
+- "Now streaming from your watchlist" and "Short enough for tonight" are folded into From your watchlist: what just
+  arrived leads, with "Now on Netflix" under the poster. Runtimes are under every poster now; the spotlight still
+  picks a short one ("Only 1h 40m"). Friends liked shows once 7 friends' ratings qualify.
+
+## Awards (24 Nov)
+
+- The awards table was empty: the sync that fills it was never written. `syncAwards` now reads Wikidata (Oscars,
+  Primetime Emmys, Golden Globes; technical, honorary and special awards left out): 8,137 wins and nominations,
+  592 titles with a win (552 on Lukas's services). Weekly on Sundays; the `Awards` workflow runs it by hand.
+- Home has an award row every day, in turn: Oscar winners, Emmy-winning series, Best Picture winners, Golden Globe
+  winners. Under each poster: its top category in that award and how many more it won ("Best Picture +3").
+  Hidden gems shows every other day. The title page's Awards section now has data too.
+
+## Coming back to Home (24 Nov)
+
+- Coming back to the app on a new day with Home in front: the launch wordmark covers the page at once while
+  today's Home is built and its first pictures decoded (up to 2 s), then fades over it, as at a fresh start.
+  Not ready in time, the page stays and the new Home waits for the next visit to the tab.
+- Other new content (a sync that ran during the day) never swaps in front of you: it is put in place when you come
+  back to the Home tab, pull to refresh or open the app.
+- A new Home only goes on screen with its first pictures decoded (`prepare` in `useHome`), and once Home has shown
+  it never hides again: the black screen before the swap is gone.
+
+## A new version while the app is open (24 Nov)
+
+- After a deploy, a screen the open app loads only when it's opened (Settings, Browse, Title…) is gone under its
+  old file name, and opening it crashed ("Something went wrong"; 3 reports on 24 Nov). The app now reloads into the
+  new version instead (`reloadForNewVersion` in errors.ts, at most once a minute), and doesn't report it.

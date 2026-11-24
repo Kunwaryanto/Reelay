@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 // Building blocks from the Components page of the design canvas. Styles are in src/styles/app.css.
+import { paths } from '../lib/routes'
 import { useLayoutEffect,
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
@@ -9,11 +10,17 @@ import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
-import { SERVICE_NAME, loadTitle, type Card } from '../lib/catalogue'
+import { useWatchedMark } from '../lib/letterboxd'
+import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { useNav, useNavActions, type Tab } from '../lib/nav'
-import { prefetch, useRequestFailed } from '../lib/query'
+import { useRequestFailed } from '../lib/query'
 import { notePressed } from '../lib/press'
 import { warmFacts } from '../lib/facts'
+import { usePageQuery, warmPage, type Page } from '../lib/pages'
+import type { Query } from '../lib/query'
+import { checkStamp } from '../lib/stamp'
+import { allDecoded, decodePicture, markDecoded, wasDecoded, type Picture } from '../lib/pictures'
+export { posterPicture, titleArt, warmPictures, type Picture } from '../lib/pictures'
 
 // ---- Icons -----------------------------------------------------------------
 
@@ -146,10 +153,8 @@ export function useNearScreen(ref: React.RefObject<HTMLElement | null>, skip = f
  * A poster arrives in one moment: the grey tile stays plain until the image is loaded and decoded, then the
  * image, its edge line and the service mark fade in together.
  */
-function wasDecoded(src: string | null | undefined) { return !!src && decoded.has(src) }
-function markDecoded(src: string | null | undefined) { if (src) decoded.add(src) }
 
-export function Cover({ path, service, eager, sizes = '147px' }: { path: string | null; service?: string; eager?: boolean; sizes?: string }) {
+export function Cover({ path, service, eager, sizes = '147px', watched }: { path: string | null; service?: string; eager?: boolean; sizes?: string; watched?: boolean }) {
   const inRow = useContext(NearContext)
   const box = useRef<HTMLDivElement>(null)
   // in a grid (no row to speak for it), each poster watches for itself
@@ -165,38 +170,58 @@ export function Cover({ path, service, eager, sizes = '147px' }: { path: string 
   const pic = useRef<HTMLImageElement>(null)
   useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
   return (
-    <div className="cover" data-ready={ready} ref={box}>
+    <div className="cover" data-ready={ready} data-watched={watched || undefined} ref={box}>
       {path && (
         <img ref={pic} src={src} srcSet={posterSrcSet(path)} sizes={sizes} alt="" draggable={false}
           loading={known || eager || near ? undefined : 'lazy'} decoding={known ? 'sync' : 'async'} onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
+      {/* logged on Letterboxd: a check in the other corner from the service */}
+      {watched && <span className="cover-seen" aria-hidden="true"><Icon name="check" size={14} /></span>}
     </div>
   )
 }
 
-export function TitleCard({ card, note, eager, onHold }: { card: Card; note?: string | null; eager?: boolean; onHold?: (card: Card, cover: HTMLElement) => void }) {
+// ---- Holding a poster ------------------------------------------------------------------------------------------
+// A long press on any poster opens the same menu, wherever it is: one menu for the app (`HoldProvider`, set up in
+// App), which poster cards and rows reach through `useHold`. Screens don't keep a menu of their own.
+export type Held = { card: Card; cover: HTMLElement }
+const HoldCtx = createContext<((held: Held) => void) | null>(null)
+/** Open the menu for a held poster. `before` runs first (close a swiped row, put the keyboard away). */
+export function useHold(before?: () => void): (card: Card, cover: HTMLElement) => void {
+  const open = useContext(HoldCtx)
+  const pre = useRef(before)
+  pre.current = before
+  return useCallback((card: Card, cover: HTMLElement) => { pre.current?.(); open?.({ card, cover }) }, [open])
+}
+export function HoldProvider({ menu, children }: { menu: (held: Held, close: () => void) => ReactNode; children: ReactNode }) {
+  const [held, setHeld] = useState<Held | null>(null)
+  return (
+    <HoldCtx.Provider value={setHeld}>
+      {children}
+      {held && createPortal(menu(held, () => setHeld(null)), document.body)}
+    </HoldCtx.Provider>
+  )
+}
+
+export function TitleCard({ card, note, eager }: { card: Card; note?: string | null; eager?: boolean }) {
   const { push } = useNavActions()
   const service = card.availability[0]?.service_id
-  const hold = useLongPress((el) => onHold?.(card, el.querySelector<HTMLElement>('.cover')!))
-  const meta = note ?? `${card.kind === 'film' ? 'Film' : 'Series'}${card.year ? ` · ${card.year}` : ''}`
+  const onHold = useHold()
+  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.cover')!))
+  const link = usePageLink(paths.title(card.id))
+  const meta = note ?? metaLine(card)
+  const watched = useWatchedMark(card.id)
   // near the screen: its long-press facts are fetched with the rest of its row
   const box = useRef<HTMLAnchorElement>(null)
   const near = useNearScreen(box)
   useEffect(() => { if (near) warmFacts([card.id]) }, [near, card.id])
   return (
-    <a ref={box} className="card" href={`/title/${card.id}`} {...hold.handlers}
-      onPointerDown={(e) => {
-        warmFacts([card.id], true)
-        hold.handlers.onPointerDown(e)
-        // a finger resting on the poster (not a scroll passing over it) starts loading its page
-        const el = e.currentTarget
-        setTimeout(() => { if (el.dataset.pressed) warmTitle(card.id) }, 100)
-      }}
-      onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(`/title/${card.id}`) }}>
-      <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}`}>
-        <Cover path={card.poster_path} service={service} eager={eager} />
+    <a ref={box} className="card" href={paths.title(card.id)} {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
+      onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(card.id)) }}>
+      <div role="img" aria-label={`${card.title}${service ? `, ${SERVICE_NAME[service] ?? service}` : ''}${watched ? ', watched' : ''}`}>
+        <Cover path={card.poster_path} service={service} eager={eager} watched={watched} />
       </div>
       <span className="card-title">{card.title}</span>
       <span className="card-meta">{meta}</span>
@@ -253,31 +278,80 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
   }
 }
 
-export function SectionHeader({ title, onViewAll, onViewAllPress }: { title: string; onViewAll?: () => void; onViewAllPress?: () => void }) {
+/** `viewAll`: the page it opens (preloaded on press), or what it does instead (switch tab). */
+export function SectionHeader({ title, viewAll }: { title: string; viewAll?: string | (() => void) }) {
   return (
     <div className="section-head">
       <h2>{title}</h2>
-      {onViewAll && <button type="button" className="view-all" aria-label={`View all in ${title}`} onPointerDown={onViewAllPress} onClick={onViewAll}>View all</button>}
+      {viewAll && <ViewAll to={viewAll} label={`View all in ${title}`} />}
     </div>
   )
 }
 
+/** A button that opens a page (`to`) among other things: preloads it on press; `onClick` does the opening. */
+export function PageButton({ to, children, ...rest }: { to: string | null } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const press = usePageLink(to)
+  return <button type="button" {...rest} {...press}>{children}</button>
+}
+
+export function ViewAll({ to, label }: { to: string | (() => void); label: string }) {
+  const { push } = useNavActions()
+  const press = usePageLink(typeof to === 'string' ? to : null)
+  return <button type="button" className="view-all" aria-label={label} {...press} onClick={() => (typeof to === 'string' ? push(to) : to())}>View all</button>
+}
+
+/**
+ * A link to a page in the app: preloads it on press (see usePageLink) and opens it on a tap. `onClick` replaces the
+ * opening (call `push` yourself, e.g. after checking it wasn't a swipe); `handlers` join the link's own (a long press).
+ */
+export function PageLink({ to, onClick, handlers, children, ...rest }: { to: string; onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void; handlers?: Record<string, ((e: never) => void) | undefined> } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'onClick'>) {
+  const { push } = useNavActions()
+  const press = usePageLink(to)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const joined = joinHandlers(press, (handlers ?? {}) as any)
+  return (
+    <a href={to} {...rest} {...joined} onClick={(e) => { e.preventDefault(); if (onClick) onClick(e); else push(to) }}>{children}</a>
+  )
+}
+
 export function PosterRow({ children }: { children: ReactNode }) {
+  return <NearRow className="row-scroll noscroll"><div className="row-track">{children}</div></NearRow>
+}
+
+/**
+ * A row that scrolls sideways: everything in it counts as near once the row is a screen and a half away (its
+ * pictures off to the side can't be seen by the page from inside the row's own scroll). Every row of pictures is
+ * one of these, so its pictures (Cover, NearImage) are in before the row is seen.
+ */
+export function NearRow({ children, ...rest }: { children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null)
-  const [near, setNear] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || near) return
-    // the page scrolls inside .page, so measure against it (a margin on the viewport would be clipped by it)
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setNear(true) },
-      { root: el.closest('.page'), rootMargin: '150% 0px' })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [near])
+  const near = useNearScreen(ref)
   return (
     <NearContext.Provider value={near}>
-      <div ref={ref} className="row-scroll noscroll"><div className="row-track">{children}</div></div>
+      <div ref={ref} {...rest}>{children}</div>
     </NearContext.Provider>
+  )
+}
+
+/**
+ * A wide picture (a backdrop) that behaves like a poster: asked for a screen and a half ahead, shown once decoded
+ * with the same fade, and painted at once if it was seen before. Its box says `data-ready`, so what sits on the
+ * picture can wait for it too.
+ */
+export function NearImage({ src, srcSet, sizes }: { src: string | null | undefined; srcSet?: string; sizes?: string }) {
+  const inRow = useContext(NearContext)
+  const box = useRef<HTMLSpanElement>(null)
+  const near = useNearScreen(box, inRow) || inRow
+  const [known] = useState(() => wasDecoded(src))
+  const [ready, setReady] = useState(!src || known)
+  const pic = useRef<HTMLImageElement>(null)
+  useLayoutEffect(() => { if (pic.current?.complete && pic.current.naturalWidth > 0) setReady(true) }, [])
+  const show = (img: HTMLImageElement) => { img.decode().catch(() => {}).finally(() => { markDecoded(src); setReady(true) }) }
+  return (
+    <span ref={box} className="near-img" data-ready={ready}>
+      {src && <img ref={pic} src={src} srcSet={srcSet} sizes={sizes} alt="" draggable={false}
+        loading={known || near ? undefined : 'lazy'} decoding={known ? 'sync' : 'async'} onLoad={(e) => show(e.currentTarget)} onError={() => setReady(true)} />}
+    </span>
   )
 }
 
@@ -357,6 +431,17 @@ const SETTLE = '--pull 420ms cubic-bezier(0.22, 1, 0.36, 1)'
  * movement is one transform on the page, so nothing fights the native bounce.
  * Put `bind.ref` on the scroll area and render `indicator` next to it, inside the same pane.
  */
+/**
+ * Pull to refresh on a page, the one way (see CLAUDE.md, Pull to refresh): ask whether the nightly sync has run,
+ * then load what the page shows afresh, skipping the saved copy. Offline or failing, the page stays as it is (the
+ * Offline pill or Couldn't load says why). Spread `bind` on the page's <main> and render `indicator` after it.
+ */
+export function usePageRefresh(...queries: { retry: () => Promise<void> }[]) {
+  const qs = useRef(queries)
+  qs.current = queries
+  return usePullToRefresh(async () => { await checkStamp(); await Promise.all(qs.current.map((q) => q.retry())) })
+}
+
 export function usePullToRefresh(refresh: () => Promise<unknown>) {
   const ind = useRef<HTMLDivElement>(null)
   const latest = useRef(refresh)
@@ -396,8 +481,9 @@ export function usePullToRefresh(refresh: () => Promise<unknown>) {
       if (!start) return
       const dx = e.touches[0].clientX - start.x, dy = e.touches[0].clientY - start.y
       if (!pulling) {
-        // the first movement decides: straight down from the top is a pull, anything else is the page's own
-        if (!(dy > 0 && dy > Math.abs(dx) && el.scrollTop <= 0)) { start = null; return }
+        // the first movement decides: clearly down from the top is a pull, anything else is the page's own (a swipe
+        // back often starts a little downward, and must stay a swipe)
+        if (!(dy > 0 && dy > Math.abs(dx) * 1.5 && el.scrollTop <= 0)) { start = null; return }
         pulling = true
         el.dataset.ptr = ''
         hold = (ind.current ? parseFloat(getComputedStyle(ind.current).top) || 0 : 0) + HOLD
@@ -655,7 +741,10 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     return () => document.removeEventListener('keydown', esc)
   }, [open, onClose])
 
-  return (
+  // Every sheet is drawn in #root, wherever it is used: over the tab bar, and inside #root's clip. A sheet left
+  // in a page sits under the tab bar; one put on the body makes iOS scroll the whole document when the sheet
+  // takes focus, so it opens at the top of the screen. Callers never portal a sheet themselves.
+  return createPortal(
     <>
     <div className="sheet-scrim" data-open={open} aria-hidden="true" onClick={onClose} />
     <dialog ref={ref} className="sheet"
@@ -685,7 +774,8 @@ data-keyboard={keyboard || undefined} aria-label={label} aria-modal="true"
         {children}
       </div>
     </dialog>
-    </>
+    </>,
+    document.getElementById('root') ?? document.body,
   )
 }
 
@@ -777,7 +867,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function TabBar({ hidden, arriving }: { hidden?: boolean; arriving?: boolean }) {
   const { tab, setTab, dimmed } = useNav()
   const items: [Tab, string, ReactNode][] = [
-    ['now', 'Now', <HomeIcon key="i" />], ['browse', 'Browse', <Icon key="i" name="browse" />],
+    ['now', 'Home', <HomeIcon key="i" />], ['browse', 'Browse', <Icon key="i" name="browse" />],
     ['watchlist', 'Watchlist', <Icon key="i" name="bookmark" />], ['search', 'Search', <Icon key="i" name="search" />],
   ]
   return (
@@ -982,7 +1072,8 @@ export function PinnedArt({ children }: { children: ReactNode }) {
     }
     return () => { stop(); layer.remove() }
   }, [])
-  return <><span ref={mark} hidden />{frame && createPortal(children, frame)}</>
+  // the marker is also what the picture's movement is measured against (.art-mark)
+  return <><span ref={mark} className="art-mark" aria-hidden="true" />{frame && createPortal(children, frame)}</>
 }
 
 /** The small count on a type pill. Without a number yet it takes no room; when the number lands the pill eases wider as it fades in. */
@@ -992,10 +1083,32 @@ export function PillCount({ n, off }: { n?: number; off?: boolean }) {
 
 // ---- Pages arriving ----------------------------------------------------------
 
-/** Start loading a title's page as a finger lands on its poster. */
-export const titleArt = (t: { backdrop_path?: string | null; poster_path?: string | null } | null | undefined): Picture[] =>
-  [{ src: t && (tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')) }]
-export const warmTitle = (id: number) => prefetch(`title:${id}`, () => loadTitle(id).then((t) => { warmPictures(titleArt(t)); return t }), { maxAge: 10 * 60 * 1000 })
+type PointerHandlers = {
+  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerMove?: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerUp?: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerCancel?: (e: React.PointerEvent<HTMLElement>) => void
+}
+/** Several sets of event handlers on one element: each event calls every set's handler for it, in turn. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function joinHandlers(...sets: Record<string, ((e: any) => void) | undefined>[]): Record<string, (e: any) => void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: Record<string, (e: any) => void> = {}
+  for (const name of new Set(sets.flatMap((s) => Object.keys(s)))) {
+    const fns = sets.map((s) => s[name]).filter((f) => !!f)
+    out[name] = (e) => { for (const f of fns) f!(e) }
+  }
+  return out
+}
+/**
+ * Every link to a page spreads this: the page (see `pageFor` in lib/pages) starts loading on a press that isn't a
+ * scroll, so it opens with its content in place. `path` null: the link goes nowhere that loads.
+ */
+export function usePageLink(path: string | null): PointerHandlers {
+  const p = useRef(path)
+  p.current = path
+  return usePressWarm(() => { if (p.current) warmPage(p.current) })
+}
 
 /** Start a load on a press that isn't a scroll: the finger still after 80 ms, or lifted without having moved. */
 export function usePressWarm(run: () => void) {
@@ -1010,43 +1123,45 @@ export function usePressWarm(run: () => void) {
   }
 }
 
-export type Picture = { src: string | null | undefined; srcset?: string; sizes?: string }
-/** A poster as its card will ask for it, so the file waited for is the file shown. */
-export const posterPicture = (path: string | null): Picture => ({ src: tmdbImage(path, 'w342'), srcset: posterSrcSet(path), sizes: '147px' })
-// Pictures this session has already decoded: they can show from the first frame, with no fade of their own.
-const decoded = new Set<string>()
-// The decoded pictures themselves are held on to (the newest 80), so the browser keeps them in memory and the
-// page's own <img> gets them in the same frame instead of fetching them from its cache and decoding again.
-const held = new Map<string, HTMLImageElement>()
-// One request per picture, however many ask (a list warmed while Browse sits idle, then opened): the page's wait
-// joins the one under way instead of starting a second.
-const decoding = new Map<string, Promise<void>>()
-const decodePicture = ({ src, srcset, sizes }: Picture): Promise<void> => {
-  if (!src || decoded.has(src)) return Promise.resolve()
-  const going = decoding.get(src)
-  if (going) return going
-  const img = new Image()
-  if (srcset) { img.sizes = sizes ?? '147px'; img.srcset = srcset }
-  img.src = src
-  const keep = () => {
-    decoded.add(src)
-    held.set(src, img)
-    if (held.size > 120) held.delete(held.keys().next().value!)
-  }
-  // Safari sometimes refuses decode() on a picture that is still arriving. That must not count as ready (the page
-  // then faded in with posters still painting, 22 Nov): wait for it to load instead, and only a broken picture gives up.
-  const loaded = () => new Promise<void>((done) => {
-    if (img.complete) { if (img.naturalWidth > 0) keep(); done(); return }
-    img.addEventListener('load', () => { keep(); done() }, { once: true })
-    img.addEventListener('error', () => done(), { once: true })
-  })
-  const p = img.decode().then(keep, loaded).finally(() => decoding.delete(src))
-  decoding.set(src, p)
-  return p
+/** A page's content, read through its entry (lib/pages), and how far it has arrived. */
+export type PageFrame<T> = {
+  q: Query<T>; phase: Arrival; arrive: '' | undefined
+  /** the address names nothing (an id that isn't one) */
+  none: boolean
+  /** pull to refresh: `pull.bind` on the <main>, `pull.indicator` after it */
+  pull: { bind: { ref: (el: HTMLElement | null) => void | (() => void) }; indicator: ReactNode }
 }
-/** Fetch and decode pictures ahead of the page that will show them. */
-export const warmPictures = (pictures: Picture[]) => { for (const p of pictures) void decodePicture(p) }
-const allDecoded = (pictures: Picture[]) => pictures.every((p) => !p.src || decoded.has(p.src))
+/** `refresh: false`: a page without pull to refresh (one where you type or change settings). */
+export function usePageFrame<T>(page: Page<T> | null, { refresh = true }: { refresh?: boolean } = {}): PageFrame<T> {
+  const q = usePageQuery(page)
+  const phase = useArrival(page?.key ?? '-', q.data != null, () => page?.fold(q.data) ?? [])
+  const pull = usePageRefresh(q)
+  return { q, phase, arrive: phase === 'in' ? '' : undefined, none: page === null, pull: refresh ? pull : NO_PULL }
+}
+const NO_PULL = { bind: { ref: () => {} }, indicator: null }
+/** Two refs on one element (a page's own and pull to refresh's). */
+export function useJoinedRef<E extends HTMLElement>(own: React.RefObject<E | null>, other: (el: E | null) => void | (() => void)) {
+  return useCallback((el: E | null) => { own.current = el; return other(el) }, [own, other])
+}
+/**
+ * What every page shows while its content comes: placeholders while it waits, Couldn't load with Try again, the page's
+ * own `missing` when there is no such thing (a title or person Reelay doesn't have), and then the content, fading in
+ * as one piece. Goes inside the page's <main data-arrive={frame.arrive}>.
+ */
+export function PageContent<T>({ frame, what, skeleton, missing, className, children }: {
+  frame: PageFrame<T>; what: string; skeleton: SkeletonKind; missing?: ReactNode; className?: string
+  children: (data: NonNullable<T>) => ReactNode
+}) {
+  const { q, phase } = frame
+  if (frame.none || (q.data === null && !q.loading)) return <>{missing ?? null}</>
+  return (
+    <>
+      {q.error && <div className="page-center"><LoadFailed what={what} retry={q.retry} retrying={q.retrying} /></div>}
+      {phase !== 'there' && !q.error && <Skeleton kind={skeleton} leaving={phase === 'in'} />}
+      {q.data != null && phase !== 'wait' && <div className={className ? `arrive ${className}` : 'arrive'}>{children(q.data as NonNullable<T>)}</div>}
+    </>
+  )
+}
 
 export type Arrival = 'wait' | 'in' | 'there'
 /**
@@ -1078,7 +1193,8 @@ export function useArrival(key: string, has: boolean, pictures: () => Picture[])
 }
 
 /** Placeholders while a page waits: 'rows' a heading and posters under the top picture, 'grid' posters three across, 'title' a title page's first lines. */
-export function Skeleton({ kind, leaving }: { kind: 'rows' | 'grid' | 'title' | 'person' | 'cards'; leaving?: boolean }) {
+export type SkeletonKind = 'rows' | 'grid' | 'title' | 'person' | 'cards'
+export function Skeleton({ kind, leaving }: { kind: SkeletonKind; leaving?: boolean }) {
   return (
     <div className="skel" data-kind={kind} data-leaving={leaving || undefined} aria-hidden="true">
       {kind === 'rows' && <section><i /><div><span /><span /><span /></div></section>}

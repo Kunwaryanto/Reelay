@@ -2,6 +2,7 @@
 // a row slides in to its options. Changes are a draft until "Show n" is tapped; closing any other way drops them.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { GENRE_OPTIONS, LANG_OPTIONS, genreNames, type Filters } from '../lib/search'
+import { useWatched } from '../lib/letterboxd'
 import { Button, Icon, Rolling, Sheet } from '../ui'
 
 export type Sort = 'best' | 'rated' | 'newest'
@@ -26,8 +27,8 @@ export const sortName = (s: Sort) => SORTS.find((x) => x[0] === s)![1]
 
 /** Everything the drawer can set. Empty values mean "any". */
 /** `rating` is IMDb's (0 to 10), `rt` Rotten Tomatoes critics (%), `lb` Letterboxd (0 to 5); 0 is any. */
-export type Draft = { sort: string; mine: boolean; genres: string[]; decade: number | null; rating: number; rt: number; lb: number; length: Len | null; lang: string | null }
-export const NO_FILTERS: Draft = { sort: 'best', mine: false, genres: [], decade: null, rating: 0, rt: 0, lb: 0, length: null, lang: null }
+export type Draft = { sort: string; mine: boolean; /** leave out films logged on Letterboxd */ hide: boolean; genres: string[]; decade: number | null; rating: number; rt: number; lb: number; length: Len | null; lang: string | null }
+export const NO_FILTERS: Draft = { sort: 'best', mine: false, hide: false, genres: [], decade: null, rating: 0, rt: 0, lb: 0, length: null, lang: null }
 
 /** A count to fetch: `key` names it (the same key is never fetched twice), `run` gets it. */
 export type Count = { key: string; run: () => Promise<number | null> }
@@ -126,7 +127,8 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
     rating: ratingNote(d), length: d.length ? lengthName(d.length) : '', lang: d.lang ? langName(d.lang) : '',
   }
   const set_ = { genres: d.genres.length > 0, decade: d.decade !== null, rating: d.rating > 0 || d.rt > 0 || d.lb > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
-  const any = Object.values(set_).some(Boolean) || d.mine
+  const any = Object.values(set_).some(Boolean) || d.mine || d.hide
+  const seen = useWatched()
   const clear: Record<Sub, () => void> = {
     sort: () => set({ sort: firstSort }), genres: () => set({ genres: [] }), decade: () => set({ decade: null }),
     rating: () => set({ rating: 0, rt: 0, lb: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }),
@@ -194,6 +196,13 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
               {services.length > 0 && (
                 <button type="button" role="switch" aria-checked={d.mine} className="wl-switch fd-switch" onClick={() => set({ mine: !d.mine })}>
                   <span><b>Only on my services</b><small>{services.slice(0, 3).join(', ')}{services.length > 3 ? ` +${services.length - 3}` : ''}</small></span>
+                  <i aria-hidden="true" />
+                </button>
+              )}
+              {/* only with Letterboxd connected and something logged */}
+              {seen.size > 0 && (
+                <button type="button" role="switch" aria-checked={d.hide} className="wl-switch fd-switch" onClick={() => set({ hide: !d.hide })}>
+                  <span><b>Hide watched</b></span>
                   <i aria-hidden="true" />
                 </button>
               )}
@@ -273,6 +282,7 @@ export function draftChips(d: Draft, set: (d: Draft) => void, sorts: [string, st
     ...(d.length ? [{ key: 'length', label: lengthName(d.length), drop: () => set({ ...d, length: null }) }] : []),
     ...(d.lang ? [{ key: 'lang', label: langName(d.lang), drop: () => set({ ...d, lang: null }) }] : []),
     ...(d.mine ? [{ key: 'mine', label: 'My services', drop: () => set({ ...d, mine: false }) }] : []),
+    ...(d.hide ? [{ key: 'hide', label: 'Hide watched', drop: () => set({ ...d, hide: false }) }] : []),
     ...(d.sort !== firstSort ? [{ key: 'sort', label: sorts.find((x) => x[0] === d.sort)?.[1] ?? '', drop: () => set({ ...d, sort: firstSort }) }] : []),
   ]
 }

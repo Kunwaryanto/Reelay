@@ -17,6 +17,7 @@ export type Hit = {
   genres: string[]
   lang: string | null
   runtime: number | null
+  seasons: number | null
 }
 
 export type Filters = {
@@ -33,6 +34,8 @@ export type Filters = {
   minLb?: number // Letterboxd, 0 to 5
   length?: 'short' | 'mid' | 'long' // under 90 min, up to 2 h, over 2 h
   services?: string[]
+  /** titles to leave out (Hide watched) */
+  hide?: number[]
 }
 
 /** A word in the query that became a filter chip. */
@@ -133,12 +136,12 @@ const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
-  genres: string[] | null; original_language: string | null; runtime_min: number | null
+  genres: string[] | null; original_language: string | null; runtime_min: number | null; seasons: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
   scores: Score | Score[] | null
 }
 type Score = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)'
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,scores(imdb_rating,rt_critics,letterboxd)'
 /** a filter on a score only counts titles that have that score */
 const scored = (f: Filters) => !!(f.minRating || f.minRt || f.minLb)
 
@@ -149,11 +152,12 @@ function toHit(r: Raw): Hit {
     id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
-    rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null,
+    rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null, seasons: r.seasons ?? null,
   }
 }
 
 function passes(h: Hit, f: Filters): boolean {
+  if (f.hide?.includes(h.id)) return false
   if (f.kind && h.kind !== f.kind) return false
   if (f.service && !h.services.includes(f.service)) return false
   if (f.from !== undefined && (h.year === null || h.year < f.from)) return false
@@ -188,6 +192,7 @@ function narrow<Q>(query: Q, f: Filters): Q {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = query as any
   if (f.kind) q = q.eq('kind', f.kind)
+  if (f.hide?.length) q = q.not('id', 'in', `(${f.hide.join(',')})`)
   if (f.service) q = q.eq('availability.service_id', f.service)
   if (f.services) q = q.in('availability.service_id', f.services)
   if (f.leaving) q = q.not('availability.leaves_on', 'is', null).lte('availability.leaves_on', inDays(30))

@@ -6,10 +6,16 @@ import {
   createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type ReactNode, type UIEvent,
 } from 'react'
+import { pageFor, warmPage, wasWarmed } from './pages'
+import { TAB_PATH, routeOf, type Tab } from './routes'
 
-export type Tab = 'now' | 'browse' | 'watchlist' | 'search'
+const REPORT_COLD = import.meta.env.DEV || location.hostname !== 'usereelay.vercel.app'
+// a tap opened it (not the keyboard or code): its link had the press to preload on
+let pressedAt = 0
+if (REPORT_COLD) window.addEventListener('pointerdown', () => { pressedAt = Date.now() }, { capture: true, passive: true })
+
+export type { Tab } from './routes'
 export const TABS: Tab[] = ['now', 'browse', 'watchlist', 'search']
-const TAB_PATH: Record<Tab, string> = { now: '/', browse: '/browse', watchlist: '/watchlist', search: '/search' }
 
 type Page = { key: string; path: string }
 type State = { tab: Tab; stacks: Record<Tab, Page[]> }
@@ -53,9 +59,9 @@ const page = (path: string): Page => ({ key: `p${++seq}`, path })
 function initialState(): State {
   const stacks: State['stacks'] = { now: [], browse: [], watchlist: [], search: [] }
   const path = location.pathname
-  const tab = TABS.find((t) => TAB_PATH[t] === path)
-  if (tab) return { tab, stacks }
-  if (path !== '/' && !path.startsWith('/i/')) stacks.now = [page(path)]
+  const r = routeOf(path)
+  if (r.name === 'tab') return { tab: r.tab, stacks }
+  if (r.name !== 'invite') stacks.now = [page(path)]
   return { tab: 'now', stacks }
 }
 
@@ -90,6 +96,9 @@ export function NavProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback((path: string) => {
     settlePressed()
+    // every link preloads its page on press (PageLink, usePageLink); one that didn't is reported off production
+    if (REPORT_COLD && Date.now() - pressedAt < 1500 && pageFor(path) && !wasWarmed(path)) console.warn(`[pages] ${path} opened without being preloaded: its link should be a PageLink or use usePageLink`)
+    warmPage(path)
     const s = stateRef.current
     if (topPath(s) === path) return
     depth.current++
@@ -261,7 +270,50 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
     }
   }, [shown, pages])
 
-  // The finger swiped back: once the strip settles on an earlier page, drop the ones after it.
+  // The swipe back decides like iOS: the way the finger is moving when it lets go, not only how far it got.
+  // While the finger moves right (or is past halfway), the top page has no snap point (data-going), so the strip
+  // can only come to rest on the page under it; moving back left, or holding still short of halfway, puts it back.
+  // The snap points change during the drag, so Safari already knows the target when the finger lifts.
+  const count = useRef(0)
+  count.current = shown.length
+  useEffect(() => {
+    const el = strip.current
+    if (!el) return
+    let last: { x: number; t: number } | null = null
+    let still: ReturnType<typeof setTimeout> | undefined
+    const top = () => el.children[count.current] as HTMLElement | undefined
+    const moved = () => count.current * el.clientWidth - el.scrollLeft // how far the strip has come back
+    const mark = (on: boolean) => { const p = top(); if (p && count.current > 0) { if (on) p.dataset.going = ''; else delete p.dataset.going } }
+    const start = (e: TouchEvent) => { last = { x: e.touches[0].clientX, t: e.timeStamp }; mark(false) }
+    const move = (e: TouchEvent) => {
+      if (!last || sliding.current || e.touches.length !== 1) return
+      const x = e.touches[0].clientX
+      const v = (x - last.x) / Math.max(1, e.timeStamp - last.t) // px per ms, right is positive
+      last = { x, t: e.timeStamp }
+      // only once the strip itself is moving (a sideways row or a pull doesn't count)
+      const d = moved()
+      if (d < 8) { mark(false); return }
+      if (v > 0.12) mark(true)
+      else if (v < -0.06) mark(d > el.clientWidth / 2 && v > -0.3)
+      clearTimeout(still)
+      // held still: past halfway goes back, short of it stays
+      still = setTimeout(() => mark(moved() > el.clientWidth / 2), 120)
+    }
+    const end = () => { last = null; clearTimeout(still) }
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: true })
+    el.addEventListener('touchend', end, { passive: true })
+    el.addEventListener('touchcancel', end, { passive: true })
+    return () => {
+      clearTimeout(still)
+      el.removeEventListener('touchstart', start); el.removeEventListener('touchmove', move)
+      el.removeEventListener('touchend', end); el.removeEventListener('touchcancel', end)
+    }
+  }, [])
+
+  // The finger swiped back: once the strip has come to rest on an earlier page, drop the ones after it.
+  // "At rest" is exact (half a pixel) so the pages never change under Safari's snap while it is still finishing,
+  // which would restart the end of the movement.
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget || sliding.current) return
     const el = e.currentTarget
@@ -269,8 +321,11 @@ export function TabStack({ tab, root, render }: { tab: Tab; root: ReactNode; ren
     settle.current = setTimeout(() => {
       if (sliding.current || !el.clientWidth) return
       const index = Math.round(el.scrollLeft / el.clientWidth)
-      if (index < shown.length && Math.abs(el.scrollLeft - index * el.clientWidth) < 2) ctx.popTo(tab, index)
-    }, 90)
+      const resting = Math.abs(el.scrollLeft - index * el.clientWidth) < 0.5
+      if (!resting) return
+      if (index < shown.length) ctx.popTo(tab, index)
+      else delete (el.children[shown.length] as HTMLElement | undefined)?.dataset.going // came back: snap as usual
+    }, 120)
   }
 
   return (

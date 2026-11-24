@@ -61,6 +61,8 @@ button { font: inherit; color: inherit; }
 .stack[data-active='false'] { visibility: hidden; pointer-events: none; }
 .pane { position: relative; flex: none; width: 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; view-timeline: --pane inline; }
 .pane-in { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+/* A swipe back that is heading out: the strip can only come to rest on the page under it (nav.tsx). */
+.pane[data-going] { scroll-snap-align: none; }
 .pane.solo { overflow: hidden; background: var(--bg); }
 .pane.solo { position: absolute; inset: 0; }
 /* The page you leave slides at a third of the speed and dims, like iOS. */
@@ -209,7 +211,9 @@ button { font: inherit; color: inherit; }
 .title-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 .title-art[data-poster='true'] { object-position: center top; }
 .title-head { position: relative; margin: 0 var(--margin); display: flex; align-items: flex-start; gap: 12px; }
-.title-head h1 { flex: 1; min-width: 0; margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); letter-spacing: var(--track-title); }
+/* two-line titles are set tight, like the large headings in Search and onboarding (22px lines); the 2px above and
+   below keep a one-line title exactly where it was, centred on the 26px buttons beside it */
+.title-head h1 { flex: 1; min-width: 0; margin: 2px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
 .title-actions { flex: none; display: flex; align-items: center; gap: 6px; height: 26px; }
 .title-actions .icon-btn { margin: -6px; }
 .pill-open { height: var(--button-inline); padding: 0 10px 0 12px; border: 0; border-radius: var(--radius-pill-28); background: #fff; color: #000; display: flex; align-items: center; gap: 4px; font: var(--type-text); font-weight: 600; cursor: pointer; }
@@ -235,11 +239,16 @@ button.pill-open { padding: 0 12px 0 10px; }
 .row-text small { margin-top: 1px; font: var(--type-meta); color: var(--text-faint); }
 .row-text small.err, .err { color: var(--error); }
 .row-note { font: var(--type-meta); color: var(--text-faint); white-space: nowrap; }
-.cast { list-style: none; margin: 0; display: flex; gap: 12px; padding: 0 var(--margin); width: max-content; }
-.cast li { width: 76px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+/* 3.3 people across the screen, as poster rows show 2.3 posters: the last one is cut, so the row reads as one that
+   scrolls. Each person is a column of the screen's width; the picture is the column less 20px (the space between
+   pictures), and the row is pulled out by half that so the first picture lines up with the heading. The name and
+   the part are one line each, cut with … when too long. */
+.cast { --col: calc((100vw - var(--margin)) / 3.3); --face: calc(var(--col) - 20px); list-style: none; margin: 0 -10px; display: flex; gap: 0; padding: 0 var(--margin); width: max-content; }
+.cast .avatar { width: var(--face); height: var(--face); font-size: 20px; }
+.cast li { width: var(--col); display: flex; flex-direction: column; align-items: center; text-align: center; }
 .avatar { width: 76px; height: 76px; border-radius: 50%; overflow: hidden; background: var(--surface); display: flex; align-items: center; justify-content: center; font: 600 17px/1 var(--font); color: var(--text-faint); }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
-.cast-name, .cast-role { width: 100%; font: var(--type-meta); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.cast-name, .cast-role { width: 100%; padding: 0 4px; font: var(--type-meta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cast-name { margin-top: 8px; color: var(--text-secondary); } .cast-role { margin-top: 1px; color: var(--text-faint); }
 .details { margin: 8px var(--margin) 0; }
 .details div { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 5px 0; font: var(--type-meta); }
@@ -286,7 +295,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 .sheet-body { touch-action: none; }
 /* lists in a sheet scroll natively, momentum and bounce included; the bounce stays inside the list (contain), and at
    the top a pull down is taken by the sheet's drag (see Sheet), so the two never fight */
-.sheet-body :is(.fd-list, .ob-more) { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+.sheet-body :is(.fd-list, .ob-more, .lb-list) { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 /* Where iOS doesn't draw the page (under Safari's floating address bar, past the bottom of the viewport),
    it shows the page background. While a sheet is open, make that the sheet's grey so it never shows as black. */
 html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); }
@@ -979,19 +988,23 @@ html[data-runway] .tabbar { touch-action: none; }
    - iOS bouncing the page down, or a pull to refresh: the picture doesn't move at all; the page slides over it.
    - Scrolling up: the frame leaves at the page's speed (so the picture never shows behind the rows below) while
      the picture inside it drifts back, which makes it move at about two thirds of the page's speed.
-   Both run on the page's scroll timeline, off the main thread. --pull is how far the page is pulled to refresh. */
+   Both follow the marker at the top of the page (see .art-mark), off the main thread. --pull is how far the page is pulled to refresh. */
 @property --pull { syntax: '<length>'; inherits: true; initial-value: 0px; }
 .page[data-ptr] > * { translate: 0 var(--pull); }
-.pane-in { timeline-scope: --page; }
-.page { scroll-timeline: --page block; }
+.pane-in { timeline-scope: --art; }
+/* What the picture follows: a 540px marker at the top of the page (PinnedArt puts it there), as it leaves the
+   screen. Not the page's whole scroll: measured against that, Safari kept using the page's first length while a
+   finger was scrolling, so once the page had grown (rows arriving after the picture) the picture ran about 4%
+   fast during a scroll and snapped back when it stopped. The marker's own 540px don't change with the page. */
+.art-mark { position: absolute; top: 0; left: 0; width: 1px; height: 540px; visibility: hidden; pointer-events: none; view-timeline: --art block; }
 .art-layer { position: absolute; top: 0; left: 0; right: 0; height: 540px; overflow: hidden; pointer-events: none; }
 .art-drift { position: absolute; inset: 0; }
 .art-layer:has(+ .page[data-launch]) { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
 @supports (animation-timeline: scroll()) {
-  .art-layer { animation: art-leave linear both; animation-timeline: --page; animation-range: 0 540px; }
-  .art-layer:has(+ .page[data-launch]) { animation: art-leave linear both, launch-fade var(--dur-launch) var(--ease-launch) both; animation-timeline: --page, auto; animation-range: 0 540px, normal; }
+  .art-layer { animation: art-leave linear both; animation-timeline: --art; animation-range: exit 0% exit 100%; }
+  .art-layer:has(+ .page[data-launch]) { animation: art-leave linear both, launch-fade var(--dur-launch) var(--ease-launch) both; animation-timeline: --art, auto; animation-range: exit 0% exit 100%, normal; }
   @media (prefers-reduced-motion: no-preference) {
-    .art-drift { animation: art-drift linear both; animation-timeline: --page; animation-range: 0 540px; }
+    .art-drift { animation: art-drift linear both; animation-timeline: --art; animation-range: exit 0% exit 100%; }
   }
   @keyframes art-leave { to { translate: 0 -540px; } }
   @keyframes art-drift { to { translate: 0 170px; } }
@@ -1037,7 +1050,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .arrive { animation: launch-fade var(--dur-arrive) var(--ease-launch) both; }
 .art-layer:has(+ .page[data-arrive]) { animation: launch-fade var(--dur-arrive) var(--ease-launch) both; }
 @supports (animation-timeline: scroll()) {
-  .art-layer:has(+ .page[data-arrive]) { animation: art-leave linear both, launch-fade var(--dur-arrive) var(--ease-launch) both; animation-timeline: --page, auto; animation-range: 0 540px, normal; }
+  .art-layer:has(+ .page[data-arrive]) { animation: art-leave linear both, launch-fade var(--dur-arrive) var(--ease-launch) both; animation-timeline: --art, auto; animation-range: exit 0% exit 100%, normal; }
 }
 .skel { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; animation: launch-fade 200ms var(--ease-out) both; }
 .skel[data-leaving] { animation: skel-out 240ms var(--ease-out) both; }
@@ -1102,3 +1115,73 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .wl-row[data-fresh] { animation: wl-open 320ms var(--ease-sheet) both; overflow: hidden; }
 @keyframes wl-open { from { max-height: 0; opacity: 0; } to { max-height: 110px; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .wl-row[data-fresh] { animation: none; } }
+
+/* ---- Letterboxd ---- */
+/* Posters of films the person has logged: a check in the corner opposite the service mark (the picture itself is left alone). */
+.cover-seen { position: absolute; top: 7px; left: 7px; height: 14px; display: flex; align-items: center; color: #fff; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
+.cover-seen .ms { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+.cover[data-ready='true'] > .cover-seen { opacity: 1; }
+
+/* Title page: who has watched it, under the scores */
+/* part of the top block (meta, scores, this row, the text): an even 32px of visible space above and below,
+   counting the air the 44px row has around its 28px initials */
+.lb-row { margin: 24px var(--margin) 0; }
+.lb-row + .overview { margin-top: 22px; }
+.lb-row > button, .lb-row > div { width: 100%; min-height: var(--hit); padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 12px; text-align: left; }
+.lb-row > button { cursor: pointer; transition: opacity 200ms var(--ease-out); }
+.lb-row > button:active { opacity: 0.5; transition: opacity 0s linear 80ms; }
+.lb-row small em, .lb-score { font-style: normal; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.lb-faces { flex: none; display: flex; }
+.lb-faces i { width: 28px; height: 28px; border-radius: 50%; background: #2A2A2A; color: var(--text-secondary); font: 600 12px/28px var(--font); font-style: normal; text-align: center; box-shadow: 0 0 0 2px var(--bg); position: relative; }
+.lb-faces i + i { margin-left: -8px; }
+.lb-faces i:nth-child(1) { z-index: 3; } .lb-faces i:nth-child(2) { z-index: 2; }
+/* your own picture is the same grey as friends' (23 Nov: white was louder than anything else on the page) */
+/* the sheet with every log */
+.lb-head { display: flex; align-items: center; justify-content: space-between; margin-top: -12px; min-height: var(--hit); }
+.lb-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
+.lb-head a { height: var(--hit); display: inline-flex; align-items: center; gap: 2px; font: var(--type-text); color: var(--text-faint); }
+.lb-list { max-height: min(62lvh, 560px); margin: 0 calc(var(--margin) * -1); padding: 0 var(--margin); overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.lb-list .ratings { margin: 4px 0 0; }
+.lb-list h3 { margin: 20px 0 4px; font: var(--type-text); font-weight: 500; color: var(--text-faint); }
+.lb-list .rows { margin: 0; }
+.lb-list .rows li.row-plain { min-height: var(--hit); }
+.lb-list .lb-faces i { background: #262626; box-shadow: none; }
+.lb-score { font: var(--type-text); font-weight: 500; }
+
+/* Settings › Letterboxd */
+.lb-connect { margin-top: 24px; }
+.lb-field { height: 44px; padding: 0 6px 0 14px; border-radius: 12px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; gap: 8px; transition: box-shadow var(--dur-press) var(--ease-out); }
+.lb-field[data-error='true'] { box-shadow: inset 0 0 0 0.5px var(--error); }
+.lb-field input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none; color: #fff; font: var(--type-field); }
+.lb-field input::placeholder { color: var(--text-faint); opacity: 1; }
+.lb-field .btn-small { padding: 0 14px; font-weight: 500; }
+.lb-out { display: inline-flex; align-items: center; gap: 2px; }
+.lb-foot { margin-top: 4px; }
+/* Import your history: two steps in the sheet, each with its button on the right */
+.lb-steps { list-style: none; margin: 16px 0 0; padding: 0; counter-reset: step; }
+.lb-steps li { display: flex; align-items: center; gap: 12px; min-height: 64px; counter-increment: step; }
+.lb-steps li::before { content: counter(step); flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--fill); font: 600 12px/22px var(--font); text-align: center; }
+.lb-steps .btn-small { flex: none; padding: 0 14px; gap: 2px; text-decoration: none; transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out); }
+
+/* ---- Home: why a hero slide is there, and the spotlight card ---- */
+/* the reason and the meta under it are one block at the meta size: the reason white and medium, the meta grey; a
+   reason too long for one line is cut */
+.hero-reason { position: absolute; left: 20px; right: 20px; bottom: 82px; text-align: center; font: var(--type-meta); font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hero-text[data-reason] .hero-meta { font: var(--type-meta); }
+.hero-text[data-reason] :is(.hero-logo, .hero-name) { bottom: 106px; }
+/* the spotlight: large cards side by side, the next one peeking in */
+.spot-row { margin-top: var(--space-3); display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding: 0 var(--margin); padding: 0 var(--margin); }
+.spot-row .spot-item { flex: none; width: calc(100% - 2 * var(--margin) - 32px); scroll-snap-align: start; }
+.spot { position: relative; display: block; aspect-ratio: 16 / 10; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; }
+.spot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+/* a wide picture arrives like a poster: plain until decoded, then the picture and what is written on it fade in together */
+.near-img { position: absolute; inset: 0; }
+.near-img > img { opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
+.near-img[data-ready='true'] > img { opacity: 1; }
+.spot-text { transition: opacity var(--dur-image-in) var(--ease-out); }
+.spot:has(.near-img[data-ready='false']) .spot-text { opacity: 0; }
+.spot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.82) 100%); }
+.spot-text { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; }
+.spot-text small { font: var(--type-meta); font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spot-text b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); text-wrap: balance; }
+.spot-text span { margin-top: 2px; font: var(--type-meta); color: var(--text-secondary); }

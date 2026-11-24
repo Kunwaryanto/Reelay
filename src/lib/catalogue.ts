@@ -13,13 +13,12 @@ export type Card = {
   logo_path?: string | null
   genres?: string[]
   seasons?: number | null
+  runtime_min?: number | null
   availability: Avail[]
 }
 export type Row = { id: string; title: string; items: Card[]; notes?: 'leaving' }
-export type NowData = { hero: Card[]; rows: Row[] }
 
-const CARD = 'id,kind,title,year,poster_path,availability!inner(service_id,leaves_on)'
-const HERO = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
+const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -27,7 +26,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+
 
 // Now mixes films and series, and recent titles with classics, so popularity alone (which favours
 // long-running series) doesn't fill the page. A title is shown once: rows skip anything already above them.
@@ -37,7 +36,7 @@ const CLASSIC_TO = YEAR - 15 // fifteen years and older
 
 type Kind = Card['kind']
 type Bucket = { kind: Kind; from?: number; to?: number }
-const BOTH: Bucket[] = [{ kind: 'film' }, { kind: 'series' }]
+
 const MIXED: Bucket[] = [
   { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM },
   { kind: 'film', to: CLASSIC_TO }, { kind: 'series', to: CLASSIC_TO },
@@ -74,61 +73,11 @@ async function cards(b: Bucket, f: Filter, limit: number): Promise<Card[]> {
   return unwrap((await q.order('popularity', { ascending: false }).limit(limit)) as never)
 }
 
-async function rated(b: Bucket): Promise<Card[]> {
-  const recent = b.from !== undefined
-  let q = supabase.from('titles').select(`${CARD},scores!inner(imdb_rating,imdb_votes)`).eq('kind', b.kind)
-    .gte('scores.imdb_votes', recent ? 20000 : 50000)
-  q = recent ? q.gte('year', RECENT_FROM) : q.lt('year', RECENT_FROM)
-  return unwrap((await q.order('scores(imdb_rating)', { ascending: false }).limit(15)) as never)
-}
-
-const RATED: Bucket[] = [
-  { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM }, { kind: 'film' }, { kind: 'series' },
-]
-
-export async function loadNow(): Promise<NowData> {
-  const heroQ = (kind: Kind) => supabase.from('titles').select(HERO).eq('kind', kind)
-    .not('backdrop_path', 'is', null).not('logo_path', 'is', null).order('popularity', { ascending: false }).limit(6)
-  const all = (buckets: Bucket[], f: Filter, limit: number) => Promise.all(buckets.map((b) => cards(b, f, limit)))
-
-  const [heroFilm, heroSeries, leaving, ratedLists, d2000, d90, crime, comedy, drama] = await Promise.all([
-    heroQ('film'), heroQ('series'),
-    supabase.from('availability').select(`leaves_on,title:titles!inner(${CARD})`).gte('leaves_on', today()).lte('leaves_on', inDays(30)).order('leaves_on').limit(40),
-    Promise.all(RATED.map(rated)),
-    all(BOTH, { from: 2000, to: 2009 }, 25),
-    all(BOTH, { from: 1990, to: 1999 }, 25),
-    all(MIXED, { genresAll: ['Crime'] }, 15),
-    all(MIXED, { genresAll: ['Comedy'] }, 15),
-    all(MIXED, { genresAll: ['Drama'] }, 15),
-  ])
-
-  const seen = new Set<number>()
-  const hero = interleave([unwrap(heroFilm as never), unwrap(heroSeries as never)], seen, 5)
-
-  // Leaving soon is a list of facts, so it keeps every title, and marks them as shown for the rows below.
-  const inLeaving = new Set<number>()
-  const leavingCards = (unwrap(leaving as never) as { title: Card }[])
-    .map((r) => r.title)
-    .filter((t) => t && !inLeaving.has(t.id) && inLeaving.add(t.id))
-    .slice(0, 20)
-  leavingCards.forEach((t) => seen.add(t.id))
-
-  const rows: Row[] = [
-    { id: 'leaving', title: 'Leaving soon', items: leavingCards, notes: 'leaving' },
-    { id: 'rated', title: 'Highest rated', items: interleave(ratedLists, seen) },
-    { id: '2000s', title: '2000s', items: interleave(d2000, seen) },
-    { id: '90s', title: '90s', items: interleave(d90, seen) },
-    { id: 'crime', title: 'Crime', items: interleave(crime, seen) },
-    { id: 'comedy', title: 'Comedy', items: interleave(comedy, seen) },
-    { id: 'drama', title: 'Drama', items: interleave(drama, seen) },
-  ]
-  return { hero, rows: rows.filter((r) => r.items.length >= 3) }
-}
-
 export type Person = { id: number; name: string; profile_path: string | null }
 export type Credit = { role: 'cast' | 'director' | 'creator' | 'writer'; character: string | null; sort_order: number; person: Person }
 export type Award = { id: number; award: string; year: number; short_category: string; won: boolean; person_name: string | null; rank: number }
 export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
+  tmdb_id: number
   original_title: string | null
   end_year: number | null
   runtime_min: number | null
@@ -143,16 +92,26 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
 }
 
 export async function loadTitle(id: number): Promise<TitleDetail | null> {
+  // More like this is asked for at the same time: its list doesn't depend on the title's details
+  const similar = supabase.rpc('similar_titles', { p_id: id })
   const title = unwrap(await supabase.from('titles').select(
-    'id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
+    'id,tmdb_id,kind,title,original_title,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
     'availability(*,service:services(*)),' +
     'scores(imdb_rating,rt_critics,rt_audience,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +
     'awards(id,award,year,short_category,won,person_name,rank)',
   ).eq('id', id).maybeSingle()) as unknown as (Omit<TitleDetail, 'more'>) | null
   if (!title) return null
+  // the titles most like this one (title_similar, built nightly; until then scored live), in order, streaming only
   let more: Card[] = []
-  if (title.genres.length) {
+  const sim = await similar
+  const order = (sim.data as { id: number; pos: number }[] | null) ?? []
+  if (order.length) {
+    const pos = new Map(order.map((r) => [Number(r.id), r.pos]))
+    const cards = unwrap(await supabase.from('titles').select(CARD).in('id', [...pos.keys()])) as unknown as Card[]
+    more = cards.sort((a, b) => (pos.get(a.id) ?? 99) - (pos.get(b.id) ?? 99))
+  } else if (sim.error && title.genres.length) {
+    // the list can't be read (an older database): the most popular titles in the same first genre, as before
     more = (unwrap(await supabase.from('titles').select(CARD).contains('genres', [title.genres[0]]).eq('kind', title.kind)
       .neq('id', id).order('popularity', { ascending: false }).limit(12)) as unknown as Card[])
   }
@@ -192,7 +151,7 @@ export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
   type Sc = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
   type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'rt' | 'lb' | 'notify' | 'added_at'> & { scores: Sc | Sc[] | null }) | null }
   const rows = unwrap(await supabase.from('watchlist')
-    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
+    .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
     .order('added_at', { ascending: false }) as never) as Raw[]
   return rows.filter((r) => r.title).map((r) => {
     const { scores, ...t } = r.title!
@@ -281,6 +240,7 @@ export const SERVICE_NAME: Record<string, string> = {
   netflix: 'Netflix', 'hbo-max': 'HBO Max', 'svt-play': 'SVT Play', viaplay: 'Viaplay', 'disney-plus': 'Disney+',
   'prime-video': 'Prime Video', 'apple-tv': 'Apple TV', skyshowtime: 'SkyShowtime', 'tv4-play': 'TV4 Play',
   mubi: 'MUBI', crunchyroll: 'Crunchyroll', curiosity: 'Curiosity Stream', 'pluto-tv': 'Pluto TV',
+  cineasterna: 'Cineasterna', 'draken-film': 'Draken Film', 'triart-play': 'TriArt Play', hayu: 'hayu', britbox: 'BritBox',
 }
 
 // Where "Open in" goes when the catalogue has no direct link: the service's own search for the title.
@@ -314,7 +274,42 @@ export function leavingNote(date: string | null | undefined): string | null {
   return `Leaves ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
 
+/** The first day a title leaves one of its services, if it does. */
+export const leavesOn = (t: { availability: { leaves_on?: string | null }[] }) =>
+  t.availability.map((a) => a.leaves_on).filter((d): d is string => !!d).sort()[0] ?? null
+/**
+ * "Leaves in 3 days" for a title (its first leaving date), or for one date. The one way every screen writes it:
+ * nothing when the saved copy is outdated (`stale`: the date may have passed), or past `within` days.
+ */
+export function leavingFor(what: { availability: { leaves_on?: string | null }[] } | string | null | undefined, { stale = false, within }: { stale?: boolean; within?: number } = {}): string | null {
+  const date = typeof what === 'string' || what == null ? what : leavesOn(what)
+  if (stale || !date) return null
+  if (within !== undefined && (Date.parse(date + 'T00:00:00Z') - Date.now()) / 864e5 > within) return null
+  return leavingNote(date)
+}
+
 export const kindWord = (kind: Card['kind']) => (kind === 'film' ? 'Film' : 'Series')
+
+/** The fewest titles a row of posters may show, anywhere in the app: a shorter row is left out. */
+export const MIN_ROW = 7
+
+/** Runtime in the short form for poster cards and lists: 2h 6m, 2h, 45m. */
+export function shortRuntime(min: number | null | undefined): string | null {
+  if (!min) return null
+  const h = Math.floor(min / 60), m = min % 60
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`
+}
+
+/** How long it is: a film's short runtime, a series' seasons; the plain kind when that isn't known. */
+export function lengthOf(t: { kind: 'film' | 'series'; runtime_min?: number | null; seasons?: number | null }): string {
+  if (t.kind === 'film') return shortRuntime(t.runtime_min) ?? 'Film'
+  return t.seasons ? (t.seasons === 1 ? '1 season' : `${t.seasons} seasons`) : 'Series'
+}
+
+/** The meta line under a title everywhere outside the title page: year first, then its length, then any extras. */
+export function metaLine(t: { kind: 'film' | 'series'; year: number | null; runtime_min?: number | null; seasons?: number | null }, ...extra: (string | null | undefined | false)[]): string {
+  return [t.year, lengthOf(t), ...extra].filter(Boolean).join(' · ')
+}
 
 export function runtime(min: number | null): string | null {
   if (!min) return null
