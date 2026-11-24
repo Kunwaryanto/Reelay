@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { paths } from '../lib/routes'
-import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type TitleDetail } from '../lib/catalogue'
+import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Award, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { firstName, fullDate, looseDate, times, useTitleLogs, useWatched, type TitleLogs } from '../lib/letterboxd'
 import { useServicesQuery } from '../lib/profile'
@@ -96,6 +96,96 @@ function Watchers({ logs, tmdbId, everyone }: { logs: TitleLogs; tmdbId: number;
   )
 }
 
+/** One award in one category: the title's own and those given to people for it, together (wins and nominations apart). */
+type AwardGroup = { key: string; award: string; year: number; category: string; won: boolean; rank: number; people: string[] }
+function groupAwards(awards: Award[]): AwardGroup[] {
+  const groups = new Map<string, AwardGroup>()
+  for (const a of awards) {
+    const key = `${a.award}|${a.year}|${a.short_category}|${a.won}`
+    const g = groups.get(key) ?? { key, award: a.award, year: a.year, category: a.short_category, won: a.won, rank: a.rank, people: [] }
+    if (a.person_name && !g.people.includes(a.person_name)) g.people.push(a.person_name)
+    g.rank = Math.min(g.rank, a.rank)
+    groups.set(key, g)
+  }
+  return [...groups.values()]
+}
+/** On the page: the first name and how many more ("Harry Lange +2"), so a row stays one line; the sheet names them all. */
+const firstOf = (names: string[]) => (names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] ?? '')
+/** The page shows this many (wins first); more are in the sheet behind View all. */
+const AWARDS_SHOWN = 4
+
+function Awards({ awards }: { awards: Award[] }) {
+  const [open, setOpen] = useState(false)
+  // awards come sorted wins first, then the category's rank, newest first: the page keeps that order
+  const groups = useMemo(() => groupAwards(awards), [awards])
+  // the sheet: by ceremony, newest first; in each, wins first, then by rank
+  const ceremonies = useMemo(() => {
+    const by = new Map<string, AwardGroup[]>()
+    for (const g of [...groups].sort((a, b) => b.year - a.year || a.award.localeCompare(b.award) || Number(b.won) - Number(a.won) || a.rank - b.rank)) {
+      const k = `${g.award} ${g.year}`
+      by.set(k, [...(by.get(k) ?? []), g])
+    }
+    return [...by.entries()]
+  }, [groups])
+  const shown = groups.slice(0, AWARDS_SHOWN)
+  // a line cut short on this phone's width (measured, and again when the width changes)
+  const list = useRef<HTMLUListElement>(null)
+  const [cut, setCut] = useState(false)
+  useLayoutEffect(() => {
+    const ul = list.current
+    if (!ul) return
+    const measure = () => setCut([...ul.querySelectorAll('small')].some((el) => el.scrollWidth > el.clientWidth + 1))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(ul)
+    return () => ro.disconnect()
+  }, [shown.length])
+  // anything the page doesn't show (more awards, "+N" names, a cut line): View all, and every row opens the sheet
+  const hidden = groups.length > AWARDS_SHOWN || shown.some((g) => g.people.length > 1) || cut
+  const sheetList = useRef<HTMLDivElement>(null)
+  const openAt = (key?: string) => {
+    setOpen(true)
+    if (key) setTimeout(() => sheetList.current?.querySelector(`[data-award="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'center' }), 60)
+  }
+  const wins = groups.filter((g) => g.won).length
+  const line = (g: AwardGroup) => (
+    <>
+      <Laurel size={16} won={g.won} />
+      <span className="row-text"><b>{g.won ? 'Won' : 'Nominated'} · {g.award} {g.year}</b><small>{[g.category, firstOf(g.people)].filter(Boolean).join(' · ')}</small></span>
+    </>
+  )
+  return (
+    <section className="block awards">
+      {hidden ? <SectionHeader title="Awards" viewAll={() => openAt()} /> : <h2 className="block-title">Awards</h2>}
+      <ul className="rows" ref={list}>
+        {shown.map((g) => (hidden
+          ? <li key={g.key}><button type="button" onClick={() => openAt(g.key)}>{line(g)}</button></li>
+          : <li key={g.key} className="row-plain">{line(g)}</li>))}
+      </ul>
+      <Sheet open={open} onClose={() => setOpen(false)} label="Awards">
+        <div className="lb-head">
+          <h2>Awards</h2>
+          <span className="aw-sum">{wins > 0 ? `${wins} ${wins === 1 ? 'win' : 'wins'} · ` : ''}{groups.length} in all</span>
+        </div>
+        <div className="lb-list noscroll" ref={sheetList}>
+          {ceremonies.map(([name, gs]) => (
+            <div key={name}>
+              <h3>{name}</h3>
+              <ul className="rows">
+                {gs.map((g) => (
+                  <li key={g.key} className="row-plain" data-award={g.key}>
+                    <Laurel size={16} won={g.won} />
+                    <span className="row-text"><b>{g.category}</b><small>{[g.won ? 'Won' : 'Nominated', g.people.join(', ')].filter(Boolean).join(' · ')}</small></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Sheet>
+    </section>
+  )
+}
 function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   const saved = useSaved()
   // More like this in your order: what's on your services first (each group keeps its likeness order), and films
@@ -184,24 +274,12 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
             )
           })}
           {t.availability.length === 0 && (
-            <li className="row-plain"><span className="row-text"><b>Not streaming in Sweden</b><small>{notifying ? 'We’ll let you know when it’s on.' : 'Not on any service here right now.'}</small></span></li>
+            <li className="row-plain"><span className="row-text"><b>Not streaming in Sweden</b>{notifying && <small>We’ll let you know when it’s on.</small>}</span></li>
           )}
         </ul>
       </section>
 
-      {t.awards.length > 0 && (
-        <section className="block">
-          <h2 className="block-title">Awards</h2>
-          <ul className="rows">
-            {t.awards.map((a) => (
-              <li key={a.id} className="row-plain">
-                <Laurel size={16} won={a.won} />
-                <span className="row-text"><b>{a.award} {a.year}</b><small>{a.won ? 'Won' : 'Nominated'} · {a.short_category}{a.person_name ? `, ${a.person_name}` : ''}</small></span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {t.awards.length > 0 && <Awards awards={t.awards} />}
 
       {cast.length > 0 && (
         <section className="block">

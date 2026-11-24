@@ -648,3 +648,77 @@ Measured on the database before and after:
 - (24 Nov, later) The logos are sized by visible ink, not by their box: each shows about the same amount of logo
   (`MARK_SHAPE` holds each file's ratio and share of ink), 7–13 px tall, at most 36 wide. Thin logos (Disney+,
   TriArt Play, Prime Video) grew, solid ones (HBO Max, Crunchyroll) calmed down.
+
+## Big films that don't stream, and everything else on TMDB (24 Nov)
+
+- 2001: A Space Odyssey and Chinatown are only to rent in Sweden, so the sync never had them. Well-known titles
+  (500+ votes on TMDB: 9,438) are now kept whether or not they stream: 4,254 were added, the rest were already in.
+  `syncNotable` adds new ones on Sundays; the clean-up never removes them. Their title page says "Not streaming in
+  Sweden" with the notification offer.
+- Everything else on TMDB: Search asks the `tmdb` function once its own results are in and lists TMDB's titles the
+  catalogue lacks after them (a moment later). Tapping one saves it (title, cast, crew) and opens its page.
+  Not asked with a service ("on Netflix"), "my services" or the drawer's filters.
+- Awards were read again for the new titles: 13,238 wins and nominations, 883 titles with a win.
+
+## Search: filter lists count and load on (24 Nov)
+
+- A search made by filters alone ("90s thriller", "leaving soon") used to load the 60 most popular titles, and the
+  type pills counted those 60 while the filter panel counted the database. Now the pills show the database's totals
+  (All, Films, Series) and the list loads 60 more as it nears the end, so every title is reachable.
+- Pages follow popularity, then id, so a page never repeats or skips a title. The mixed list (All) shows only as far
+  as its own pages reached; Films and Series page on their own.
+- The filter panel's "Show N results" button is stacked above the blur under it, so it stays sharp while the panel opens.
+
+## Title page: awards grouped, View all opens a sheet (24 Nov)
+
+- One row per category: the title's own award and the people given it for the title are one row
+  ("Nominated · Production Design · Harry Lange +2" on the page; the sheet names everyone).
+- The page shows four rows, wins first. When there are more, the Awards heading has View all (as poster rows do),
+  which opens a sheet with every award under a heading per ceremony and year, newest first, wins first in each.
+  The sheet's heading says "3 wins · 9 in all".
+
+## Explore: lists made of filters, and All titles (24 Nov)
+
+- A Browse list made of filters (a genre, decade or country, Under 90 minutes, Leaving soon, New this year, and the
+  rows on a category page such as "Top thriller series") opens with those filters as chips. Taking one off widens the
+  list, and the heading follows: "Thriller series" → "Series", "90s" → "All titles".
+- The list is read from the database by its filters, 60 at a time as it scrolls, with real totals in the type pills.
+- Browse has "All titles" on the right of its heading, in the View all style (design B3): the same page, nothing set.
+- Decades can be picked several at once in the filter panel ("90s & 2000s"), in Search too. 70s and 60s are their own
+  decades now; Older is before 1960.
+- Trending, Hidden gems, Highest rated, Award winners and New on streaming stay fixed lists.
+
+## Not streaming: said once (24 Nov)
+
+- Title page: a title not streaming shows "Not streaming in Sweden" alone (the line under it said the same again);
+  after Notify me, "We'll let you know when it's on." under it.
+- Watchlist › Not on your services: where a title is ends its meta line, as a service does in the other sections
+  ("1968 · 2h 29m · Not streaming", "… · On Viaplay"), instead of a third line.
+
+## Country in the filters (24 Nov)
+
+- The filter panel has a Country row (Sweden, Denmark, Norway, Finland, UK, US, France, Germany, Spain, Italy,
+  South Korea, Japan, India, Australia, Canada) in Search and on Explore pages; the chip reads "From Sweden".
+  Lists filtered on the phone (the fixed Browse lists, Watchlist) don't offer it: their titles don't carry countries.
+- Name searches now also apply decades and country to their results.
+
+## Search: Leaving soon starts on your services (24 Nov)
+
+- The Leaving soon suggestion (before typing) reads "On your services" for a member with services: tapping it
+  searches with My services on (a chip that can be taken off), and its poster is the top title on their services.
+  The other suggestions turn My services off.
+
+## Title page awards: one line, the sheet for the rest (24 Nov)
+
+- Each row: "Won · Oscars 1969" (or Nominated), then the category and the first name ("Harry Lange +2") on one line,
+  cut with … when it doesn't fit.
+- When the page hides anything (more than four awards, a "+N", or a line cut on this phone's width), the heading has
+  View all and every row opens the sheet at that award. When nothing is hidden, the rows are plain.
+
+## Corner logos: more even; titles never clipped (24 Nov)
+
+- Logos are sized by box area with a light correction for thin ones (area ∝ 1/√ink), instead of equal ink: Prime
+  Video and other wide thin logos no longer look big, and dense round ones (Pluto, Crunchyroll) no longer small.
+  6.5–11.5 px tall, at most 34 wide. SVT Play and SkyShowtime follow the same rule.
+- Services without a logo show their name in 7 px semibold, as written ("Cineasterna"), not 800 capitals.
+- Title page: the name has no line limit any more, so nothing is clipped (the 4 px of room is gone).

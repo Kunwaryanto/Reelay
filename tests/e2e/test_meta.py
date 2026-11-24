@@ -31,3 +31,6 @@ def test_poster_corner_shows_the_service_logo(app):
     assert marks
     # every service in the mock has a logo now: no names written out
     assert all(kind == 'img' for kind, _ in marks), marks
+    # sized by one rule: 6.5–11.5 px tall, at most 34 wide (TV4's square file keeps 10 × 10)
+    sizes = pg.evaluate(f"[...({TOP}).querySelectorAll('.cover-mark img')].map(i => [i.getBoundingClientRect().width, i.getBoundingClientRect().height])")
+    assert all(6.4 <= h <= 11.6 and w <= 34.1 for w, h in sizes), sizes

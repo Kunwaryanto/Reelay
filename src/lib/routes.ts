@@ -14,6 +14,8 @@ export type Route =
   | { name: 'browse-section'; section: SectionId; kind?: Kind }
   | { name: 'browse-category'; id: string; kind?: Kind }
   | { name: 'browse-grid'; id: string; row: string; kind?: Kind }
+  /** every title, with filters of the member's own (Browse › All titles) */
+  | { name: 'browse-titles' }
   | { name: 'settings'; page?: SettingsPage }
   | { name: 'privacy' } | { name: 'terms' } | { name: 'onboarding' } | { name: 'dev' }
   | { name: 'invite'; token: string }
@@ -34,6 +36,7 @@ export function routeOf(path: string): Route {
     if (b === 'all' && c) return { name: 'browse-section', section: c as SectionId, kind: kindOf(d) }
     if (b === 'c' && c) return { name: 'browse-category', id: c, kind: kindOf(d) }
     if (b === 'g' && c && d) return { name: 'browse-grid', id: c, row: d, kind: kindOf(e) }
+    if (b === 'titles' && !c) return { name: 'browse-titles' }
   }
   if (a === 'settings') {
     if (!b) return { name: 'settings' }
@@ -55,6 +58,7 @@ export const paths = {
   section: (section: SectionId, kind?: Kind | 'all') => `/browse/all/${section}${kindPart(kind)}`,
   category: (id: string, kind?: Kind | 'all') => `/browse/c/${id}${kindPart(kind)}`,
   grid: (id: string, row: string, kind?: Kind | 'all') => `/browse/g/${id}/${row}${kindPart(kind)}`,
+  allTitles: '/browse/titles',
   settings: (page?: SettingsPage) => (page ? `/settings/${page}` : '/settings'),
   privacy: '/privacy', terms: '/terms', onboarding: '/onboarding',
 } as const

@@ -66,11 +66,18 @@ def route(r):
     from urllib.parse import unquote
     _ids = re.search(r'[?&]id=in\.\(([\d,]+)\)', unquote(u)) if '/rest/v1/titles' in u and 'original_language' not in u else None
     if _ids: return r.fulfill(json=[card(int(x)) for x in _ids.group(1).split(',')][::-1])  # any order: the app puts them back in the list's
+    # everything else on TMDB: a search answer, and saving one returns its new id
+    if 'functions/v1/tmdb' in u:
+        b=json.loads(r.request.post_data or '{}')
+        if b.get('add'): return r.fulfill(json={'id': 777})
+        if 'tmdb' in MODE: return r.fulfill(json={'results': MODE['tmdb']})
+        return r.fulfill(json={'results':[{'kind':'film','tmdb_id':62,'title':'2001: A Space Odyssey','year':1968,'poster_path':'/p62.jpg'}] if '2001' in b.get('q','') else []})
     if '/rest/v1/rpc/search_titles' in u:
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])
         return r.fulfill(json=[{"id":i} for i in hits])
-    if '/rest/v1/titles' in u and 'original_language' in u and '?id=eq.' not in u and '&id=eq.' not in u:
+    # search by filters, and Explore (Browse lists made of filters: ordered by popularity then id, in pages)
+    if '/rest/v1/titles' in u and ('original_language' in u or r.request.method=='HEAD' or 'id.asc' in u) and '?id=eq.' not in u and '&id=eq.' not in u:
         from urllib.parse import unquote
         uu=unquote(u)
         def hit(i):
@@ -79,18 +86,20 @@ def route(r):
             return t
         m=re.search(r'id=in\.\(([\d,]+)\)',uu)
         if m: return r.fulfill(json=[hit(int(x)) for x in m.group(1).split(',')][::-1])
-        n=int(re.search(r'limit=(\d+)',uu).group(1))
-        out=[hit(i) for i in range(41,41+min(n,14)) if i%5]
-        if 'kind=eq.film' in uu: out=[t for t in out if t['kind']=='film']
-        if 'kind=eq.series' in uu: out=[t for t in out if t['kind']=='series']
-        return r.fulfill(json=out)
+        # a list made by filters: MODE['pool'] titles in popularity order (14 unless a test asks for more), in pages
+        pool=[hit(i) for i in range(41,41+MODE.get('pool',14)) if i%5]
+        if 'kind=eq.film' in uu: pool=[t for t in pool if t['kind']=='film']
+        if 'kind=eq.series' in uu: pool=[t for t in pool if t['kind']=='series']
+        if r.request.method=='HEAD': return r.fulfill(status=200, headers={'content-range':f'*/{len(pool)}','access-control-expose-headers':'content-range','access-control-allow-origin':'*'}, body='')
+        n=int(re.search(r'limit=(\d+)',uu).group(1)); o=int((re.search(r'offset=(\d+)',uu) or [0,0])[1])
+        return r.fulfill(json=pool[o:o+n])
     if '/rest/v1/titles' in u:
         if 'id=eq.' in u:
             t=card(1); t.update({"original_title":"The Sinner","end_year":2021,"runtime_min":45,"overview":"Detective Harry Ambrose takes on a new case each season, digging into why ordinary people commit shocking crimes. The first season follows a young mother who stabs a stranger on a crowded beach, and has no idea why she did it.","original_language":"en","genres":["Crime","Mystery"],
               "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":"2026-12-31","link":"https://viaplay.com/film/old-style","service":{"name":"Viaplay","kind":"subscription"}},{"service_id":"netflix","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Netflix","kind":"subscription"}}],
               "scores":{"imdb_rating":7.8,"rt_critics":92,"letterboxd":None},
               "credits":[{"role":"cast","character":"Harry Ambrose","sort_order":i,"person":{"id":i,"name":n,"profile_path":None if i%2 else f"/c{i}.jpg"}} for i,n in enumerate(['Bill Pullman','Jessica Biel','Christopher Abbott','Carrie Coon','Matt Bomer'])]+[{"role":"creator","character":None,"sort_order":0,"person":{"id":99,"name":"Derek Simonds","profile_path":None}}],
-              "awards":[{"id":1,"award":"Emmys","year":2018,"short_category":"Lead Actress","won":False,"person_name":"Jessica Biel","rank":2}]})
+              "awards":MODE.get('awards',[{"id":1,"award":"Emmys","year":2018,"short_category":"Lead Actress","won":False,"person_name":"Jessica Biel","rank":2}])})
             return r.fulfill(json=t)
         n=5 if 'logo_path' in u.split('select=')[1].split('&')[0] else 12
         if 'limit=15' in u:
@@ -148,7 +157,7 @@ def new():
         if '/rest/v1/titles' in u and 'id=eq.' in u and 'overview' in u:
             t=card(3); t.update({"tmdb_id":603692,"kind":"film","title":"John Wick: Chapter 4","year":2023,"original_title":None,"end_year":None,"runtime_min":170,"seasons":None,"overview":"With the price on his head ever increasing, John Wick uncovers a path to defeating the High Table.","genres":["Action","Thriller"],"original_language":"en",
               "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Viaplay","kind":"subscription"}}],
-              "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":[]})
+              "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":MODE.get('awards',[])})
             return r.fulfill(json=t)
         return r.fallback()
     pg.route(re.compile(r'.*/rest/v1/titles.*'), tt)

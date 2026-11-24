@@ -14,9 +14,10 @@ import { FRESH, useQuery } from '../lib/query'
 import {
   addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
+  addFromTmdb, searchTmdb, loadMore, pagedList, type TmdbHit,
 } from '../lib/search'
-import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
+import { FilterDrawer, SOURCES, SERVER_ROWS, DECADES, countryName, decadeYears, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
+import { Icon, LoadOn, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 
@@ -24,16 +25,17 @@ type Kind = 'all' | 'series' | 'film' | 'people'
  * What the filter drawer has set, on top of the words. A key that is present has been decided in the drawer, even
  * when its value is "any" (null, []): it then replaces what the words say about it ("90s" typed, Released set to 80s).
  */
-type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; rating?: number; rt?: number; lb?: number; length?: Len }
-const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
+type Extra = { genres?: string[]; decades?: number[]; lang?: string | null; country?: string | null; rating?: number; rt?: number; lb?: number; length?: Len }
+const slot = (key: string): 'genres' | 'decades' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decades' : key === 'lang' ? 'lang' : null)
 /** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
-const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
+const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1960 && from % 10 === 0 && to === from + 9 ? from : null }
 function toFilters(x: Extra, services: string[] | null, hide: number[] | null = null): Filters {
   const f: Filters = {}
   if (hide?.length) f.hide = hide
-  if (typeof x.decade === 'number') { if (x.decade === 0) f.to = 1979; else { f.from = x.decade; f.to = x.decade + 9 } }
+  if (x.decades?.length) f.decades = x.decades.map(decadeYears)
   if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
   if (x.lang) f.lang = x.lang
+  if (x.country) f.country = x.country
   if (x.rating) f.minRating = x.rating
   if (x.rt) f.minRt = x.rt
   if (x.lb) f.minLb = x.lb
@@ -56,7 +58,7 @@ const keep = (key: string, found: Found) => {
   if (answers.size > 30) answers.delete(answers.keys().next().value!)
 }
 /** Fetch a search ahead of time (the ideas on the first page). */
-const warm = (text: string) => { const key = keyOf(text, []); if (!kept(key)) search(text, []).then((found) => keep(key, found), () => {}) }
+const warm = (text: string, extra: Filters = {}) => { const key = keyOf(text, [], extra); if (!kept(key)) search(text, [], extra).then((found) => keep(key, found), () => {}) }
 
 /** Run the search a moment after typing stops; keep showing the last results until the new ones arrive. */
 function useSearch(typed: string, removed: string[], extra: Filters) {
@@ -89,12 +91,63 @@ function useSearch(typed: string, removed: string[], extra: Filters) {
     return () => window.removeEventListener('online', online)
   }, [])
 
+  // a list made by filters loads on as it is scrolled: one page at a time
+  const loading = useRef(false)
+  const more = (kind: 'all' | Hit['kind']) => {
+    const now = ready ?? (key && state.key === key ? state.found : null)
+    if (!now?.paged || loading.current) return
+    loading.current = true
+    loadMore(now, kind).then((next) => { keep(key, next); setState({ key, found: next, error: false }) }, () => {}).finally(() => { loading.current = false })
+  }
+
   return {
     found: ready ?? (key ? state.found : null),
     error: !ready && !!key && state.key === key && state.error,
     waiting: !ready && !!key && state.key !== key,
     retry: () => setAgain((n) => n + 1),
+    more,
   }
+}
+
+
+/** Everything else on TMDB: asked once the catalogue's own answer is on screen, for a plain name search (no filters,
+ *  not "only my services", which TMDB's titles can't meet). Kept per words for the session. */
+const tmdbKept = new Map<string, TmdbHit[]>()
+function useTmdb(text: string, words: string, on: boolean): { hits: TmdbHit[]; waiting: boolean } {
+  const key = text.replace(/\s+/g, ' ').trim().toLowerCase()
+  const [got, setGot] = useState<{ key: string; hits: TmdbHit[] } | null>(null)
+  useEffect(() => {
+    if (!on || key.length < 2 || tmdbKept.has(key)) return
+    let live = true
+    const t = setTimeout(() => {
+      searchTmdb(key, words).then((hits) => { tmdbKept.set(key, hits); if (live) setGot({ key, hits }) }, () => { tmdbKept.set(key, []); if (live) setGot({ key, hits: [] }) })
+    }, 150)
+    return () => { live = false; clearTimeout(t) }
+    // `words` follows `key`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, on])
+  if (!on || key.length < 2) return { hits: [], waiting: false }
+  const hits = tmdbKept.get(key) ?? (got?.key === key ? got.hits : undefined)
+  return { hits: hits ?? [], waiting: hits === undefined }
+}
+
+/** A TMDB title: tapping saves it to the catalogue, then opens its page like any other. */
+function TmdbRow({ h, onOpen }: { h: TmdbHit; onOpen: (id: number) => void }) {
+  const [state, setState] = useState<'idle' | 'adding' | 'failed'>('idle')
+  const open = () => {
+    if (state === 'adding') return
+    setState('adding')
+    addFromTmdb(h).then((id) => { setState('idle'); onOpen(id) }, () => setState('failed'))
+  }
+  const meta = state === 'adding' ? 'Opening…' : state === 'failed' ? 'Couldn’t open it. Tap to try again.' : [h.year, h.kind === 'film' ? 'Film' : 'Series'].filter(Boolean).join(' · ')
+  return (
+    <li className="s-tmdb">
+      <button type="button" className="s-row press-row" onClick={open} aria-busy={state === 'adding' || undefined}>
+        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-text"><b>{h.title}</b><small>{meta}</small></span>
+      </button>
+    </li>
+  )
 }
 
 const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, runtime_min: h.runtime, seasons: h.seasons, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
@@ -157,9 +210,9 @@ export default function Search() {
   const [hour] = useState(() => new Date().getHours())
 
   const mineQ = useServicesQuery()
-  const ideas = useQuery<Idea[]>('search-ideas', loadIdeas, FRESH.catalogue)
-  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
+  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}`, () => loadIdeas(picked), FRESH.catalogue)
+  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
   // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
@@ -188,7 +241,7 @@ export default function Search() {
   // chips from the words that the drawer has replaced
   const off = useMemo(() => [...removed, ...parseQuery(q).tokens.filter((t) => { const s = slot(t.key); return s !== null && extra[s] !== undefined }).map((t) => t.key)], [q, removed, extra])
   const xf = useMemo(() => toFilters(extra, myOnly ? picked : null, hiding ? seenIds : null), [extra, myOnly, picked, hiding, seenIds])
-  const { found, error, waiting, retry } = useSearch(q, off, xf)
+  const { found, error, waiting, retry, more: loadNext } = useSearch(q, off, xf)
   const hasQ = q.trim().length > 0
   // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
   useEffect(() => { if (found?.kind) setKind(found.kind) }, [found])
@@ -198,15 +251,30 @@ export default function Search() {
   const tokens = early?.tokens ?? found?.tokens ?? []
   const skeleton = useLate(waiting && !found, 150)
   // the three ideas are fetched ahead, so tapping one has nothing to wait for
-  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query)) }, [ideas.data])
+  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query, c.mine ? { services: picked } : {})) }, [ideas.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = useMemo(() => (hiding ? (found?.hits ?? []).filter((h) => !seen.has(h.id)) : found?.hits ?? []), [found, hiding, seen])
   const mine = all
   const folks = found?.people ?? []
-  const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
-  const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || h.kind === kind)
+  // a list made by filters counts what the database has, and shows what has loaded so far (it loads on as it scrolls)
+  const paged = found?.paged
+  const counts = paged
+    ? { all: paged.totals.all + folks.length, people: folks.length, series: paged.totals.series, film: paged.totals.film }
+    : { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
+  const shown = kind === 'people' ? [] : paged && found ? pagedList(found, kind) : mine.filter((h) => kind === 'all' || h.kind === kind)
+  const unloaded = !!paged && kind !== 'people' && shown.length < (kind === 'all' ? paged.totals.all : paged.totals[kind])
   const shownPeople = kind === 'people' ? folks : kind === 'all' ? folks.slice(0, 2) : []
   const list = sort === 'best' ? shown : [...shown].sort((a, b) => (sort === 'rated' ? (b.rating ?? 0) - (a.rating ?? 0) : (b.year ?? 0) - (a.year ?? 0)))
+  // everything else on TMDB, after the catalogue's own answer, for a plain name search
+  // asked whenever there are name words (film names often hold a year, "2001 a space odyssey"), not with a service
+  // or "my services" (TMDB's titles don't stream there) or the drawer's filters
+  const words = parseQuery(q).rest
+  const plain = hasQ && !!found && !waiting && !error && !myOnly && words.length >= 2 && !tokens.some((t) => t.filter.service || t.filter.services) && Object.keys(extra).length === 0 && kind !== 'people'
+  const more = useTmdb(q, words, plain)
+  // TMDB's titles leave out what the catalogue has (by TMDB id, on the server); as a second guard, one listed above
+  // with the same type, name and year isn't listed again
+  const listed = new Set(all.map((h) => `${h.kind}|${h.title.toLowerCase()}|${h.year}`))
+  const extraHits = more.hits.filter((h) => (kind === 'all' || h.kind === kind) && !listed.has(`${h.kind}|${h.title.toLowerCase()}|${h.year}`))
 
   const remember = (r: Recent) => setRecents((old) => { const next = addRecent(old, r); writeRecents(next); return next })
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
@@ -222,11 +290,12 @@ export default function Search() {
   // what is on, for the chips and the count on the button (sort isn't a filter, so it doesn't count)
   const less = (patch: Extra) => setExtra((x) => ({ ...x, ...patch }))
   const xchips: { key: string; label: string; drop: () => void }[] = [
-    ...(typeof extra.decade === 'number' ? [{ key: 'x-decade', label: decadeName(extra.decade), drop: () => less({ decade: null }) }] : []),
+    ...DECADES.filter(([, y]) => extra.decades?.includes(y)).map(([label, y]) => ({ key: `x-decade:${y}`, label, drop: () => less({ decades: (extra.decades ?? []).filter((z) => z !== y) }) })),
     ...(extra.genres ?? []).map((g) => ({ key: `x-genre:${g}`, label: g, drop: () => less({ genres: (extra.genres ?? []).filter((x) => x !== g) }) })),
     ...SOURCES.filter((s) => extra[s.key]).map((s) => ({ key: `x-${s.key}`, label: `${s.short} ${s.show(extra[s.key]!)}`, drop: () => less({ [s.key]: undefined }) })),
     ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
     ...(extra.lang ? [{ key: 'x-lang', label: langName(extra.lang), drop: () => less({ lang: null }) }] : []),
+    ...(extra.country ? [{ key: 'x-country', label: `From ${countryName(extra.country)}`, drop: () => less({ country: null }) }] : []),
     ...(myOnly ? [{ key: 'x-mine', label: 'My services', drop: () => setOnlyMine(false) }] : []),
     ...(hiding ? [{ key: 'x-hide', label: 'Hide watched', drop: () => setHideSeen(false) }] : []),
   ]
@@ -237,15 +306,16 @@ export default function Search() {
   const init: Draft = {
     sort, mine: myOnly, hide: hiding, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
     genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
-    decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
+    decades: extra.decades !== undefined ? extra.decades : decadeOf(yearsToken) !== null ? [decadeOf(yearsToken)!] : [],
     lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
+    country: extra.country ?? null,
   }
-  const yearsNote = extra.decade === undefined && yearsToken && decadeOf(yearsToken) === null ? yearsToken.label : ''
+  const yearsNote = extra.decades === undefined && yearsToken && decadeOf(yearsToken) === null ? yearsToken.label : ''
   /** How many results a draft would give: the draft stands in for what the words say about genre, years and language. */
   const countOf = (d: Draft): Count => {
-    const keepYears = d.decade === null && yearsNote !== ''
+    const keepYears = d.decades.length === 0 && yearsNote !== ''
     const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
-    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null, d.hide ? seenIds : null)
+    const f = toFilters({ genres: d.genres, decades: d.decades, lang: d.lang, country: d.country, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null, d.hide ? seenIds : null)
     const k = kind === 'film' || kind === 'series' ? kind : undefined
     return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
   }
@@ -256,8 +326,9 @@ export default function Search() {
     setExtra((x) => {
       const next: Extra = { ...x, rating: d.rating || undefined, rt: d.rt || undefined, lb: d.lb || undefined, length: d.length ?? undefined }
       if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres
-      if (d.decade !== init.decade) next.decade = d.decade
+      if (d.decades.join('|') !== init.decades.join('|')) next.decades = d.decades
       if (d.lang !== init.lang) next.lang = d.lang
+      if ((d.country ?? null) !== (init.country ?? null)) next.country = d.country ?? null
       return next
     })
     setSheet(false)
@@ -317,7 +388,7 @@ export default function Search() {
   const swipe = useRef<{ x: number; y: number } | null>(null)
 
   // why there is nothing, and the one step that gets something back
-  const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0
+  const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0 && extraHits.length === 0 && !more.waiting
   const other: 'film' | 'series' = kind === 'film' ? 'series' : 'film'
   const nothing = !empty ? null
     : myOnly ? {
@@ -392,7 +463,7 @@ export default function Search() {
               <ul>
                 {(ideas.data ?? []).map((c) => (
                   <li key={c.query}>
-                    <button type="button" className="s-idea" onClick={() => run(c.query)}>
+                    <button type="button" className="s-idea" onClick={() => { setOnlyMine(!!c.mine); run(c.query) }}>
                       <span className="s-thumb">{c.poster_path && <img src={tmdbImage(c.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                       <span className="s-recent-text"><b>{c.title}</b><small>{c.sub}</small></span>
                     </button>
@@ -449,6 +520,8 @@ export default function Search() {
               {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
               <ul className="s-results" key={kind} data-waiting={waiting}>
                 {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} before={() => input.current?.blur()} />)}
+                {unloaded && <LoadOn key={`${kind}:${shown.length}`} onNear={() => loadNext(kind)} />}
+                {extraHits.map((h) => <TmdbRow key={`${h.kind}:${h.tmdb_id}`} h={h} onOpen={(id) => { input.current?.blur(); remember({ t: 'title', id, text: h.title, sub: [h.year, h.kind === 'film' ? 'Film' : 'Series'].filter(Boolean).join(' · '), poster_path: h.poster_path }); push(paths.title(id)) }} />)}
               </ul>
 
               {nothing && online && (
@@ -492,7 +565,7 @@ export default function Search() {
       {/* over everything, inside #root (its clip keeps iOS from scrolling the document) */}
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={init} yearsNote={yearsNote}
         services={picked.map(nameOf)} noun={kind === 'film' ? ['film', 'films'] : kind === 'series' ? ['series', 'series'] : ['result', 'results']}
-        countOf={countOf} apply={apply} />
+        countOf={countOf} apply={apply} rows={SERVER_ROWS} />
     </main>
   )
 }

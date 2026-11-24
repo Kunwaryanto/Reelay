@@ -143,7 +143,7 @@ button { font: inherit; color: inherit; }
   mask-image: linear-gradient(90deg, transparent 0%, #000 26%, #000 74%, transparent 100%), linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%); mask-composite: add; }
 .cover-mark { position: absolute; top: 8px; right: 9px; height: 12px; display: flex; align-items: center; }
 .mark { display: block; filter: brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); }
-.mark-text { font: var(--type-mark); letter-spacing: 0.02em; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+.mark-text { font: var(--type-mark); letter-spacing: 0.01em; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 .card { width: 147px; flex: none; display: flex; flex-direction: column; color: #fff; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .card-title { margin-top: 12px; font: var(--type-text); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-meta { margin-top: 2px; font: var(--type-meta); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -212,8 +212,9 @@ button { font: inherit; color: inherit; }
 .title-art[data-poster='true'] { object-position: center top; }
 .title-head { position: relative; margin: 0 var(--margin); display: flex; align-items: flex-start; gap: 12px; }
 /* two-line titles are set tight, like the large headings in Search and onboarding (22px lines); the 2px above and
-   below keep a one-line title exactly where it was, centred on the 26px buttons beside it */
-.title-head h1 { flex: 1; min-width: 0; margin: 2px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
+   below keep a one-line title exactly where it was, centred on the 26px buttons beside it. No line limit, so nothing
+   is ever clipped (a fourth line needs about 70 characters) */
+.title-head h1 { flex: 1; min-width: 0; margin: 2px 0; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
 .title-actions { flex: none; display: flex; align-items: center; gap: 6px; height: 26px; }
 .title-actions .icon-btn { margin: -6px; }
 .pill-open { height: var(--button-inline); padding: 0 10px 0 12px; border: 0; border-radius: var(--radius-pill-28); background: #fff; color: #000; display: flex; align-items: center; gap: 4px; font: var(--type-text); font-weight: 600; cursor: pointer; }
@@ -507,7 +508,6 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-text b, .wl-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl-text b { font: var(--type-text); color: var(--text-secondary); }
 .wl-text small { margin-top: 2px; font: var(--type-meta); color: var(--text-faint); }
-.wl-text small.wl-where { color: var(--text-muted); }
 .wl-note { flex: none; font: var(--type-meta); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .wl-none { margin: 24px var(--margin) 0; font: var(--type-body); color: var(--text-faint); }
 .wl-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-top: -4px; }
@@ -590,6 +590,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-chips .ms { color: var(--text-muted); }
 .s-results { list-style: none; margin: 8px 0 0; padding: 0 0 16px; }
 .s-row { display: flex; align-items: center; gap: 14px; padding: 6px var(--margin); color: #fff; -webkit-touch-callout: none; }
+/* a TMDB title is a button (it is saved before it opens), drawn like the other rows */
+.s-tmdb .s-row { width: 100%; border: 0; background: none; font: inherit; text-align: left; }
+.s-tmdb .s-row[aria-busy] small { color: var(--text-faint); }
 .s-note { margin: 16px var(--margin) 0; font: var(--type-body); color: var(--text-muted); }
 .s-failed { margin: 16px var(--margin) 0; }
 .s-nothing { margin: 16px var(--margin) 0; animation: rise-in var(--dur-rise) var(--ease-out) both; }
@@ -613,6 +616,11 @@ html[data-runway] .tabbar { touch-action: none; }
 
 /* ---- Browse ---- */
 .br-head { min-height: calc(var(--safe-top) + 15px + var(--hit)); }
+/* All titles: in the View all style, on the title's baseline, its right edge on the page margin */
+.br-head { align-items: baseline; }
+/* the title where every tab has it: centred in a tap-sized row, as beside Watchlist's and Home's buttons */
+.br-head h1 { margin-block: calc((var(--hit) - 26px) / 2); }
+.br-all { margin: -12px calc(var(--margin) - 12px) -12px 0; display: inline-flex; align-items: center; text-decoration: none; }
 .br-section { margin-top: 32px; }
 .br-section[data-first='true'] { margin-top: 12px; }
 .br-section-head { margin: 0 var(--margin); display: flex; align-items: baseline; justify-content: space-between; }
@@ -947,12 +955,13 @@ html[data-runway] .tabbar { touch-action: none; }
 .fd-opt[aria-disabled='true'] { color: var(--text-faint); cursor: default; }
 /* Under the button: a soft blur that deepens downward and a fade into the sheet's colour, the way pages go under
    the tab bar. No line. Touches pass through it to the list. */
-.fd-fade { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--fd-foot) + 28px); pointer-events: none; }
+.fd-fade { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: calc(var(--fd-foot) + 28px); pointer-events: none; }
 .fd-fade i { position: absolute; inset: 0; }
 .fd-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(transparent 0, #000 50%); mask-image: linear-gradient(transparent 0, #000 50%); }
 .fd-fade i:nth-child(2) { -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); -webkit-mask-image: linear-gradient(transparent 35%, #000 85%); mask-image: linear-gradient(transparent 35%, #000 85%); }
 .fd-fade i:nth-child(3) { background: linear-gradient(rgb(20 20 20 / 0) 0, rgb(20 20 20 / 0.55) 45%, var(--sheet) 92%); }
-.fd-action { position: absolute; left: 0; right: 0; bottom: calc(20px + var(--safe-bottom)); margin: 0; pointer-events: none; }
+/* the button always above the blur under it: while the sheet moves, Safari could draw the blur over it */
+.fd-action { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(20px + var(--safe-bottom)); margin: 0; pointer-events: none; }
 .fd-action .btn { pointer-events: auto; }
 /* The label is plain text inside the button (a flex box would drop the spaces around the number). Under it, in the
    same grid cell, an unseen "Show 000 films" keeps the button at least that wide, so counts up to three digits never
@@ -1147,6 +1156,11 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .lb-list h3 { margin: 20px 0 4px; font: var(--type-text); font-weight: 500; color: var(--text-faint); }
 .lb-list .rows { margin: 0; }
 .lb-list .rows li.row-plain { min-height: var(--hit); }
+/* Awards on the title page: one line each under the ceremony, cut with … (the sheet has it all) */
+.awards .rows .row-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.awards .rows li > button { min-height: var(--hit); }
+.aw-sum { font: var(--type-meta); color: var(--text-faint); }
+.awards .section-head { margin-bottom: 0; }
 .lb-list .lb-faces i { background: #262626; box-shadow: none; }
 .lb-score { font: var(--type-text); font-weight: 500; }
 

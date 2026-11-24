@@ -18,6 +18,10 @@ export type Hit = {
   lang: string | null
   runtime: number | null
   seasons: number | null
+  /** TMDB's popularity: the order of a list made by filters (and where its next page starts) */
+  popularity: number
+  /** where it was made (ISO codes) */
+  countries: string[]
 }
 
 export type Filters = {
@@ -33,6 +37,10 @@ export type Filters = {
   minRt?: number // Rotten Tomatoes critics, %
   minLb?: number // Letterboxd, 0 to 5
   length?: 'short' | 'mid' | 'long' // under 90 min, up to 2 h, over 2 h
+  /** any of these year ranges (decades; an open start is everything before) */
+  decades?: [number | undefined, number][]
+  /** made in this country (ISO code) */
+  country?: string
   services?: string[]
   /** titles to leave out (Hide watched) */
   hide?: number[]
@@ -136,12 +144,12 @@ const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
-  genres: string[] | null; original_language: string | null; runtime_min: number | null; seasons: number | null
+  genres: string[] | null; original_language: string | null; countries?: string[] | null; runtime_min: number | null; seasons: number | null; popularity?: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
   scores: Score | Score[] | null
 }
 type Score = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,scores(imdb_rating,rt_critics,letterboxd)'
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,countries,runtime_min,seasons,popularity,scores(imdb_rating,rt_critics,letterboxd)'
 /** a filter on a score only counts titles that have that score */
 const scored = (f: Filters) => !!(f.minRating || f.minRt || f.minLb)
 
@@ -149,7 +157,7 @@ function toHit(r: Raw): Hit {
   const score = Array.isArray(r.scores) ? r.scores[0] : r.scores
   const av = r.availability ?? []
   return {
-    id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
+    popularity: r.popularity ?? 0, countries: r.countries ?? [], id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
     rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null, seasons: r.seasons ?? null,
@@ -164,6 +172,8 @@ function passes(h: Hit, f: Filters): boolean {
   if (f.to !== undefined && (h.year === null || h.year > f.to)) return false
   if (f.genres && !f.genres.some((g) => h.genres.includes(g))) return false
   if (f.lang && h.lang !== f.lang) return false
+  if (f.country && !h.countries.includes(f.country)) return false
+  if (f.decades?.length && !f.decades.some(([a, b]) => h.year !== null && (a === undefined || h.year >= a) && h.year <= b)) return false
   if (f.leaving && !(h.leaves && h.leaves <= inDays(30))) return false
   if (f.services && !h.services.some((s) => f.services!.includes(s))) return false
   if (f.minRating && !(h.rating !== null && h.rating >= f.minRating)) return false
@@ -188,7 +198,7 @@ async function byName(text: string, max = 60): Promise<Hit[]> {
 
 /** Put the filters on a query of streaming titles (its select must embed availability, and scores for a rating). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function narrow<Q>(query: Q, f: Filters): Q {
+export function narrow<Q>(query: Q, f: Filters): Q {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = query as any
   if (f.kind) q = q.eq('kind', f.kind)
@@ -199,6 +209,8 @@ function narrow<Q>(query: Q, f: Filters): Q {
   if (f.from !== undefined) q = q.gte('year', f.from)
   if (f.to !== undefined) q = q.lte('year', f.to)
   if (f.genres) q = q.overlaps('genres', f.genres)
+  if (f.decades?.length) q = q.or(f.decades.map(([a, b]) => (a === undefined ? `year.lte.${b}` : `and(year.gte.${a},year.lte.${b})`)).join(','))
+  if (f.country) q = q.contains('countries', [f.country])
   if (f.lang) q = q.eq('original_language', f.lang)
   if (f.minRating) q = q.gte('scores.imdb_rating', f.minRating)
   if (f.minRt) q = q.gte('scores.rt_critics', f.minRt)
@@ -209,12 +221,22 @@ function narrow<Q>(query: Q, f: Filters): Q {
   return q as Q
 }
 
-/** Streaming titles that fit the filters, most popular first. */
-export async function byFilters(f: Filters, max = 60): Promise<Hit[]> {
+/** Streaming titles that fit the filters, most popular first (then by id, so pages follow on exactly). */
+export async function byFilters(f: Filters, max = PAGE, from = 0): Promise<Hit[]> {
   const fields = scored(f) ? FIELDS.replace('scores(', 'scores!inner(') : FIELDS
   const q = narrow(supabase.from('titles').select(`${fields},availability!inner(service_id,leaves_on)`), f)
-  const rows = unwrap(await q.order('popularity', { ascending: false }).limit(max) as never) as Raw[]
+  const rows = unwrap(await q.order('popularity', { ascending: false }).order('id').range(from, from + max - 1) as never) as Raw[]
   return rows.map(toHit)
+}
+/** A list made by filters loads this many titles at a time. */
+export const PAGE = 60
+/** How many streaming titles fit the filters (for the type pills and the filter drawer). */
+function countFiltered(f: Filters): Promise<number | null> {
+  return once(`count:${JSON.stringify(f)}`, async () => {
+    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${scored(f) ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
+    if (res.error) throw new Error(res.error.message)
+    return res.count as number | null
+  })
 }
 
 export type PersonHit = { id: number; name: string; profile_path: string | null; known_for: string | null }
@@ -228,8 +250,16 @@ async function people(text: string): Promise<PersonHit[]> {
   return rows.sort((a, b) => rank(a) - rank(b) || (a.profile_path ? 0 : 1) - (b.profile_path ? 0 : 1)).slice(0, 8)
 }
 
-/** `kind`: the words asked for films or series. That picks the type pill; it isn't a filter chip. */
-export type Found = { hits: Hit[]; tokens: Token[]; people: PersonHit[]; kind?: Hit['kind'] }
+/**
+ * `kind`: the words asked for films or series. That picks the type pill; it isn't a filter chip.
+ * A list made by filters alone has more than it loads at first: `paged` says how many there are of each type and
+ * how far the mixed list has loaded (`mixed`, in popularity order), so the pills show the real numbers and the list
+ * loads on as it is scrolled (`loadMore`).
+ */
+export type Found = {
+  hits: Hit[]; tokens: Token[]; people: PersonHit[]; kind?: Hit['kind']
+  paged?: { f: Filters; totals: { all: number; film: number; series: number }; mixed: number }
+}
 
 // Lookups made again within a few minutes (the same words with other filters, counts in the filter drawer) are reused.
 const memo = new Map<string, Promise<unknown>>()
@@ -284,11 +314,38 @@ export async function search(typed: string, removed: string[], extra: Filters = 
   const base = { tokens: p.tokens, people: p.people, kind: p.kind }
   if (p.pool) return { ...base, hits: p.pool.filter((h) => passes(h, f)) }
   if (!some(f) && !p.kind) return { ...base, hits: [] }
-  if (!p.kind) return { ...base, hits: await byFilters(f) }
+  const totals = Promise.all([countFiltered(f), countFiltered({ ...f, kind: 'film' }), countFiltered({ ...f, kind: 'series' })])
+    .then(([all, film, series]) => ({ all: all ?? 0, film: film ?? 0, series: series ?? 0 }))
+  if (!p.kind) {
+    const [hits, t] = await Promise.all([byFilters(f), totals])
+    return { ...base, hits, paged: { f, totals: t, mixed: hits.length } }
+  }
   // enough of the kind that was asked for, plus the mixed list so the other pills have something too
-  const [asked, mixed] = await Promise.all([byFilters({ ...f, kind: p.kind }), byFilters(f)])
+  const [asked, mixed, t] = await Promise.all([byFilters({ ...f, kind: p.kind }), byFilters(f), totals])
   const seen = new Set(asked.map((h) => h.id))
-  return { ...base, hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))] }
+  return { ...base, hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))], paged: { f, totals: t, mixed: mixed.length } }
+}
+
+/** The next page of a list made by filters, for the type pill showing ('all' pages the mixed list). */
+export async function loadMore(found: Found, kind: 'all' | Hit['kind']): Promise<Found> {
+  const p = found.paged
+  if (!p) return found
+  // the titles of one type that are loaded are always the most popular of that type, so the next page starts after them
+  const from = kind === 'all' ? p.mixed : found.hits.filter((h) => h.kind === kind).length
+  const got = await byFilters(kind === 'all' ? p.f : { ...p.f, kind }, PAGE, from)
+  const have = new Set(found.hits.map((h) => h.id))
+  return { ...found, hits: [...found.hits, ...got.filter((h) => !have.has(h.id))], paged: { ...p, mixed: kind === 'all' ? p.mixed + got.length : p.mixed } }
+}
+
+/** The loaded titles a type pill shows, in popularity order. The mixed list stops where its own pages reached:
+ *  titles of one type loaded beyond that wait until the mixed list gets there (so nothing is slotted in above). */
+export function pagedList(found: Found, kind: 'all' | Hit['kind']): Hit[] {
+  const p = found.paged!
+  const byPop = (a: Hit, b: Hit) => b.popularity - a.popularity || a.id - b.id
+  if (kind !== 'all') return found.hits.filter((h) => h.kind === kind).sort(byPop)
+  // everything above the mixed list's frontier is loaded (its pages are the most popular titles of all), so its first
+  // `mixed` titles in popularity order are exactly what it has reached
+  return [...found.hits].sort(byPop).slice(0, p.mixed >= p.totals.all ? undefined : p.mixed)
 }
 
 /**
@@ -301,11 +358,7 @@ export async function countWith(typed: string, removed: string[], extra: Filters
   const f = { ...combine(p.f, extra), ...(kind ? { kind } : {}) }
   if (p.pool) return p.pool.filter((h) => passes(h, f)).length
   if (!some(combine(p.f, extra)) && !p.kind) return 0
-  return once(`count:${JSON.stringify(f)}`, async () => {
-    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${scored(f) ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
-    if (res.error) throw new Error(res.error.message)
-    return res.count as number | null
-  })
+  return countFiltered(f)
 }
 
 /** The genres and languages the filter drawer offers. */
@@ -328,16 +381,21 @@ export function guess(typed: string, removed: string[]): { tokens: Token[]; kind
 /** For "Popular right now" under an empty result. */
 export const loadPopular = () => byFilters({}, 3)
 
-export type Idea = { query: string; title: string; sub: string; poster_path: string | null }
+/** `mine`: the search starts with My services on (for a member with services). */
+export type Idea = { query: string; title: string; sub: string; poster_path: string | null; mine?: boolean }
 const IDEAS: [string, string, string, Filters][] = [
   ['leaving soon', 'Leaving soon', 'Last chance', { leaving: true }],
   ['swedish series', 'Swedish series', 'From Sweden', { lang: 'sv', kind: 'series' }],
   ['90s films', '90s films', 'Classics', { kind: 'film', from: 1990, to: 1999 }],
 ]
+/** Leaving soon is about what the member can still watch: on their services, when they have any. */
+const MINE_IDEAS = new Set(['leaving soon'])
 /** The three suggestions before typing, each with the poster of its top result. */
-export async function loadIdeas(): Promise<Idea[]> {
-  const tops = await Promise.all(IDEAS.map(([, , , f]) => byFilters(f, 1)))
-  return IDEAS.map(([query, title, sub], i) => ({ query, title, sub, poster_path: tops[i][0]?.poster_path ?? null })).filter((_, i) => tops[i].length > 0)
+export async function loadIdeas(picked: string[] = []): Promise<Idea[]> {
+  const on = (q: string) => picked.length > 0 && MINE_IDEAS.has(q)
+  const tops = await Promise.all(IDEAS.map(([q, , , f]) => byFilters(on(q) ? { ...f, services: picked } : f, 1)))
+  return IDEAS.map(([query, title, sub], i) => ({ query, title, sub: on(query) ? 'On your services' : sub, mine: on(query), poster_path: tops[i][0]?.poster_path ?? null }))
+    .filter((_, i) => tops[i].length > 0)
 }
 
 // ---- Recents (on this phone) ---------------------------------------------------
@@ -355,3 +413,31 @@ const same = (a: Recent, b: Recent) => (a.t === 'q' && b.t === 'q' ? a.text.toLo
 /** Newest first, 12 at most. A search replaces the shorter ones typed on the way to it ("sha" then "shaw"). */
 export const addRecent = (list: Recent[], r: Recent): Recent[] => [r, ...list.filter((x) =>
   !same(x, r) && !(r.t === 'q' && x.t === 'q' && r.text.toLowerCase().startsWith(x.text.toLowerCase())))].slice(0, 12)
+
+// ---- Everything else on TMDB (supabase/functions/tmdb) ----
+/** A film or series on TMDB that the catalogue doesn't have yet. */
+export type TmdbHit = { kind: 'film' | 'series'; tmdb_id: number; title: string; year: number | null; poster_path: string | null }
+
+async function callTmdb<T>(body: Record<string, unknown>): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('signed_out')
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tmdb`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error ?? `tmdb ${res.status}`)
+  return json as T
+}
+
+/** TMDB's films and series for the words that the catalogue doesn't have (asked after the catalogue's own answer).
+ *  `words` is the text without what was read as filters ("dune 2021" → "dune"), tried when the whole finds nothing. */
+export async function searchTmdb(text: string, words = ''): Promise<TmdbHit[]> {
+  return (await callTmdb<{ results: TmdbHit[] }>({ q: text, alt: words })).results ?? []
+}
+
+/** Save a TMDB title to the catalogue (with its cast and crew) and return its id, to open its page. */
+export async function addFromTmdb(h: TmdbHit): Promise<number> {
+  return Number((await callTmdb<{ id: number }>({ add: { kind: h.kind, tmdb_id: h.tmdb_id } })).id)
+}

@@ -9,6 +9,8 @@ import { posterPicture, titleArt, warmPictures, type Picture } from './pictures'
 import { prefetch, readQueryData, useQuery, type Freshness, type Query } from './query'
 import { supabase } from './supabase'
 import { routeOf, type Route } from './routes'
+import { ALL_TITLES, exploreKey, exploreOf, loadExplore, type ExplorePage, type ExploreStart, type Pick } from './explore'
+import type { Draft } from '../screens/SearchFilters'
 
 export type Page<T> = Freshness & {
   key: string
@@ -92,6 +94,22 @@ export const gridPage = (cat: Category, def: RowDef, row: string, kind: Kind | u
   fold: (cards) => (cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path)),
 })
 
+/** A Browse list made of filters (Explore): one page of it and its totals. `ctx`: the member's services and watched
+ *  films, used only when My services or Hide watched is on (so a list opened from a link has the same key as its preload). */
+export const explorePage = (d: Draft, pick: Pick, ctx: { picked: string[]; seen: number[] } = { picked: [], seen: [] }): Page<ExplorePage> => ({
+  key: exploreKey(d, pick, ctx),
+  load: () => loadExplore(d, pick, ctx),
+  catalogue: true, persist: false,
+  fold: (p) => (p?.cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path)),
+})
+/** Where a grid route starts when its list is made of filters. */
+export const exploreStartOf = (r: Route): ExploreStart | null => {
+  if (r.name === 'browse-titles') return ALL_TITLES
+  if (r.name !== 'browse-grid') return null
+  const cat = categoryOf(r.id)
+  return cat ? exploreOf(cat, r.row, r.kind) : null
+}
+
 // ---- Routes ------------------------------------------------------------------
 /** What a route loads, or null for one that loads nothing of its own (Settings, a tab). */
 export function pageOf(r: Route): Page<unknown> | null {
@@ -100,7 +118,10 @@ export function pageOf(r: Route): Page<unknown> | null {
     case 'person': return personPage(r.id) as Page<unknown>
     case 'browse-section': return sectionPage(r.section, r.kind ?? 'all') as Page<unknown>
     case 'browse-category': { const cat = categoryOf(r.id); return cat ? categoryPage(cat, r.kind) as Page<unknown> : null }
+    case 'browse-titles': return explorePage(ALL_TITLES.draft, ALL_TITLES.pick) as Page<unknown>
     case 'browse-grid': {
+      const ex = exploreStartOf(r)
+      if (ex) return explorePage(ex.draft, ex.pick) as Page<unknown>
       const cat = categoryOf(r.id)
       const def = cat && gridDef(cat, r.row, r.kind)
       return cat && def ? gridPage(cat, def, r.row, r.kind, def.sort ?? 'popular') as Page<unknown> : null

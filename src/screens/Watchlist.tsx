@@ -153,7 +153,7 @@ export default function Watchlist() {
             {s.rows.map((r) => (
               <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} note={s.id === 'leaving' ? note(r) : null}
                 open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
-                where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming in Sweden' : null}
+                where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming' : null}
                 onNotify={() => saved.toggleNotify(r.t.id)}
                 onOpen={() => push(paths.title(r.t.id))} onRemove={() => { setOpen(null); saved.toggleSaved(r.t.id, r.t.title) }} />
             ))}
@@ -185,7 +185,8 @@ function WatchRow({ row, fresh, group, note, where, open, setOpen, onOpen, onRem
   const onHold = useHold(() => setOpen(false))
   const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
   // year first, then how long it is (runtime or seasons, which also says film or series)
-  const meta = metaLine(t, group !== 'off' && service ? nameOf(service) : null)
+  // in Not on your services, where it is ("On Viaplay", "Not streaming") ends the line, as a service does elsewhere
+  const meta = metaLine(t, group !== 'off' && service ? nameOf(service) : where)
 
   // Swipe left, like a row in iOS Mail. The row follows the finger exactly (its position is written straight to
   // the element, not through React, and starts from where the finger was when the swipe was recognised, so it
@@ -263,7 +264,7 @@ function WatchRow({ row, fresh, group, note, where, open, setOpen, onOpen, onRem
           onOpen()
         }}>
         <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="sync" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
-        <span className="wl-text"><b>{t.title}</b><small>{meta}</small>{where && <small className="wl-where">{where}</small>}</span>
+        <span className="wl-text"><b>{t.title}</b><small>{meta}</small></span>
         {note && <span className="wl-note">{note}</span>}
        </PageLink>
        {group === 'off' && (
