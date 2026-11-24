@@ -222,6 +222,8 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
     ['Runtime', film ? runtime(t.runtime_min) ?? '' : ''],
     ['Seasons', !film && t.seasons ? String(t.seasons) : ''],
     ['Original title', t.original_title && t.original_title !== t.title ? t.original_title : ''],
+    // a Nordic film shown by its own title: the English one too
+    ['English title', t.title_en && t.title_en !== t.title ? t.title_en : ''],
     ['Language', t.original_language ? LANG[t.original_language] ?? t.original_language.toUpperCase() : ''],
   ] as [string, string][]).filter((d) => d[1])
   const art = tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')
