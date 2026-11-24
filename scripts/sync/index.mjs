@@ -937,6 +937,98 @@ async function syncRecs() {
 // rest. Due by tier (refresh_every 'similar': new every 2 weeks, recent 2 months, older 6 months); titles without a
 // list first. SIMILAR_PER_RUN caps a night (the first nights build the whole catalogue).
 const SIMILAR_PER_RUN = Number(process.env.SIMILAR_PER_RUN || 6000);
+// Awards (Oscars, Primetime Emmys, Golden Globes) from Wikidata: what our titles won or were nominated for, also
+// when the award went to a person for the title (acting, directing). Asked for by our titles' Wikidata ids, 300 at a
+// time, so it doesn't depend on how Wikidata groups the categories. The table is rebuilt whole (it is only written
+// here). AWARDS_DRY=1 counts without writing. Weekly in the nightly sync (Sundays), or the Awards workflow.
+const AWARDS = [['Oscars', 'Academy Award for '], ['Emmys', 'Primetime Emmy Award for '], ['Golden Globes', 'Golden Globe Award for ']];
+const NOT_AWARDS = /Technical|Scientific|Honorary|Juvenile|Merit|Special Achievement|Medal|Humanitarian|Governors|Cecil B\. DeMille|Carol Burnett/i;
+function awardRank(cat) {
+  if (/Supporting/i.test(cat)) return 5;
+  if (/^(Best Picture|Best Animated Feature|Best International Feature|Best Foreign Language Film|Best Non-English Language Film|Outstanding (Drama|Comedy) Series|Outstanding (Limited|Mini)[- ]?series|Outstanding Limited or Anthology Series|Outstanding Miniseries or (a )?Movie|Best (Motion Picture|Television Series|Miniseries|Limited Series|Television Limited Series))/i.test(cat)) return 1;
+  if (/Lead Act|^Best Actor|^Best Actress|^Outstanding Actor|^Outstanding Actress/i.test(cat)) return 2;
+  if (/Direct/i.test(cat)) return 3;
+  if (/Screenplay|Writing/i.test(cat)) return 4;
+  return 6;
+}
+async function wikidata(query) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch('https://query.wikidata.org/sparql', {
+      method: 'POST', body: new URLSearchParams({ query }),
+      headers: { 'user-agent': 'Reelay/1.0 (https://usereelay.vercel.app; personal non-commercial project)', accept: 'application/sparql-results+json', 'content-type': 'application/x-www-form-urlencoded' },
+    });
+    if (r.ok) return (await r.json()).results.bindings;
+    if (attempt >= 3 || ![429, 500, 502, 503, 504].includes(r.status)) throw new Error(`Wikidata ${r.status}`);
+    await new Promise((ok) => setTimeout(ok, 5000 * (attempt + 1)));
+  }
+}
+async function syncAwards() {
+  const titles = (await db.query('select id, wikidata_id from public.titles where wikidata_id is not null')).rows;
+  const byQ = new Map(titles.map((t) => [t.wikidata_id, Number(t.id)]));
+  const ids = [...byQ.keys()];
+  const found = new Map(); // statement -> row
+  let failed = 0;
+  const batches = [];
+  for (let i = 0; i < ids.length; i += 300) batches.push(ids.slice(i, i + 300));
+  await pool(batches, 2, async (batch) => {
+    const rows = await wikidata(`SELECT ?st ?work ?award ?awardLabel ?time ?kind ?personLabel WHERE {
+      VALUES ?work { ${batch.map((q) => `wd:${q}`).join(' ')} }
+      { ?work p:P166 ?st . ?st ps:P166 ?award . BIND("won" AS ?kind) } UNION { ?work p:P1411 ?st . ?st ps:P1411 ?award . BIND("nom" AS ?kind) }
+      UNION { ?person p:P166 ?st . ?st ps:P166 ?award ; pq:P1686 ?work . BIND("won" AS ?kind) }
+      UNION { ?person p:P1411 ?st . ?st ps:P1411 ?award ; pq:P1686 ?work . BIND("nom" AS ?kind) }
+      ?award rdfs:label ?awardLabel . FILTER(LANG(?awardLabel) = "en")
+      FILTER(STRSTARTS(?awardLabel, "Academy Award for ") || STRSTARTS(?awardLabel, "Primetime Emmy Award for ") || STRSTARTS(?awardLabel, "Golden Globe Award for "))
+      OPTIONAL { ?st pq:P585 ?time }
+      OPTIONAL { ?person rdfs:label ?personLabel . FILTER(LANG(?personLabel) = "en") }
+    }`).catch((e) => { failed++; log('  awards batch failed:', e.message); return []; });
+    for (const r of rows) {
+      const label = r.awardLabel.value;
+      const [award, prefix] = AWARDS.find(([, p]) => label.startsWith(p));
+      const category = label.slice(prefix.length);
+      const year = r.time ? Number(r.time.value.slice(0, 4)) : null;
+      if (!year || NOT_AWARDS.test(category)) continue;
+      const st = r.st.value.split('/').pop();
+      found.set(st, {
+        title_id: byQ.get(r.work.value.split('/').pop()), award, year, category,
+        short_category: category.replace(/^Outstanding /, 'Best '), rank: awardRank(category), won: r.kind.value === 'won',
+        person_name: r.personLabel?.value ?? null, ref: st,
+      });
+    }
+  });
+  // one row per title, award, year, category and person: a win beats a nomination
+  const rows = new Map();
+  for (const a of found.values()) {
+    const k = [a.title_id, a.award, a.year, a.category, a.person_name ?? ''].join('|');
+    if (!rows.has(k) || (a.won && !rows.get(k).won)) rows.set(k, a);
+  }
+  const list = [...rows.values()];
+  const by = (f) => Object.entries(list.reduce((m, a) => ((m[f(a)] = (m[f(a)] ?? 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(', ');
+  log(`awards: ${list.length} from ${batches.length} batches (${failed} failed): ${by((a) => `${a.award} ${a.won ? 'won' : 'nominated'}`)}`);
+  log(`  titles with a win: ${new Set(list.filter((a) => a.won).map((a) => a.title_id)).size}; by rank (won): ${by((a) => (a.won ? `rank ${a.rank}` : 'nom'))}`);
+  if (process.env.AWARDS_DRY) {
+    const top = list.filter((a) => a.won && a.rank <= 2).slice(0, 12);
+    for (const a of top) log(`  e.g. ${a.award} ${a.year} ${a.short_category}${a.person_name ? ` (${a.person_name})` : ''} -> title ${a.title_id}`);
+    return;
+  }
+  if (failed > batches.length / 10) return log('awards: too many failed batches, kept what we had');
+  await db.query('begin');
+  try {
+    await db.query('delete from public.awards');
+    for (let i = 0; i < list.length; i += 1000) {
+      const c = list.slice(i, i + 1000);
+      await db.query(
+        `insert into public.awards (title_id, award, year, category, short_category, rank, won, person_name, wikidata_ref)
+         select * from unnest($1::bigint[], $2::text[], $3::int[], $4::text[], $5::text[], $6::smallint[], $7::boolean[], $8::text[], $9::text[])
+         on conflict do nothing`,
+        [c.map((a) => a.title_id), c.map((a) => a.award), c.map((a) => a.year), c.map((a) => a.category), c.map((a) => a.short_category),
+          c.map((a) => a.rank), c.map((a) => a.won), c.map((a) => a.person_name), c.map((a) => a.ref)],
+      );
+    }
+    await db.query('commit');
+  } catch (e) { await db.query('rollback'); throw e; }
+  log(`awards: saved ${list.length}`);
+}
+
 async function syncSimilar() {
   const idOf = new Map((await db.query(
     'select t.id, t.kind, t.tmdb_id from public.titles t where exists (select 1 from public.availability a where a.title_id = t.id)',
@@ -987,6 +1079,13 @@ async function main() {
     await syncRecs();
     await syncSimilar();
     await stamp();
+    await db.end();
+    return;
+  }
+  if (ONLY === 'awards') {
+    log('awards only');
+    await syncAwards();
+    if (!process.env.AWARDS_DRY) await stamp();
     await db.end();
     return;
   }
@@ -1064,6 +1163,7 @@ async function main() {
   if (FULL) await syncTrending().catch((e) => log('trending failed:', e.message));
   if (FULL) await syncRecs().catch((e) => log('recommendations failed:', e.message));
   if (FULL) await syncSimilar().catch((e) => log('similar failed:', e.message));
+  if (FULL && new Date().getUTCDay() === 0) await syncAwards().catch((e) => log('awards failed:', e.message));
   if (FULL) await reconcile(runStart);
   // the Start screen's poster wall, made once a night (public.start_wall reads it)
   if (FULL) await db.query('select public.refresh_start_wall()').catch((e) => log('start wall failed:', e.message));
