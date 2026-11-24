@@ -7,7 +7,7 @@ import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runti
 import { HOME_VERSION, loadHome, type HomeCard, type HomeData } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
-import { useLetterboxd } from '../lib/letterboxd'
+import { useLetterboxd, watchedKey } from '../lib/letterboxd'
 import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
@@ -352,7 +352,7 @@ export default function Now() {
   const savedLoaded = useSaved().loaded
   const settled = svc !== undefined && lb.account !== undefined && savedLoaded
   const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), changes, tab === 'now' && path === '/', decodeFold)
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [] }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its

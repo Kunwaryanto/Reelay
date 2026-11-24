@@ -9,15 +9,17 @@ export type LbAccount = { username: string; display_name: string | null; mark_wa
 export type LbLog = { me: boolean; name: string; username: string; entry_id: string; watched_on: string | null; rating: number | null; rewatch: boolean }
 
 const meKey = (uid: string) => `lb-me:${uid}`
-const watchedKey = (uid: string) => `lb-watched:${uid}`
+// v2: the whole list (a saved v1 list may be cut at 1,000 films)
+export const watchedKey = (uid: string) => `lb-watched:v2:${uid}`
 
 async function loadMe(): Promise<LbAccount | null> {
   const { data, error } = await supabase.rpc('letterboxd_me')
   if (error) throw new Error(error.message)
   return ((data ?? []) as LbAccount[])[0] ?? null
 }
+// One row holding the whole list: a row per film would be cut at the API's 1,000 rows (max_rows)
 async function loadWatched(): Promise<number[]> {
-  const { data, error } = await supabase.rpc('letterboxd_watched')
+  const { data, error } = await supabase.rpc('letterboxd_watched_ids')
   if (error) throw new Error(error.message)
   return ((data ?? []) as (number | string)[]).map(Number)
 }
