@@ -676,3 +676,14 @@ Measured on the database before and after:
 - The page shows four rows, wins first. When there are more, the Awards heading has View all (as poster rows do),
   which opens a sheet with every award under a heading per ceremony and year, newest first, wins first in each.
   The sheet's heading says "3 wins · 9 in all".
+
+## Explore: lists made of filters, and All titles (24 Nov)
+
+- A Browse list made of filters (a genre, decade or country, Under 90 minutes, Leaving soon, New this year, and the
+  rows on a category page such as "Top thriller series") opens with those filters as chips. Taking one off widens the
+  list, and the heading follows: "Thriller series" → "Series", "90s" → "All titles".
+- The list is read from the database by its filters, 60 at a time as it scrolls, with real totals in the type pills.
+- Browse has "All titles" on the right of its heading, in the View all style (design B3): the same page, nothing set.
+- Decades can be picked several at once in the filter panel ("90s & 2000s"), in Search too. 70s and 60s are their own
+  decades now; Older is before 1960.
+- Trending, Hidden gems, Highest rated, Award winners and New on streaming stay fixed lists.

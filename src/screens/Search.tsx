@@ -16,8 +16,8 @@ import {
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
   addFromTmdb, searchTmdb, loadMore, pagedList, type TmdbHit,
 } from '../lib/search'
-import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
-import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
+import { FilterDrawer, SOURCES, DECADES, decadeYears, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
+import { Icon, LoadOn, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 
@@ -25,14 +25,14 @@ type Kind = 'all' | 'series' | 'film' | 'people'
  * What the filter drawer has set, on top of the words. A key that is present has been decided in the drawer, even
  * when its value is "any" (null, []): it then replaces what the words say about it ("90s" typed, Released set to 80s).
  */
-type Extra = { genres?: string[]; decade?: number | null; lang?: string | null; rating?: number; rt?: number; lb?: number; length?: Len }
-const slot = (key: string): 'genres' | 'decade' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decade' : key === 'lang' ? 'lang' : null)
+type Extra = { genres?: string[]; decades?: number[]; lang?: string | null; rating?: number; rt?: number; lb?: number; length?: Len }
+const slot = (key: string): 'genres' | 'decades' | 'lang' | null => (key.startsWith('genre:') ? 'genres' : key === 'years' ? 'decades' : key === 'lang' ? 'lang' : null)
 /** A years chip as one of the drawer's decades, or null ("1994", "70s"). */
-const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1980 && from % 10 === 0 && to === from + 9 ? from : null }
+const decadeOf = (t: Token | undefined) => { const { from, to } = t?.filter ?? {}; return from !== undefined && from >= 1960 && from % 10 === 0 && to === from + 9 ? from : null }
 function toFilters(x: Extra, services: string[] | null, hide: number[] | null = null): Filters {
   const f: Filters = {}
   if (hide?.length) f.hide = hide
-  if (typeof x.decade === 'number') { if (x.decade === 0) f.to = 1979; else { f.from = x.decade; f.to = x.decade + 9 } }
+  if (x.decades?.length) f.decades = x.decades.map(decadeYears)
   if (x.genres?.length) f.genres = x.genres.flatMap(genreNames)
   if (x.lang) f.lang = x.lang
   if (x.rating) f.minRating = x.rating
@@ -108,21 +108,6 @@ function useSearch(typed: string, removed: string[], extra: Filters) {
   }
 }
 
-/** Loads the next page when the end of the list comes near (a screen ahead). */
-function LoadOn({ onNear }: { onNear: () => void }) {
-  const el = useRef<HTMLLIElement>(null)
-  const near = useRef(onNear)
-  near.current = onNear
-  useEffect(() => {
-    const node = el.current
-    const root = node?.closest('.page') ?? null
-    if (!node) return
-    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) near.current() }, { root, rootMargin: '0px 0px 900px 0px' })
-    io.observe(node)
-    return () => io.disconnect()
-  }, [])
-  return <li ref={el} className="s-loadon" aria-hidden="true" />
-}
 
 /** Everything else on TMDB: asked once the catalogue's own answer is on screen, for a plain name search (no filters,
  *  not "only my services", which TMDB's titles can't meet). Kept per words for the session. */
@@ -301,7 +286,7 @@ export default function Search() {
   // what is on, for the chips and the count on the button (sort isn't a filter, so it doesn't count)
   const less = (patch: Extra) => setExtra((x) => ({ ...x, ...patch }))
   const xchips: { key: string; label: string; drop: () => void }[] = [
-    ...(typeof extra.decade === 'number' ? [{ key: 'x-decade', label: decadeName(extra.decade), drop: () => less({ decade: null }) }] : []),
+    ...DECADES.filter(([, y]) => extra.decades?.includes(y)).map(([label, y]) => ({ key: `x-decade:${y}`, label, drop: () => less({ decades: (extra.decades ?? []).filter((z) => z !== y) }) })),
     ...(extra.genres ?? []).map((g) => ({ key: `x-genre:${g}`, label: g, drop: () => less({ genres: (extra.genres ?? []).filter((x) => x !== g) }) })),
     ...SOURCES.filter((s) => extra[s.key]).map((s) => ({ key: `x-${s.key}`, label: `${s.short} ${s.show(extra[s.key]!)}`, drop: () => less({ [s.key]: undefined }) })),
     ...(extra.length ? [{ key: 'x-length', label: lengthName(extra.length), drop: () => less({ length: undefined }) }] : []),
@@ -316,15 +301,15 @@ export default function Search() {
   const init: Draft = {
     sort, mine: myOnly, hide: hiding, rating: extra.rating ?? 0, rt: extra.rt ?? 0, lb: extra.lb ?? 0, length: extra.length ?? null,
     genres: extra.genres ?? tokens.filter((t) => t.key.startsWith('genre:')).map((t) => t.label),
-    decade: extra.decade !== undefined ? extra.decade : decadeOf(yearsToken),
+    decades: extra.decades !== undefined ? extra.decades : decadeOf(yearsToken) !== null ? [decadeOf(yearsToken)!] : [],
     lang: extra.lang !== undefined ? extra.lang : tokens.find((t) => t.key === 'lang')?.filter.lang ?? null,
   }
-  const yearsNote = extra.decade === undefined && yearsToken && decadeOf(yearsToken) === null ? yearsToken.label : ''
+  const yearsNote = extra.decades === undefined && yearsToken && decadeOf(yearsToken) === null ? yearsToken.label : ''
   /** How many results a draft would give: the draft stands in for what the words say about genre, years and language. */
   const countOf = (d: Draft): Count => {
-    const keepYears = d.decade === null && yearsNote !== ''
+    const keepYears = d.decades.length === 0 && yearsNote !== ''
     const gone = [...removed, ...parseQuery(q).tokens.filter((t) => slot(t.key) !== null && !(t.key === 'years' && keepYears)).map((t) => t.key)]
-    const f = toFilters({ genres: d.genres, decade: d.decade, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null, d.hide ? seenIds : null)
+    const f = toFilters({ genres: d.genres, decades: d.decades, lang: d.lang, rating: d.rating, rt: d.rt, lb: d.lb, length: d.length ?? undefined }, d.mine && hasPicked ? picked : null, d.hide ? seenIds : null)
     const k = kind === 'film' || kind === 'series' ? kind : undefined
     return { key: `${q.trim().toLowerCase()}|${gone.join(',')}|${JSON.stringify(f)}|${k ?? ''}`, run: () => countWith(q, gone, f, k) }
   }
@@ -335,7 +320,7 @@ export default function Search() {
     setExtra((x) => {
       const next: Extra = { ...x, rating: d.rating || undefined, rt: d.rt || undefined, lb: d.lb || undefined, length: d.length ?? undefined }
       if (d.genres.join('|') !== init.genres.join('|')) next.genres = d.genres
-      if (d.decade !== init.decade) next.decade = d.decade
+      if (d.decades.join('|') !== init.decades.join('|')) next.decades = d.decades
       if (d.lang !== init.lang) next.lang = d.lang
       return next
     })

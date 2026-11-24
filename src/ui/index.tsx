@@ -1276,3 +1276,19 @@ export function Rolling({ n }: { n: number }) {
   }
   return <span className="roll" data-live={live || undefined} aria-hidden="true">{cells}</span>
 }
+
+/** Loads the next page when the end of the list comes near (a screen ahead). */
+export function LoadOn({ onNear }: { onNear: () => void }) {
+  const el = useRef<HTMLLIElement>(null)
+  const near = useRef(onNear)
+  near.current = onNear
+  useEffect(() => {
+    const node = el.current
+    const root = node?.closest('.page') ?? null
+    if (!node) return
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) near.current() }, { root, rootMargin: '0px 0px 900px 0px' })
+    io.observe(node)
+    return () => io.disconnect()
+  }, [])
+  return <li ref={el} className="s-loadon" aria-hidden="true" />
+}

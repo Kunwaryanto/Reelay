@@ -75,7 +75,8 @@ def route(r):
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])
         return r.fulfill(json=[{"id":i} for i in hits])
-    if '/rest/v1/titles' in u and ('original_language' in u or r.request.method=='HEAD') and '?id=eq.' not in u and '&id=eq.' not in u:
+    # search by filters, and Explore (Browse lists made of filters: ordered by popularity then id, in pages)
+    if '/rest/v1/titles' in u and ('original_language' in u or r.request.method=='HEAD' or 'id.asc' in u) and '?id=eq.' not in u and '&id=eq.' not in u:
         from urllib.parse import unquote
         uu=unquote(u)
         def hit(i):

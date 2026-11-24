@@ -5,7 +5,7 @@ import { routeOf, tabBarShown, type Route, type Tab } from './lib/routes'
 import { SavedProvider } from './lib/saved'
 import { useWatchedSync } from './lib/letterboxd'
 import { setRunway } from './lib/runway'
-import Browse, { BrowseCategory, BrowseGrid, BrowseSection } from './screens/Browse'
+import Browse, { BrowseCategory, BrowseGrid, BrowseSection, BrowseTitles } from './screens/Browse'
 import { isDesktop } from './lib/desktop'
 import { useProfile } from './lib/profile'
 import { noteOpenedFrom, registerDevice } from './lib/push'
@@ -41,6 +41,7 @@ function renderRoute(r: Route): React.ReactNode {
     case 'browse-section': return <BrowseSection section={r.section} kind={r.kind} />
     case 'browse-category': return <BrowseCategory id={r.id} kind={r.kind} />
     case 'browse-grid': return <BrowseGrid id={r.id} row={r.row} kind={r.kind} />
+    case 'browse-titles': return <BrowseTitles />
     case 'settings': return r.page === 'invites' ? <Invites /> : r.page ? <SettingsPage page={r.page} /> : <Settings />
     case 'privacy': return <PrivacyPolicy />
     case 'terms': return <Terms />

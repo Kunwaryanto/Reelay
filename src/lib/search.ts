@@ -35,6 +35,10 @@ export type Filters = {
   minRt?: number // Rotten Tomatoes critics, %
   minLb?: number // Letterboxd, 0 to 5
   length?: 'short' | 'mid' | 'long' // under 90 min, up to 2 h, over 2 h
+  /** any of these year ranges (decades; an open start is everything before) */
+  decades?: [number | undefined, number][]
+  /** made in this country (ISO code) */
+  country?: string
   services?: string[]
   /** titles to leave out (Hide watched) */
   hide?: number[]
@@ -190,7 +194,7 @@ async function byName(text: string, max = 60): Promise<Hit[]> {
 
 /** Put the filters on a query of streaming titles (its select must embed availability, and scores for a rating). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function narrow<Q>(query: Q, f: Filters): Q {
+export function narrow<Q>(query: Q, f: Filters): Q {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = query as any
   if (f.kind) q = q.eq('kind', f.kind)
@@ -201,6 +205,8 @@ function narrow<Q>(query: Q, f: Filters): Q {
   if (f.from !== undefined) q = q.gte('year', f.from)
   if (f.to !== undefined) q = q.lte('year', f.to)
   if (f.genres) q = q.overlaps('genres', f.genres)
+  if (f.decades?.length) q = q.or(f.decades.map(([a, b]) => (a === undefined ? `year.lte.${b}` : `and(year.gte.${a},year.lte.${b})`)).join(','))
+  if (f.country) q = q.contains('countries', [f.country])
   if (f.lang) q = q.eq('original_language', f.lang)
   if (f.minRating) q = q.gte('scores.imdb_rating', f.minRating)
   if (f.minRt) q = q.gte('scores.rt_critics', f.minRt)

@@ -8,8 +8,12 @@ import { Button, Icon, Rolling, Sheet } from '../ui'
 export type Sort = 'best' | 'rated' | 'newest'
 export type Len = NonNullable<Filters['length']>
 export const SORTS: [Sort, string][] = [['best', 'Best match'], ['rated', 'Highest rated'], ['newest', 'Newest']]
-/** Decade starts; 0 is everything before 1980. */
-export const DECADES: [string, number][] = [['2020s', 2020], ['2010s', 2010], ['2000s', 2000], ['90s', 1990], ['80s', 1980], ['Older', 0]]
+/** Decade starts; 0 is everything before 1960. */
+export const DECADES: [string, number][] = [['2020s', 2020], ['2010s', 2010], ['2000s', 2000], ['90s', 1990], ['80s', 1980], ['70s', 1970], ['60s', 1960], ['Older', 0]]
+/** The years a decade covers. */
+export const decadeYears = (d: number): [number | undefined, number] => (d === 0 ? [undefined, 1959] : [d, d + 9])
+/** Decades in the order the drawer lists them (newest first), as words: "90s & 2000s" reads oldest first. */
+export const decadeNames = (ds: number[]) => DECADES.filter((x) => ds.includes(x[1])).map((x) => x[0])
 export const LENGTHS: [string, Len][] = [['Under 90 min', 'short'], ['Up to 2 h', 'mid'], ['Over 2 h', 'long']]
 /** Where a rating comes from: the draft's key for it, its name (long, and short for chips), the steps on offer and how a step reads. */
 export type Source = 'rating' | 'rt' | 'lb'
@@ -21,14 +25,22 @@ export const SOURCES: { key: Source; name: string; short: string; steps: number[
 const ratingNote = (d: Draft) => SOURCES.filter((s) => d[s.key]).map((s) => `${s.short} ${s.show(d[s.key])}`).join(', ')
 
 export const decadeName = (d: number) => DECADES.find((x) => x[1] === d)?.[0] ?? ''
+const COUNTRY: Record<string, string> = { SE: 'Sweden', KR: 'South Korea', ES: 'Spain', GB: 'the UK', DK: 'Denmark', NO: 'Norway', JP: 'Japan', FR: 'France', US: 'the US' }
+export const countryName = (code: string) => COUNTRY[code] ?? code
 export const lengthName = (l: Len) => LENGTHS.find((x) => x[1] === l)?.[0] ?? ''
 export const langName = (code: string) => LANG_OPTIONS.find((x) => x[0] === code)?.[1] ?? code
 export const sortName = (s: Sort) => SORTS.find((x) => x[0] === s)![1]
 
 /** Everything the drawer can set. Empty values mean "any". */
 /** `rating` is IMDb's (0 to 10), `rt` Rotten Tomatoes critics (%), `lb` Letterboxd (0 to 5); 0 is any. */
-export type Draft = { sort: string; mine: boolean; /** leave out films logged on Letterboxd */ hide: boolean; genres: string[]; decade: number | null; rating: number; rt: number; lb: number; length: Len | null; lang: string | null }
-export const NO_FILTERS: Draft = { sort: 'best', mine: false, hide: false, genres: [], decade: null, rating: 0, rt: 0, lb: 0, length: null, lang: null }
+export type Draft = {
+  sort: string; mine: boolean; /** leave out films logged on Letterboxd */ hide: boolean; genres: string[]
+  /** any of these decades */
+  decades: number[]; rating: number; rt: number; lb: number; length: Len | null; lang: string | null
+  /** set by a Browse list, shown as chips (not in the drawer): made in this country, leaving within 30 days, released this year or later */
+  country?: string | null; leaving?: boolean; since?: number | null
+}
+export const NO_FILTERS: Draft = { sort: 'best', mine: false, hide: false, genres: [], decades: [], rating: 0, rt: 0, lb: 0, length: null, lang: null, country: null, leaving: false, since: null }
 
 /** A count to fetch: `key` names it (the same key is never fetched twice), `run` gets it. */
 export type Count = { key: string; run: () => Promise<number | null> }
@@ -123,14 +135,14 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
   const count = (patch: Partial<Draft>) => (open ? countOf({ ...d, ...patch }) : null)
 
   const notes: Record<Exclude<Sub, 'sort'>, string> = {
-    genres: d.genres.join(', '), decade: d.decade !== null ? decadeName(d.decade) : yearsNote,
+    genres: d.genres.join(', '), decade: d.decades.length ? decadeNames(d.decades).join(', ') : yearsNote,
     rating: ratingNote(d), length: d.length ? lengthName(d.length) : '', lang: d.lang ? langName(d.lang) : '',
   }
-  const set_ = { genres: d.genres.length > 0, decade: d.decade !== null, rating: d.rating > 0 || d.rt > 0 || d.lb > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
-  const any = Object.values(set_).some(Boolean) || d.mine || d.hide
+  const set_ = { genres: d.genres.length > 0, decade: d.decades.length > 0, rating: d.rating > 0 || d.rt > 0 || d.lb > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
+  const any = Object.values(set_).some(Boolean) || d.mine || d.hide || !!d.country || !!d.leaving || !!d.since
   const seen = useWatched()
   const clear: Record<Sub, () => void> = {
-    sort: () => set({ sort: firstSort }), genres: () => set({ genres: [] }), decade: () => set({ decade: null }),
+    sort: () => set({ sort: firstSort }), genres: () => set({ genres: [] }), decade: () => set({ decades: [] }),
     rating: () => set({ rating: 0, rt: 0, lb: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }),
   }
   const shown = sub ?? last
@@ -143,8 +155,10 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
           pick={() => set({ genres: d.genres.includes(g) ? d.genres.filter((x) => x !== g) : [...d.genres, g] })} />
       ))
       case 'decade': return [
-        <Option key="any" label="Any time" role="radio" checked={d.decade === null} pick={() => set({ decade: null })} count={count({ decade: null })} />,
-        ...DECADES.map(([label, y]) => <Option key={y} label={label} role="radio" checked={d.decade === y} pick={() => set({ decade: y })} count={count({ decade: y })} />),
+        <Option key="any" label="Any time" role="radio" checked={d.decades.length === 0} pick={() => set({ decades: [] })} count={count({ decades: [] })} />,
+        // several at once: "90s & 2000s"
+        ...DECADES.map(([label, y]) => <Option key={y} label={label} role="checkbox" checked={d.decades.includes(y)} count={count({ decades: [y] })}
+          pick={() => set({ decades: d.decades.includes(y) ? d.decades.filter((x) => x !== y) : [...d.decades, y] })} />),
       ]
       case 'rating': return SOURCES.map((s) => (
         <li key={s.key}>
@@ -258,9 +272,9 @@ export type Facets = { year: number | null; genres?: string[] | null; rating?: n
 export function passesDraft(t: Facets, d: Draft, mine: string[]): boolean {
   if (d.mine && mine.length && !t.services.some((s) => mine.includes(s))) return false
   if (d.genres.length) { const want = d.genres.flatMap(genreNames); if (!t.genres?.some((g) => want.includes(g))) return false }
-  if (d.decade !== null) {
+  if (d.decades.length) {
     const y = t.year
-    if (y === null || (d.decade === 0 ? y >= 1980 : y < d.decade || y > d.decade + 9)) return false
+    if (y === null || !d.decades.some((x) => { const [a, b] = decadeYears(x); return (a === undefined || y >= a) && y <= b })) return false
   }
   if (d.rating && !((t.rating ?? 0) >= d.rating)) return false
   if (d.rt && !((t.rt ?? 0) >= d.rt)) return false
@@ -276,7 +290,10 @@ export function passesDraft(t: Facets, d: Draft, mine: string[]): boolean {
 /** The chips for what a draft has on (sort isn't a filter; it gets a chip only when not the first sort). */
 export function draftChips(d: Draft, set: (d: Draft) => void, sorts: [string, string][], firstSort: string): { key: string; label: string; drop: () => void }[] {
   return [
-    ...(d.decade !== null ? [{ key: 'decade', label: decadeName(d.decade), drop: () => set({ ...d, decade: null }) }] : []),
+    ...DECADES.filter((x) => d.decades.includes(x[1])).map(([label, y]) => ({ key: `decade:${y}`, label, drop: () => set({ ...d, decades: d.decades.filter((z) => z !== y) }) })),
+    ...(d.since ? [{ key: 'since', label: d.since >= new Date().getFullYear() ? 'This year' : `Since ${d.since}`, drop: () => set({ ...d, since: null }) }] : []),
+    ...(d.country ? [{ key: 'country', label: `From ${countryName(d.country)}`, drop: () => set({ ...d, country: null }) }] : []),
+    ...(d.leaving ? [{ key: 'leaving', label: 'Leaving soon', drop: () => set({ ...d, leaving: false }) }] : []),
     ...d.genres.map((g) => ({ key: `g:${g}`, label: g, drop: () => set({ ...d, genres: d.genres.filter((x) => x !== g) }) })),
     ...SOURCES.filter((s) => d[s.key]).map((s) => ({ key: s.key, label: `${s.short} ${s.show(d[s.key])}`, drop: () => set({ ...d, [s.key]: 0 }) })),
     ...(d.length ? [{ key: 'length', label: lengthName(d.length), drop: () => set({ ...d, length: null }) }] : []),

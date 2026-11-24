@@ -616,6 +616,9 @@ html[data-runway] .tabbar { touch-action: none; }
 
 /* ---- Browse ---- */
 .br-head { min-height: calc(var(--safe-top) + 15px + var(--hit)); }
+/* All titles: in the View all style, on the title's baseline, its right edge on the page margin */
+.br-head { align-items: baseline; }
+.br-all { margin: -12px calc(var(--margin) - 12px) -12px 0; display: inline-flex; align-items: center; text-decoration: none; }
 .br-section { margin-top: 32px; }
 .br-section[data-first='true'] { margin-top: 12px; }
 .br-section-head { margin: 0 var(--margin); display: flex; align-items: baseline; justify-content: space-between; }

@@ -10,8 +10,9 @@ import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { useWatched } from '../lib/letterboxd'
 import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { paths } from '../lib/routes'
-import { categoryPage, coverPictures, coverSrc, coversPage, fits, gridDef, gridPage, sectionCats, sectionPage, usePageQuery, warmPage } from '../lib/pages'
-import { BackButton, useJoinedRef, usePageRefresh, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
+import { categoryPage, coverPictures, coverSrc, coversPage, explorePage, fits, gridDef, gridPage, sectionCats, sectionPage, usePageQuery, warmPage } from '../lib/pages'
+import { ALL_TITLES, exploreCards, exploreCount, exploreKey, exploreOf, exploreTitle, type ExploreStart } from '../lib/explore'
+import { BackButton, useJoinedRef, usePageRefresh, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, LoadOn, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
 import { Hero } from './Now'
 
 type Pick = 'all' | Kind
@@ -113,7 +114,7 @@ export default function Browse() {
   return (
     <>
     <main className="page noscroll" data-arrive={phase === 'in' ? '' : undefined} onScroll={onDim} ref={pageRef}>
-      <div className="tab-head br-head"><h1>Browse</h1></div>
+      <div className="tab-head br-head"><h1>Browse</h1><PageLink to={paths.allTitles} className="view-all br-all">All titles</PageLink></div>
       <div className="wl-filters"><TypePills pick={pick} setPick={setPick} /></div>
       <div className="br-body">
       {phase !== 'there' && <Skeleton kind="cards" leaving={phase === 'in'} />}
@@ -233,8 +234,113 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
 
 const SORTS: [Sort, string][] = [['rated', 'Highest rated'], ['newest', 'Newest'], ['popular', 'Most popular']]
 
-/** "View all" on a row, or a list from Browse: everything in it, three across. */
+/** "View all" on a row, or a list from Browse. A list made of filters opens as Explore (its filters are chips that
+ *  can be taken off); the others (Trending, Hidden gems, Award winners…) are a fixed grid. */
 export function BrowseGrid({ id, row, kind }: { id: string; row: string; kind?: Kind }) {
+  const cat = categoryOf(id)
+  const start = useMemo(() => (cat ? exploreOf(cat, row, kind) : null), [cat, row, kind])
+  return start ? <Explore start={start} /> : <FixedGrid id={id} row={row} kind={kind} />
+}
+
+/** Browse › All titles: every title, with filters of the member's own. */
+export function BrowseTitles() {
+  return <Explore start={ALL_TITLES} />
+}
+
+const EXPLORE_SORTS: [string, string][] = [['popular', 'Most popular'], ['rated', 'Highest rated'], ['newest', 'Newest']]
+/** Sorting by leaving date only means something while Leaving soon is on. */
+const settle = (d: Draft): Draft => (!d.leaving && d.sort === 'leaving' ? { ...d, sort: 'popular' } : d)
+
+/** A list made of filters: every filter is a chip (the list's own ones too), the heading follows them, and the
+ *  list is read from the database a page at a time with real totals in the type pills. */
+function Explore({ start }: { start: ExploreStart }) {
+  const onDim = useDimOnScroll()
+  const [d, setDraft] = useState<Draft>(start.draft)
+  const setD = (x: Draft) => setDraft(settle(x))
+  const [pick, setPick] = useState<Pick>(start.pick)
+  const switched = useSwitched(`${pick}|${JSON.stringify(d)}`)
+  const [sheet, setSheet] = useState(false)
+  const [small, setSmall] = useState(false)
+  const big = useRef<HTMLHeadingElement>(null)
+  const mineQ = useServicesQuery()
+  const watched = useWatched()
+  // the member's services and watched films matter only while My services or Hide watched is on
+  const ctx = useMemo(() => ({ picked: mineQ.data ?? [], seen: [...watched] }), [mineQ.data, watched])
+  const page = useMemo(() => explorePage(d, pick, ctx), [d, pick, ctx])
+  const frame = usePageFrame(page)
+  const { q, phase, pull } = frame
+
+  // pages after the first, loaded as the end of the list comes near (dropped when the first page is read again)
+  const [more, setMore] = useState<{ base: unknown; cards: Card[] }>({ base: null, cards: [] })
+  const loading = useRef(false)
+  const first = q.data?.cards ?? []
+  const later = more.base === q.data ? more.cards : []
+  const seenIds = new Set(first.map((c) => c.id))
+  const list = [...first, ...later.filter((c) => !seenIds.has(c.id))]
+  const totals = q.data?.totals
+  const total = totals ? (pick === 'all' ? totals.all : totals[pick]) : 0
+  const loadNext = () => {
+    const base = q.data
+    if (!base || loading.current || list.length >= total) return
+    loading.current = true
+    exploreCards(d, pick, ctx, list.length)
+      .then((got) => setMore((m) => ({ base, cards: [...(m.base === base ? m.cards : []), ...got] })), () => {})
+      .finally(() => { loading.current = false })
+  }
+
+  const firstSort = start.draft.sort === 'leaving' && !d.leaving ? 'popular' : start.draft.sort
+  const sorts: [string, string][] = d.leaving ? [['leaving', 'Leaving first'], ...EXPLORE_SORTS] : EXPLORE_SORTS
+  const chips = draftChips(d, setD, sorts, firstSort)
+  const title = exploreTitle(d, pick)
+  const countOf = (x: Draft): Count => ({
+    key: `${exploreKey(settle(x), pick, ctx)}:count`,
+    run: () => exploreCount(settle(x), pick === 'all' ? undefined : pick, ctx),
+  })
+  const tune = (
+    <button type="button" className="wl-tune" aria-haspopup="dialog" aria-label={chips.length ? `Sort and filter, ${chips.length} on` : 'Sort and filter'} onClick={() => setSheet(true)}>
+      <Icon name="tune" size={22} />
+    </button>
+  )
+
+  return (
+    <>
+      <TopBar title={title} shown={small} />
+      <main className="page noscroll" ref={pull.bind.ref} onScroll={(e) => {
+        onDim(e)
+        const y = e.currentTarget.scrollTop
+        if (big.current) big.current.style.opacity = String(Math.max(0, Math.min(1, 1 - (y - 4) / 26)))
+        if ((y > 30) !== small) setSmall(y > 30)
+      }}>
+        <div className="grid-head"><h1 ref={big}>{title}</h1></div>
+        <div className="wl-filters"><TypePills pick={pick} setPick={setPick} counts={totals && phase !== 'wait' ? totals : {}} />{tune}</div>
+        {chips.length > 0 && (
+          <div className="s-chips">
+            {chips.map((c) => <button key={c.key} type="button" aria-label={`Remove ${c.label}`} onClick={c.drop}>{c.label}<Icon name="close" size={16} /></button>)}
+          </div>
+        )}
+        {q.error && <div className="br-failed"><LoadFailed what={title} retry={q.retry} retrying={q.retrying} compact /></div>}
+        <div className="grid-wrap">
+        {phase !== 'there' && !q.error && <Skeleton kind="grid" leaving={phase === 'in'} />}
+        <ul className={phase === 'in' ? 'grid arrive' : switched ? 'grid pill-in' : 'grid'} hidden={phase === 'wait'}>
+          {list.map((card) => {
+            const note = d.leaving ? leavingFor(card, { stale: q.stale }) : pick !== 'all' ? String(card.year ?? '') : undefined
+            return <li key={card.id}><TitleCard card={card} note={note} /></li>
+          })}
+          {q.data && list.length < total && <LoadOn key={`${page.key}:${list.length}`} onNear={loadNext} />}
+        </ul>
+        </div>
+        {q.data && phase !== 'wait' && list.length === 0 && <p className="br-none">{chips.length ? 'Nothing here with these filters.' : 'Nothing streaming here right now.'}</p>}
+      </main>
+      {pull.indicator}
+      <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={d} services={ctx.picked.map((s) => SERVICE_NAME[s] ?? s)}
+        noun={pick === 'film' ? ['film', 'films'] : pick === 'series' ? ['series', 'series'] : ['title', 'titles']} sorts={sorts} firstSort={firstSort} rows={ALL_ROWS}
+        countOf={countOf} apply={(x) => { setD(x); setSheet(false) }} />
+    </>
+  )
+}
+
+/** A fixed list (not made of filters): everything in it, three across; the drawer narrows it on the phone. */
+function FixedGrid({ id, row, kind }: { id: string; row: string; kind?: Kind }) {
   const onDim = useDimOnScroll()
   const cat = categoryOf(id)
   const def = useMemo(() => (cat ? gridDef(cat, row, kind) : undefined), [cat, row, kind])
