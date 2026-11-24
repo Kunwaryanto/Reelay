@@ -636,3 +636,15 @@ Measured on the database before and after:
   returns the whole list in one row. The saved list has a new name (`lb-watched:v2`) so a cut copy isn't kept, and
   Home is rebuilt (HOME_VERSION 12).
 - Anything a member can have more than 1,000 of comes as one row (an array), never a row each.
+
+## Letterboxd matching ignores punctuation (24 Nov)
+
+- Imported films are matched to the catalogue by name and year. Letterboxd and TMDB punctuate titles differently
+  ("Mission: Impossible – The Final Reckoning" vs "- The Final Reckoning", "The 40 Year Old Virgin" vs "40 Year-Old"),
+  so those stayed unmatched and weren't hidden. `letterboxd_resolve` now compares letters and digits only
+  (`letterboxd_key`), year within one, exact match first. Re-run for everyone on 24 Nov: Adam +15, Lukas +11.
+- Films still unmatched aren't in the catalogue (not streaming here); the nightly sync matches them when they arrive.
+
+- (24 Nov, later) The logos are sized by visible ink, not by their box: each shows about the same amount of logo
+  (`MARK_SHAPE` holds each file's ratio and share of ink), 7–13 px tall, at most 36 wide. Thin logos (Disney+,
+  TriArt Play, Prime Video) grew, solid ones (HBO Max, Crunchyroll) calmed down.
