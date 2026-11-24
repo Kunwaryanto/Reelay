@@ -4,7 +4,7 @@ built app by Playwright. Grown during development (see docs/testing.md); the tes
 `new()` opens a signed-in phone-sized page with the base mocks; `hroute` adds Home's data, `lbroute` Letterboxd.
 `B` is where the built app is served (vite preview, port 4317). Page errors are collected in `errs`.
 """
-import json, sys, base64, time, re, hashlib
+import json, sys, base64, time, re, hashlib, datetime
 from playwright.sync_api import sync_playwright
 import os as _os
 B=_os.environ.get('REELAY_URL', 'http://localhost:4317')
@@ -178,7 +178,7 @@ def hroute(r):
     except Exception as e: print('  MOCK ERROR', repr(e), unquote(r.request.url).split('/rest/v1/')[-1][:260]); return r.fulfill(json=[])
 def hroute2(r):
     u=unquote(r.request.url); seenq.append(u.split('/rest/v1/')[-1][:90])
-    if '/availability_events' in u and 'title_id=in.' in u: return r.fulfill(json=[{"title_id":500+i,"service_id":"netflix"} for i in range(4)])
+    if '/availability_events' in u and 'title_id=in.' in u: return r.fulfill(json=[{"title_id":500+i,"service_id":"netflix","happened_on":(datetime.date.today()-datetime.timedelta(days=2+i*10)).isoformat()} for i in range(4)] if MODE.get('news',True) else [])
     if 'availability_events' in u: return r.fulfill(json=[{"happened_on":"2026-11-%02d"%(22-i//3),"service_id":['netflix','hbo-max','viaplay'][i%3],"title":dict(card(200+i),popularity=100-i)} for i in range(12)])
     if 'rpc/home_because' in u:
         day=json.loads(r.request.post_data)['p_day']; alt=day%2==1

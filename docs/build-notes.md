@@ -738,3 +738,11 @@ Measured on the database before and after:
 - The sync picks the title page's picture from every poster and backdrop TMDB has: a textless poster first (the
   page's tall shape, no title text, the art made for the title), else the best voted textless backdrop at least
   1920 wide, loaded at full size so the tall crop stays sharp. Without either, the page shows what it did before.
+
+## Watchlist news under the hero (25 Nov)
+
+- Home's "From your watchlist" row is gone. In its place, one line under the hero when something on the watchlist
+  has news: up to three posters fanned, "2 just arrived" (or "Just arrived", "Leaving soon", "3 leaving soon") at
+  heading size, and under it the titles and where ("Dune: Part Two on Netflix · The Holdovers leaves Viaplay in
+  3 days"), cut with "…". No card, no heading. Arrivals count for 14 days on the member's services; leaving is within
+  14 days. One title opens its page; more open the Watchlist. Nothing new: no line.

@@ -25,7 +25,19 @@ export type HomeRow = {
   /** a row of large cards instead of posters, each with its reason */
   spotlight?: HomeCard[]
 }
-export type HomeData = { hero: HomeCard[]; rows: HomeRow[] }
+/** What is new on the member's watchlist, said in one line under the hero: what arrived on their services in the
+ *  last two weeks, then what leaves them within two weeks. None when nothing has. */
+export type WatchNews = {
+  /** "2 just arrived", "Just arrived", "Leaving soon", "3 leaving soon" */
+  head: string
+  /** "Dune: Part Two on Netflix · The Holdovers leaves Viaplay in 3 days" */
+  sub: string
+  /** the posters, up to three, in the order of the line */
+  items: HomeCard[]
+  /** one title: its page; more: the Watchlist tab */
+  to: number | 'tab:watchlist'
+}
+export type HomeData = { hero: HomeCard[]; news?: WatchNews; rows: HomeRow[] }
 export type HomeAsk = {
   /** the member's services; empty: every service */
   services: string[]
@@ -39,7 +51,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 12
+export const HOME_VERSION = 13
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -149,12 +161,15 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   // the second liked film only counts when it is a different film from the row's
   const alt = becauseAlt.length && because.length && becauseAlt[0].source !== because[0].source ? becauseAlt : []
   const savedIds = saved.map((s) => s.title?.id).filter((x): x is number => !!x)
+  // saved titles that arrived on one of the member's services in the last 30 days, newest first
+  type SavedArrival = { title_id: number; service_id: string; happened_on: string }
+  let savedArrivalsQ = supabase.from('availability_events').select('title_id,service_id,happened_on').eq('event', 'added')
+    .gte('happened_on', inDays(-30)).in('title_id', savedIds).order('happened_on', { ascending: false })
+  if (mine) savedArrivalsQ = savedArrivalsQ.in('service_id', svc)
   const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, savedArrivals, decadeLists, ...genreLists] = await Promise.all([
     byIds(because.map((b) => b.title_id)), byIds(alt.map((b) => b.title_id)), byIds(friends.map((f) => f.title_id)),
     byIds(savedRecs.map((b) => b.title_id)), byIds(people.map((p) => p.title_id)),
-    // saved titles that arrived on a service in the last 30 days
-    savedIds.length ? soft<{ title_id: number; service_id: string }>(supabase.from('availability_events').select('title_id,service_id').eq('event', 'added')
-      .gte('happened_on', inDays(-30)).in('title_id', savedIds) as never) : Promise.resolve([] as { title_id: number; service_id: string }[]),
+    savedIds.length ? soft<SavedArrival>(savedArrivalsQ as never) : Promise.resolve([] as SavedArrival[]),
     Promise.all((['film', 'series'] as Kind[]).map((k) =>
       soft<Card>(titles(k).gte('year', decade.rule.from!).lte('year', decade.rule.to!).order('popularity', { ascending: false }).limit(25) as never))),
     ...picks.map(genreRow),
@@ -203,7 +218,8 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   // evening. A title in one of those isn't repeated in the main row.
   const playable: HomeCard[] = saved.map((s) => s.title).filter(Boolean)
     .sort((a, b) => (leavesOn.get(a.id) ?? '9').localeCompare(leavesOn.get(b.id) ?? '9'))
-  const arrivedSaved = new Map(savedArrivals.map((a) => [a.title_id, a.service_id]))
+  const arrivedSaved = new Map<number, string>()
+  for (const a of savedArrivals) if (!arrivedSaved.has(a.title_id)) arrivedSaved.set(a.title_id, a.service_id)
   const isShort = (t: HomeCard) => t.kind === 'film' && !!t.runtime_min && t.runtime_min > 40 && t.runtime_min <= 100
   // What just arrived from it leads the row, with a note saying where; the rest follow, leaving first. (Runtimes are
   // under every poster now, so short films need no row of their own; the spotlight still picks one for tonight.)
@@ -211,8 +227,30 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     ...playable.filter((t) => arrivedSaved.has(t.id)).map((t) => ({ ...t, note: `Now on ${svcName(arrivedSaved.get(t.id)!)}` })),
     ...playable.filter((t) => !arrivedSaved.has(t.id)),
   ].slice(0, 20)
-  savedCards.forEach((t) => seen.add(t.id))
-  fresh.set(savedCards, savedCards.length)
+
+  // ---- Watchlist news: one line under the hero, in place of a row of the whole watchlist ----
+  const recent = inDays(-14), soon = inDays(14)
+  const justArrived: HomeCard[] = []
+  for (const a of savedArrivals) {
+    const t = playable.find((x) => x.id === a.title_id)
+    if (t && a.happened_on >= recent && !justArrived.some((x) => x.id === t.id)) justArrived.push({ ...t, reason: `on ${svcName(a.service_id)}` })
+  }
+  const goingSaved: HomeCard[] = []
+  for (const t of playable) {
+    if (justArrived.some((x) => x.id === t.id)) continue
+    const l = t.availability.filter((a) => a.leaves_on && a.leaves_on >= today() && a.leaves_on <= soon).sort((a, b) => a.leaves_on!.localeCompare(b.leaves_on!))[0]
+    const when = l && leavesIn(l.leaves_on)
+    if (when) goingSaved.push({ ...t, reason: when.replace('Leaves', `leaves ${svcName(l.service_id)}`), note: l.leaves_on! })
+  }
+  goingSaved.sort((a, b) => a.note!.localeCompare(b.note!))
+  const newsItems = [...justArrived, ...goingSaved]
+  const news: WatchNews | undefined = newsItems.length ? {
+    head: justArrived.length ? (justArrived.length === 1 ? 'Just arrived' : `${justArrived.length} just arrived`)
+      : goingSaved.length === 1 ? 'Leaving soon' : `${goingSaved.length} leaving soon`,
+    sub: newsItems.map((t) => `${t.title} ${t.reason}`).join(' · '),
+    items: newsItems.slice(0, 3).map(({ note: _n, reason: _r, ...t }) => t),
+    to: newsItems.length === 1 ? newsItems[0].id : 'tab:watchlist',
+  } : undefined
   const rowBecause = take([...becauseCards].sort((a, b) => (rankOf.get(a.id) ?? 99) - (rankOf.get(b.id) ?? 99)))
   const rowFriends = take(friends.map((f) => friendCards.find((c) => c.id === f.title_id)).filter((c): c is Card => !!c)
     .map((c) => ({ ...c, note: `${first(friendOf.get(c.id)!.name)} ${Number(friendOf.get(c.id)!.rating).toFixed(1)}` })))
@@ -301,7 +339,6 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     row('trending-films', 'Trending films', rowTrendF, trendF, paths.grid('trending', 'list', 'film')),
     row('trending-series', 'Trending series', rowTrendS, trendS, paths.grid('trending', 'list', 'series')),
     row('leaving', 'Leaving soon', rowLeaving, leaving, paths.grid('leaving-soon', 'list'), { notes: 'leaving' }),
-    row('watchlist', 'From your watchlist', savedCards, saved, 'tab:watchlist'),
     row('because', because.length ? `Because you liked ${because[0].source}` : '', rowBecause, because),
     row('saved', savedRecs.length ? `Because you saved ${savedRecs[0].source}` : '', rowSaved, savedRecs),
     ...(spots.length >= 2 ? [{ id: 'spotlight', title: 'Picked for you', items: [], spotlight: spots }] : []),
@@ -315,5 +352,5 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     row(decade.id, decade.label, rowDecade, mix(decadeLists), paths.category(decade.id)),
   ]
   const full = (r: HomeRow) => r.items.length >= MIN_ROW && (fresh.get(r.items) ?? r.items.length) >= FIRST
-  return { hero, rows: rows.filter((r) => r.spotlight || full(r)).map((r) => ({ ...r, items: back(r.items) })) }
+  return { hero, news, rows: rows.filter((r) => r.spotlight || full(r)).map((r) => ({ ...r, items: back(r.items) })) }
 }

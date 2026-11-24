@@ -4,7 +4,7 @@ import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
 import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
-import { HOME_VERSION, loadHome, type HomeCard, type HomeData } from '../lib/home'
+import { HOME_VERSION, loadHome, type HomeCard, type HomeData, type WatchNews } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
 import { useLetterboxd, watchedKey } from '../lib/letterboxd'
@@ -14,7 +14,7 @@ import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
-import { NearImage, NearRow, PageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { Cover, NearImage, NearRow, PageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
@@ -318,6 +318,24 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
   )
 }
 
+/** What is new on the member's watchlist, in one line under the hero: no card, no heading; the line is its own. */
+function News({ news }: { news: WatchNews }) {
+  const { setTab } = useNavActions()
+  const inner = (
+    <>
+      <span className="news-stack" aria-hidden="true">
+        {news.items.map((t) => <Cover key={t.id} path={t.poster_path} sizes="44px" eager />)}
+      </span>
+      <span className="news-text"><b>{news.head}</b><small>{news.sub}</small></span>
+      <Icon name="chevron_right" size={20} />
+    </>
+  )
+  const label = `From your watchlist: ${news.head}. ${news.sub}`
+  return typeof news.to === 'number'
+    ? <PageLink to={paths.title(news.to)} className="news press" aria-label={label}>{inner}</PageLink>
+    : <button type="button" className="news press" aria-label={label} onClick={() => setTab('watchlist')}>{inner}</button>
+}
+
 /** Decode a Home's first pictures (the first hero's art and title logo, the first row's first posters), so it can
  *  go on screen whole. Resolves when they're decoded or have failed. */
 function decodeFold(data: HomeData): Promise<void> {
@@ -449,6 +467,7 @@ export default function Now() {
       {show && q.data && (
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
+          {q.data.news && <News news={q.data.news} />}
           {q.data.rows.map((row, r) => (
             row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>

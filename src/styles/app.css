@@ -159,6 +159,15 @@ button { font: inherit; color: inherit; }
 .now-settings { position: absolute; z-index: 4; top: calc(var(--safe-top) + 15px); right: 12px; }
 .hero { position: relative; height: 540px; margin-bottom: var(--row-gap); }
 .hero-gap { height: calc(var(--safe-top) + 70px); }
+/* Watchlist news under the hero: posters fanned, a heading-size line and the titles under it; no card, no heading */
+.news { display: flex; align-items: center; gap: var(--space-4); width: calc(100% - 2 * var(--margin)); margin: 0 var(--margin) var(--row-gap); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; text-decoration: none; }
+.news-stack { flex: none; display: flex; }
+.news-stack .cover { width: 44px; border-radius: 6px; box-shadow: 0 0 0 2px var(--bg); }
+.news-stack .cover + .cover { margin-left: -18px; }
+.news-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.news-text b { font: var(--type-heading); letter-spacing: var(--track-heading); color: var(--text-primary); }
+.news-text small { font: var(--type-text); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news > .ms { flex: none; color: var(--text-faint); }
 .hero-stage { position: relative; height: 100%; touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
 .hero-slide { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; z-index: 0; -webkit-touch-callout: none; }
 .hero-slide[data-on='true'] { pointer-events: auto; z-index: 2; }

@@ -63,3 +63,30 @@ def test_award_row_shows_the_award(app):
     notes = award[0][1]
     assert len(notes) >= 7 and all(re.match(r'Best \w+( \+\d+)?$', n) for n in notes), notes
     assert any('+1' in n for n in notes), notes   # each title once, with its other wins counted
+
+
+def test_watchlist_news_under_the_hero(app):
+    # what arrived on the watchlist in the last two weeks is one line under the hero, not a row of the whole list
+    from conftest import TOP
+    pg = app()
+    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    news = pg.evaluate(f"""(() => {{ const n = ({TOP}).querySelector('.news'); if (!n) return null
+      return {{ head: n.querySelector('b').textContent, sub: n.querySelector('small').textContent, posters: n.querySelectorAll('.cover').length,
+        afterHero: n.previousElementSibling?.classList.contains('hero'), rows: [...({TOP}).querySelectorAll('section.row h2')].map(h => h.textContent) }} }})()""")
+    assert news, 'the news line is shown'
+    assert news['head'] == '2 just arrived', news   # the mock's other two arrived 22 and 32 days ago
+    assert 'on Netflix' in news['sub'] and news['posters'] == 2 and news['afterHero']
+    assert 'From your watchlist' not in news['rows']
+    pg.locator('.news').click(); pg.wait_for_timeout(1200)
+    assert pg.evaluate("location.pathname") == '/watchlist' or pg.evaluate("!!document.querySelector('[data-tab=watchlist][aria-current], .wl')"), 'more than one: opens the Watchlist'
+
+
+def test_no_news_no_line(app):
+    from conftest import TOP
+    m.MODE['news'] = False
+    try:
+        pg = app()
+        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        assert pg.evaluate(f"!({TOP}).querySelector('.news')")
+    finally:
+        m.MODE.pop('news', None)
