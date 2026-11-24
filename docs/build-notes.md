@@ -621,3 +621,10 @@ Measured on the database before and after:
   once: sending the email redeems the invite, and the server says then if it has expired or been used.
 - The invite code is read once as the app starts (`INVITE_TOKEN` in routes.ts), so nothing that changes the address
   later can lose it.
+
+## Logos in the poster corner (24 Nov)
+
+- The corner showed the service's name in text (NETFLIX) for all but SVT Play and SkyShowtime. It now shows the
+  services' own logos: small white versions in `src/assets/marks`, inlined (about 9 KB in all), each sized for about
+  the same weight (8–12 px tall, at most 34 wide; logos with small lettering a little larger).
+- Still text: hayu, Cineasterna and Draken Film (no logo files yet).

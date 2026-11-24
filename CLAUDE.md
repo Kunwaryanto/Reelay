@@ -8,7 +8,7 @@ Where films and series stream in Sweden. A web app people add to their iPhone Ho
 - Design decisions doc (rules, open questions, decision log): https://claude.ai/artifact/3sRRqQPxj8P8R3RvcATcSx — start with its Handoff overview.
 - `docs/build-notes.md` — the build notes from beside each Current screen.
 - `public/brand/wordmark.svg` — the Reelay wordmark as outlines (Inter Display SemiBold, -0.02em), `fill=currentColor`, one `<path class="l">` per letter for the Start rise. Always use it instead of typing “Reelay” in the font. `wordmark-email.png` is the black version for emails (email apps don’t show SVG).
-- `public/icons/services/` — white service marks for poster corners (8–14px tall). SVT Play and SkyShowtime are their own wordmarks at 8px. `public/icons/ui/laurel.svg` — the award laurel.
+- Poster corner marks: the services' own logos, small white versions in `src/assets/marks` (made from `public/icons/services/logos`, 36 px tall, 16 shades of transparency, inlined: about 9 KB), sized in `ServiceMark` (`markSize`: 8–12 px tall, at most 34 wide). SVT Play and SkyShowtime keep their own 8 px wordmarks (`public/icons/services/`). A service without a logo (hayu, Cineasterna, Draken Film) shows its name. `public/icons/ui/laurel.svg` — the award laurel.
 - `public/fonts/` — self-hosted Inter (from rsms.me, opsz 32, weights 400–700) and a Material Symbols file with only our icons, declared in `src/styles/fonts.css`. Never load fonts from Google or another CDN (GDPR). New icon: add its name to `scripts/fonts/icons.txt` and run `scripts/fonts/build-icons.py` (instructions at the top of the script).
 - `src/styles/tokens.css` — every colour, type style, size, radius and motion value. Use the variables; don't hard-code values.
 

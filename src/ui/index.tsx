@@ -8,6 +8,7 @@ import { useLayoutEffect,
 import wordmarkSvg from '../../public/brand/wordmark.svg?raw'
 import svtPlaySvg from '../../public/icons/services/svt-play.svg?raw'
 import skyShowtimeSvg from '../../public/icons/services/skyshowtime.svg?raw'
+import tv4PlaySvg from '../../public/icons/services/logos/tv4-play.svg?raw'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
 import { useWatchedMark } from '../lib/letterboxd'
@@ -124,11 +125,32 @@ export const Pill = ({ selected, children, ...rest }: BtnProps & { selected?: bo
 
 // Built into the app as data URLs, so a mark never loads (or arrives) separately from its poster.
 const svgUrl = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`
-const MARK_IMG: Record<string, [string, number]> = { 'svt-play': [svgUrl(svtPlaySvg), 19.3], skyshowtime: [svgUrl(skyShowtimeSvg), 20.3] }
+// The services' own logos, small white versions made for the corner (src/assets/marks, 36 px tall, 16 shades of
+// transparency: about 9 KB for all of them). SVT Play and SkyShowtime keep their own 8 px wordmarks.
+const MARK_FILES = import.meta.glob<string>('../assets/marks/*.png', { eager: true, query: '?inline', import: 'default' })
+const MARK_RATIO: Record<string, number> = {
+  'apple-tv': 1.98, britbox: 4.12, crunchyroll: 1, curiosity: 2.92, 'disney-plus': 1.84, 'hbo-max': 1.39, mubi: 1, netflix: 3.7,
+  'pluto-tv': 1.34, 'prime-video': 3.24, 'triart-play': 3.42, viaplay: 4.13,
+}
+/** Logos with small lettering (a word over a smile, STREAM under Curiosity, a symbol beside a name) drawn a little larger. */
+const MARK_BOOST: Record<string, number> = { 'prime-video': 1.25, curiosity: 1.2, 'disney-plus': 1.2, 'triart-play': 1.25, 'pluto-tv': 1.1 }
+/** About the same weight for every logo: wide ones 8 px tall, square ones up to 12, none wider than 34. */
+function markSize(ratio: number, boost = 1): [number, number] {
+  let h = Math.min(12, Math.max(8, Math.sqrt(150 / ratio)) * boost), w = h * ratio
+  if (w > 34) { w = 34; h = w / ratio }
+  return [Math.round(w * 10) / 10, Math.round(h * 10) / 10]
+}
+const MARK_IMG: Record<string, [string, number, number]> = {
+  'svt-play': [svgUrl(svtPlaySvg), 19.3, 8], skyshowtime: [svgUrl(skyShowtimeSvg), 20.3, 8], 'tv4-play': [svgUrl(tv4PlaySvg), ...markSize(1)],
+  ...Object.fromEntries(Object.entries(MARK_RATIO).flatMap(([id, r]) => {
+    const src = MARK_FILES[`../assets/marks/${id}.png`]
+    return src ? [[id, [src, ...markSize(r, MARK_BOOST[id])]]] : []
+  })),
+}
 
 export function ServiceMark({ service }: { service: string }) {
   const mark = MARK_IMG[service]
-  if (mark) return <img className="mark" src={mark[0]} alt="" style={{ width: mark[1], height: 8 }} />
+  if (mark) return <img className="mark" src={mark[0]} alt="" style={{ width: mark[1], height: mark[2] }} />
   return <span className="mark-text">{(SERVICE_NAME[service] ?? service).toUpperCase()}</span>
 }
 
