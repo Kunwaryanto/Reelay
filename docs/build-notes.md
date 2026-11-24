@@ -594,3 +594,9 @@ Measured on the database before and after:
   back to the Home tab, pull to refresh or open the app.
 - A new Home only goes on screen with its first pictures decoded (`prepare` in `useHome`), and once Home has shown
   it never hides again: the black screen before the swap is gone.
+
+## A new version while the app is open (24 Nov)
+
+- After a deploy, a screen the open app loads only when it's opened (Settings, Browse, Title…) is gone under its
+  old file name, and opening it crashed ("Something went wrong"; 3 reports on 24 Nov). The app now reloads into the
+  new version instead (`reloadForNewVersion` in errors.ts, at most once a minute), and doesn't report it.

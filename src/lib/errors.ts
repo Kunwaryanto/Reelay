@@ -27,7 +27,24 @@ export async function reportError(kind: 'render' | 'error' | 'promise', err: unk
 }
 
 /** Errors no screen caught: reported. Installed once, at start. */
+// A new version was deployed while the app was open: the screens it loads only when they're opened (lazy) are
+// gone under their old names, and loading one fails. That isn't a bug to show: reload into the new version, once a
+// minute at most (offline, the reload would fail the same way).
+const STALE = /Importing a module script failed|Failed to fetch dynamically imported module|error loading dynamically imported module|Unable to preload CSS/i
+export const isStaleBuild = (err: unknown) => STALE.test(String((err as Error)?.message ?? err))
+export function reloadForNewVersion(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem('reelay-stale-reload') || 0)
+    if (Date.now() - last < 60_000) return false
+    sessionStorage.setItem('reelay-stale-reload', String(Date.now()))
+  } catch { /* storage unavailable: reload anyway */ }
+  location.reload()
+  return true
+}
+
 export function watchErrors() {
+  // Vite's own signal that a lazy screen's files couldn't be loaded
+  window.addEventListener('vite:preloadError', (e) => { if (reloadForNewVersion()) e.preventDefault() })
   window.addEventListener('error', (e) => { if (e.error || e.message) void reportError('error', e.error ?? e.message) })
-  window.addEventListener('unhandledrejection', (e) => void reportError('promise', e.reason))
+  window.addEventListener('unhandledrejection', (e) => { if (isStaleBuild(e.reason) && reloadForNewVersion()) return; void reportError('promise', e.reason) })
 }
