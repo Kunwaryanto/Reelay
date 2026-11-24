@@ -722,3 +722,13 @@ Measured on the database before and after:
   6.5–11.5 px tall, at most 34 wide. SVT Play and SkyShowtime follow the same rule.
 - Services without a logo show their name in 7 px semibold, as written ("Cineasterna"), not 800 capitals.
 - Title page: the name has no line limit any more, so nothing is clipped (the 4 px of room is gone).
+
+## Search v3, and Nordic titles in their own language (24 Nov)
+
+- Nordic originals (Swedish, Danish, Norwegian) show their own title ("Fanny och Alexander", "Festen"); Details lists
+  the English title. Both are searched, and Letterboxd matching uses the English one too.
+- Search also finds the other names a title goes by in Sweden ("Sagan om ringen", "Gudfadern").
+- One or two letters search the starts of words with their own index instead of reading every title; a common word
+  ("the") no longer looks up services for a thousand titles before keeping 30.
+- Order: exact name, streaming, starts with › contains › near miss, then fame (trending plus how well known), so
+  The Godfather comes before this year's hits for "god". "&" and "and" are the same.
