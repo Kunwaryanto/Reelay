@@ -555,6 +555,8 @@ Measured on the database before and after:
 - The line under a title (posters, search results, watchlist rows, spotlight) is year first, then how long it is:
   `2008 · 2h 6m`, `2013 · 11 seasons`, `2026 · 30m`; `Film`/`Series` only when the length isn't known.
   `metaLine` and `lengthOf` in `catalogue.ts` write it; card queries load `runtime_min` and `seasons`.
+- The hero line is where, how long, what kind: `On Netflix · 2h 6m · Action`, `On Netflix · 8 seasons · Crime` (the
+  service is left out when the reason above already names it).
 - The title page and the hold menu keep the full form ("Film · 2026 · 1 h 52 min"): there's room to read it.
 
 ## Hero timer (24 Nov)

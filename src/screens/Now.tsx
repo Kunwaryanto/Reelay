@@ -3,7 +3,7 @@ import { useServicesQuery } from '../lib/profile'
 import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
-import { SERVICE_NAME, kindWord, leavingFor, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
@@ -20,10 +20,8 @@ import { NearImage, NearRow, PageLink, PinnedArt, GearIcon, Icon, IconButton, Lo
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
   // the service is left out when the line above already names one ("New on Netflix")
-  const parts = [service && !/^(New|Now) on/.test(c.reason ?? '') ? `On ${SERVICE_NAME[service] ?? service}` : null, kindWord(c.kind)]
-  if (c.kind === 'series' && c.seasons) parts.push(c.seasons === 1 ? '1 season' : `${c.seasons} seasons`)
-  else if (c.genres?.[0]) parts.push(c.genres[0])
-  return parts.filter(Boolean).join(' · ')
+  // where, how long (runtime or seasons, which also says film or series), what kind of thing: "On Netflix · 2h 6m · Action"
+  return [service && !/^(New|Now) on/.test(c.reason ?? '') ? `On ${SERVICE_NAME[service] ?? service}` : null, lengthOf(c), c.genres?.[0]].filter(Boolean).join(' · ')
 }
 
 export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
