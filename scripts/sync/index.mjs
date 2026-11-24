@@ -732,17 +732,18 @@ async function reconcile(runStart) {
      select title_id, service_id, 'left' from gone on conflict do nothing`,
     [runStart],
   );
-  // Titles with nothing streaming: kept while someone has saved them or they have awards.
+  // Titles with nothing streaming: kept while someone has saved them, they're well known (notable) or have awards.
   await db.query(
     `update public.titles t set keep_reason = case
-       when exists (select 1 from public.watchlist w where w.title_id = t.id) then 'saved' else 'award' end
+       when exists (select 1 from public.watchlist w where w.title_id = t.id) then 'saved' when t.notable then 'notable' else 'award' end
      where not exists (select 1 from public.availability a where a.title_id = t.id)
-       and (exists (select 1 from public.watchlist w where w.title_id = t.id) or exists (select 1 from public.awards a where a.title_id = t.id))`,
+       and (t.notable or exists (select 1 from public.watchlist w where w.title_id = t.id) or exists (select 1 from public.awards a where a.title_id = t.id))`,
   );
   // The rest stay 90 days after their details were last fetched (old links still open them), then go.
   const dropped = await db.query(
     `delete from public.titles t
      where not exists (select 1 from public.availability a where a.title_id = t.id)
+       and not t.notable
        and not exists (select 1 from public.watchlist w where w.title_id = t.id)
        and not exists (select 1 from public.awards a where a.title_id = t.id)
        and t.synced_at < now() - interval '90 days'`,
@@ -1054,6 +1055,45 @@ async function syncAwards() {
   log(`awards: saved ${list.length}`);
 }
 
+// Well-known titles (500+ votes on TMDB) are kept whether or not they stream, so a big film that is only to rent in
+// Sweden is still in search, on its people's pages and on watchlists. TMDB's discover lists them by vote count; the
+// ones we know are marked notable, the ones we don't are fetched and saved like any title, and marked too.
+// Weekly on Sundays (vote counts only grow), or the Notable titles workflow. NOTABLE_PER_RUN caps a run.
+const NOTABLE_VOTES = 500;
+const NOTABLE_PER_RUN = Number(process.env.NOTABLE_PER_RUN || 6000);
+async function syncNotable() {
+  const want = [];
+  for (const [kind, path] of [['movie', '/discover/movie'], ['tv', '/discover/tv']]) {
+    for (let page = 1; page <= 500; page++) {
+      const r = await tmdb(path, { 'vote_count.gte': NOTABLE_VOTES, sort_by: 'vote_count.desc', include_adult: false, page });
+      for (const t of r?.results ?? []) want.push({ kind, id: t.id });
+      if (!r || page >= (r.total_pages ?? 0)) break;
+    }
+  }
+  const ids = (k) => want.filter((w) => w.kind === k).map((w) => w.id);
+  const mark = async () => db.query(
+    `update public.titles t set notable = true
+     where not t.notable and ((t.kind = 'film' and t.tmdb_id = any($1::int[])) or (t.kind = 'series' and t.tmdb_id = any($2::int[])))`,
+    [ids('movie'), ids('tv')]);
+  const marked = await mark();
+  const have = new Set((await db.query(`select (case kind when 'film' then 'movie' else 'tv' end) || ':' || tmdb_id k from public.titles`)).rows.map((r) => r.k));
+  const missing = want.map((w) => `${w.kind}:${w.id}`).filter((k) => !have.has(k)).slice(0, NOTABLE_PER_RUN);
+  let saved = 0, failed = 0;
+  await pool(missing, 8, async (key) => {
+    try {
+      const t = await fetchTitle(key);
+      if (!t) { failed++; return; }
+      await saveTitle(t);
+      if (++saved % 500 === 0) log(`  notable: ${saved} added`);
+    } catch (e) { failed++; if (failed <= 5) log(`  notable ${key} failed:`, e.message); }
+  });
+  await mark();
+  // the new ones don't stream (or the offers step would have added them): say why they're kept
+  await db.query(`update public.titles t set keep_reason = 'notable'
+    where t.notable and keep_reason = 'streaming' and not exists (select 1 from public.availability a where a.title_id = t.id)`);
+  log(`notable: ${want.length} titles with ${NOTABLE_VOTES}+ votes; ${marked.rowCount} known ones marked, ${saved} added${failed ? `, ${failed} failed` : ''}`);
+}
+
 async function syncSimilar() {
   const idOf = new Map((await db.query(
     'select t.id, t.kind, t.tmdb_id from public.titles t where exists (select 1 from public.availability a where a.title_id = t.id)',
@@ -1103,6 +1143,14 @@ async function main() {
     await syncLetterboxd();
     await syncRecs();
     await syncSimilar();
+    await stamp();
+    await db.end();
+    return;
+  }
+  if (ONLY === 'notable') {
+    log('notable titles only');
+    await syncNotable();
+    await syncAwards().catch((e) => log('awards failed:', e.message)); // the new titles' awards
     await stamp();
     await db.end();
     return;
@@ -1190,6 +1238,7 @@ async function main() {
   if (FULL) await syncTrending().catch((e) => log('trending failed:', e.message));
   if (FULL) await syncRecs().catch((e) => log('recommendations failed:', e.message));
   if (FULL) await syncSimilar().catch((e) => log('similar failed:', e.message));
+  if (FULL && new Date().getUTCDay() === 0) await syncNotable().catch((e) => log('notable failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncAwards().catch((e) => log('awards failed:', e.message));
   if (FULL) await reconcile(runStart);
   // the Start screen's poster wall, made once a night (public.start_wall reads it)
