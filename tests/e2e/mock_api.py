@@ -123,7 +123,8 @@ CASES={'many':MINE2+FR,'one':MINE2[:1]+FR[:1],'friends':FR[:4],'twice':MINE2,'on
 def lbroute(r):
     u=r.request.url
     if 'rpc/letterboxd_me' in u: return r.fulfill(json=[ST['acct']] if ST['acct'] else [])
-    if 'rpc/letterboxd_watched' in u: return r.fulfill(json=[3,6,9,12,45,48] if ST['acct'] else [])
+    # the whole list in one answer (letterboxd_watched_ids); 'lots' is more films than the API's 1,000-row cap
+    if 'rpc/letterboxd_watched' in u: return r.fulfill(json=(list(range(1, 1201)) if ST.get('lots') else [3,6,9,12,45,48]) if ST['acct'] else [])
     if 'rpc/letterboxd_for_title' in u: return r.fulfill(json=CASES[ST['case']])
     if 'functions/v1/letterboxd' in u:
         if r.request.method=='OPTIONS': return r.fulfill(status=204, headers={'access-control-allow-origin':'*','access-control-allow-headers':'*'})

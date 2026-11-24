@@ -39,7 +39,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 11
+export const HOME_VERSION = 12
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']

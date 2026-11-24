@@ -628,3 +628,11 @@ Measured on the database before and after:
   services' own logos: small white versions in `src/assets/marks`, inlined (about 9 KB in all), each sized for about
   the same weight (8–12 px tall, at most 34 wide; logos with small lettering a little larger).
 - Still text: hayu, Cineasterna and Draken Film (no logo files yet).
+
+## Watched lists over 1,000 films (24 Nov)
+
+- The member's watched films came as a row per film (`letterboxd_watched`), and the API sends at most 1,000 rows:
+  Adam has 1,141, so about 140 watched films (The Hobbit among them) weren't hidden. `letterboxd_watched_ids`
+  returns the whole list in one row. The saved list has a new name (`lb-watched:v2`) so a cut copy isn't kept, and
+  Home is rebuilt (HOME_VERSION 12).
+- Anything a member can have more than 1,000 of comes as one row (an array), never a row each.
