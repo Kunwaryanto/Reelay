@@ -1176,12 +1176,14 @@ async function main() {
   });
   log(`title details saved: ${results.filter(Boolean).length} of ${todo.length}`);
   await saveAvailability(found, keys);
-  const saUsed = await syncLeavingDates();
-  await saveLinks(); // what the leaving-dates list carried
+  // From here on each source is on its own: one that is down (Streaming Availability answered 502 on 24 Nov) is
+  // logged and the sync carries on, keeping what that source gave last time.
+  const saUsed = await syncLeavingDates().catch((e) => { log('leaving dates failed:', e.message); return SA_BUDGET; });
+  await saveLinks().catch((e) => log('saving links failed:', e.message)); // what the leaving-dates list carried
   // a failure here never fails the sync: the app falls back to the service's search
   await syncLinks(Math.max(0, Math.min(SA_LINK_REQUESTS, SA_BUDGET - saUsed))).catch((e) => log('links failed:', e.message));
-  await syncImdbRatings();
-  await syncMdblist();
+  await syncImdbRatings().catch((e) => log('IMDb ratings failed:', e.message));
+  await syncMdblist().catch((e) => log('MDBList failed:', e.message));
   await syncOmdb().catch((e) => log('OMDb failed:', e.message));
   // a failure here never fails the sync
   if (FULL) await syncLetterboxd().catch((e) => log('Letterboxd failed:', e.message));
