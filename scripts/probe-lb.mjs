@@ -6,6 +6,6 @@ const db = new pg.Client({ connectionString: cs, ssl: { rejectUnauthorized: fals
 await db.connect();
 const t = await db.query(`select id, tmdb_id, kind, title, year, keep_reason from titles where title ilike '%jfk%' order by year`);
 for (const r of t.rows) console.log('TITLE', JSON.stringify(r));
-const c = await db.query(`select query, fetched_at, jsonb_array_length(results) n, results from tmdb_search_cache where query like 'multi:jfk%'`);
-for (const r of c.rows) console.log('CACHE', r.query, r.fetched_at, r.n, JSON.stringify(r.results.map((x) => [x.kind, x.tmdb_id, x.title, x.year])));
+const c = await db.query(`select query, fetched_at, jsonb_array_length(results) n, results from tmdb_search_cache order by fetched_at desc limit 15`);
+for (const r of c.rows) console.log('CACHE', r.query, r.fetched_at, r.n, JSON.stringify(r.results.slice(0,4).map((x) => [x.kind, x.tmdb_id, x.title, x.year])));
 await db.end();
