@@ -253,7 +253,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
             )
           })}
           {t.availability.length === 0 && (
-            <li className="row-plain"><span className="row-text"><b>Not streaming in Sweden</b><small>{notifying ? 'We’ll let you know when it’s on.' : 'Not on any service here right now.'}</small></span></li>
+            <li className="row-plain"><span className="row-text"><b>Not streaming in Sweden</b>{notifying && <small>We’ll let you know when it’s on.</small>}</span></li>
           )}
         </ul>
       </section>

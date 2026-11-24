@@ -507,7 +507,6 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-text b, .wl-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl-text b { font: var(--type-text); color: var(--text-secondary); }
 .wl-text small { margin-top: 2px; font: var(--type-meta); color: var(--text-faint); }
-.wl-text small.wl-where { color: var(--text-muted); }
 .wl-note { flex: none; font: var(--type-meta); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .wl-none { margin: 24px var(--margin) 0; font: var(--type-body); color: var(--text-faint); }
 .wl-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-top: -4px; }

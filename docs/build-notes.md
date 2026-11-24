@@ -687,3 +687,10 @@ Measured on the database before and after:
 - Decades can be picked several at once in the filter panel ("90s & 2000s"), in Search too. 70s and 60s are their own
   decades now; Older is before 1960.
 - Trending, Hidden gems, Highest rated, Award winners and New on streaming stay fixed lists.
+
+## Not streaming: said once (24 Nov)
+
+- Title page: a title not streaming shows "Not streaming in Sweden" alone (the line under it said the same again);
+  after Notify me, "We'll let you know when it's on." under it.
+- Watchlist › Not on your services: where a title is ends its meta line, as a service does in the other sections
+  ("1968 · 2h 29m · Not streaming", "… · On Viaplay"), instead of a third line.
