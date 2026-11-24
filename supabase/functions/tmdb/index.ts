@@ -116,7 +116,8 @@ Deno.serve(async (req) => {
     // TMDB's films and series for some words, cached a day
     const lookup = async (words: string): Promise<Any[]> => {
       const key = `multi:${words}`;
-      const { data: cached } = await admin.from('tmdb_search_cache').select('results, fetched_at').eq('query', key).maybeSingle();
+      const { data: cached, error: cacheError } = await admin.from('tmdb_search_cache').select('results, fetched_at').eq('query', key).maybeSingle();
+      if (cacheError) console.error('tmdb_search_cache', cacheError.message);
       if (cached && Date.now() - Date.parse(cached.fetched_at) < 24 * 3600 * 1000) return cached.results;
       const r = await tmdb('/search/multi', { query: words, include_adult: 'false', language: 'en-US', page: '1' });
       const list = (r?.results ?? [])
@@ -125,7 +126,8 @@ Deno.serve(async (req) => {
           kind: x.media_type === 'movie' ? 'film' : 'series', tmdb_id: x.id, title: x.title ?? x.name,
           year: yearOf(x.release_date ?? x.first_air_date), poster_path: x.poster_path ?? null, popularity: x.popularity ?? 0,
         }));
-      await admin.from('tmdb_search_cache').upsert({ query: key, results: list, fetched_at: new Date().toISOString() });
+      const { error: saveError } = await admin.from('tmdb_search_cache').upsert({ query: key, results: list, fetched_at: new Date().toISOString() });
+      if (saveError) console.error('tmdb_search_cache', saveError.message);
       return list;
     };
     // the whole text first ("2001 a space odyssey"), then only the name words if that finds nothing ("dune 2021" → "dune")
@@ -133,7 +135,9 @@ Deno.serve(async (req) => {
     if (!found.length && alt.length >= 2 && alt !== q) found = await lookup(alt);
     // the ones the catalogue has are in search already
     const ids = found.map((x) => x.tmdb_id);
-    const { data: have } = ids.length ? await admin.from('titles').select('tmdb_id, kind').in('tmdb_id', ids) : { data: [] };
+    const { data: have, error: haveError } = ids.length ? await admin.from('titles').select('tmdb_id, kind').in('tmdb_id', ids) : { data: [], error: null };
+    // without knowing what the catalogue has, every result could be a repeat: better none than doubles
+    if (haveError) throw new Error(`titles: ${haveError.message}`);
     const known = new Set((have ?? []).map((h: Any) => `${h.kind}:${h.tmdb_id}`));
     const results = found.filter((x) => !known.has(`${x.kind}:${x.tmdb_id}`)).slice(0, 12)
       .map(({ kind, tmdb_id, title, year, poster_path }) => ({ kind, tmdb_id, title, year, poster_path }));
