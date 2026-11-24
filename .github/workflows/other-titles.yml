@@ -1,0 +1,30 @@
+# Every title's other names in Sweden (its Swedish title and the alternative titles listed for Sweden), for
+# search. Run once after they were added (24 Nov); the nightly sync keeps them from then on as it refreshes titles.
+name: Other titles
+on:
+  workflow_dispatch:
+concurrency:
+  group: nightly-sync
+  cancel-in-progress: false
+jobs:
+  aka:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+      SYNC_ONLY: aka
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Find the database address
+        run: |
+          npx supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          echo "POOLER_URL=$(cat supabase/.temp/pooler-url)" >> "$GITHUB_ENV"
+      - run: node scripts/sync/index.mjs
+

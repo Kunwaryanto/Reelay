@@ -198,9 +198,29 @@ function seRating(kind, d) {
   return d.content_ratings?.results?.find((r) => r.iso_3166_1 === 'SE')?.rating || null;
 }
 
+/** Other names a title goes by in Sweden, for search: its Swedish title (TMDB's translation) and the alternative
+ *  titles listed for Sweden, minus any that only repeat its own names (punctuation and case aside). Nordic originals
+ *  are shown by their original title (a trigger in the database); the English one is kept there as title_en. */
+export function akaOf(kind, d) {
+  const film = kind === 'movie';
+  const key = (s) => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const own = new Set([film ? d.title : d.name, film ? d.original_title : d.original_name].map(key));
+  const sv = (d.translations?.translations ?? []).find((t) => t.iso_639_1 === 'sv')?.data;
+  const alt = (film ? d.alternative_titles?.titles : d.alternative_titles?.results) ?? [];
+  const names = [film ? sv?.title : sv?.name, ...alt.filter((a) => a.iso_3166_1 === 'SE').map((a) => a.title)];
+  const out = [];
+  for (const n of names) {
+    const k = key(n);
+    if (!k || own.has(k)) continue;
+    own.add(k);
+    out.push(String(n).trim());
+  }
+  return out.slice(0, 6);
+}
+
 async function fetchTitle(key) {
   const [kind, id] = key.split(':');
-  const append = ['external_ids', 'images', kind === 'movie' ? 'credits,release_dates' : 'aggregate_credits,content_ratings'].join(',');
+  const append = ['external_ids', 'images', 'alternative_titles', 'translations', kind === 'movie' ? 'credits,release_dates' : 'aggregate_credits,content_ratings'].join(',');
   const d = await tmdb(`/${kind}/${id}`, { append_to_response: append, include_image_language: 'en,null' });
   return d ? { kind, d } : null;
 }
@@ -248,6 +268,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     logo?.file_path ?? null,
     d.popularity ?? 0,
     /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? first : null,
+    akaOf(kind, d),
   ];
   // Top 10 cast, plus directors (films) or creators (series).
   const cast = film
@@ -274,11 +295,11 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     const t = await c.query(
       `insert into public.titles (tmdb_id, kind, imdb_id, wikidata_id, title, original_title, year, end_year,
          runtime_min, seasons, last_season_on, overview, genres, original_language, countries, age_rating,
-         poster_path, backdrop_path, logo_path, popularity, released_on, keep_reason, synced_at)
+         poster_path, backdrop_path, logo_path, popularity, released_on, aka, keep_reason, synced_at)
        values ($1,$2,
          case when exists (select 1 from public.titles o where o.imdb_id = $3 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $3 end,
          case when exists (select 1 from public.titles o where o.wikidata_id = $4 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $4 end,
-         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'streaming', now())
+         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'streaming', now())
        on conflict (tmdb_id, kind) do update set
          imdb_id = excluded.imdb_id, wikidata_id = excluded.wikidata_id, title = excluded.title,
          original_title = excluded.original_title, year = excluded.year, end_year = excluded.end_year,
@@ -286,7 +307,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
          overview = excluded.overview, genres = excluded.genres, original_language = excluded.original_language,
          countries = excluded.countries, age_rating = excluded.age_rating, poster_path = excluded.poster_path,
          backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path, popularity = excluded.popularity,
-         released_on = excluded.released_on, synced_at = now()
+         released_on = excluded.released_on, aka = excluded.aka, synced_at = now()
        returning id`,
       row,
     );
@@ -1146,6 +1167,27 @@ async function main() {
     await syncLetterboxd();
     await syncRecs();
     await syncSimilar();
+    await stamp();
+    await db.end();
+    return;
+  }
+  // SYNC_ONLY=aka: once, every title's other names in Sweden (the Other titles workflow); the nightly sync keeps
+  // them from then on as it refreshes titles. Only titles whose names changed are written.
+  if (ONLY === 'aka') {
+    log('other names only');
+    const all = (await db.query(`select id, tmdb_id, kind, aka from public.titles order by popularity desc`)).rows;
+    let done = 0, changed = 0, failed = 0;
+    await pool(all, 8, async (t) => {
+      const kind = t.kind === 'film' ? 'movie' : 'tv';
+      try {
+        const d = await tmdb(`/${kind}/${t.tmdb_id}`, { append_to_response: 'alternative_titles,translations' });
+        if (!d) { failed++; return; }
+        const aka = akaOf(kind, d);
+        if (aka.join('|') !== (t.aka ?? []).join('|')) { await db.query('update public.titles set aka = $2 where id = $1', [t.id, aka]); changed++ }
+      } catch (e) { failed++; if (failed <= 5) log(`  ${kind}:${t.tmdb_id} failed:`, e.message) }
+      if (++done % 2000 === 0) log(`  ${done} of ${all.length} read, ${changed} with new names`);
+    });
+    log(`other names: ${all.length} titles read, ${changed} changed${failed ? `, ${failed} failed` : ''}`);
     await stamp();
     await db.end();
     return;
