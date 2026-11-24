@@ -965,33 +965,44 @@ async function wikidata(query) {
 async function syncAwards() {
   const titles = (await db.query('select id, wikidata_id from public.titles where wikidata_id is not null')).rows;
   const byQ = new Map(titles.map((t) => [t.wikidata_id, Number(t.id)]));
-  const ids = [...byQ.keys()];
+  // 1. The categories: every item whose English name starts with one of the three awards' prefixes. Found through
+  //    the statements that use them (an award that was never given to anything doesn't matter).
+  const cats = new Map();
+  for (const [award, prefix] of AWARDS) {
+    const rows = await wikidata(`SELECT DISTINCT ?award ?label WHERE {
+      { ?x wdt:P166 ?award } UNION { ?x wdt:P1411 ?award }
+      ?award rdfs:label ?label . FILTER(LANG(?label) = "en" && STRSTARTS(?label, "${prefix}"))
+    }`).catch((e) => { log(`  ${award} categories failed:`, e.message); return []; });
+    for (const r of rows) {
+      const category = r.label.value.slice(prefix.length);
+      if (!NOT_AWARDS.test(category)) cats.set(r.award.value.split('/').pop(), { award, category });
+    }
+  }
+  log(`awards: ${cats.size} categories (${AWARDS.map(([a]) => `${a} ${[...cats.values()].filter((c) => c.award === a).length}`).join(', ')})`);
+  // 2. Every win and nomination in those categories, given to a title or to a person for a title ("for work")
   const found = new Map(); // statement -> row
   let failed = 0;
+  const keys = [...cats.keys()];
   const batches = [];
-  for (let i = 0; i < ids.length; i += 300) batches.push(ids.slice(i, i + 300));
+  for (let i = 0; i < keys.length; i += 25) batches.push(keys.slice(i, i + 25));
   await pool(batches, 2, async (batch) => {
-    const rows = await wikidata(`SELECT ?st ?work ?award ?awardLabel ?time ?kind ?personLabel WHERE {
-      VALUES ?work { ${batch.map((q) => `wd:${q}`).join(' ')} }
-      { ?work p:P166 ?st . ?st ps:P166 ?award . BIND("won" AS ?kind) } UNION { ?work p:P1411 ?st . ?st ps:P1411 ?award . BIND("nom" AS ?kind) }
-      UNION { ?person p:P166 ?st . ?st ps:P166 ?award ; pq:P1686 ?work . BIND("won" AS ?kind) }
-      UNION { ?person p:P1411 ?st . ?st ps:P1411 ?award ; pq:P1686 ?work . BIND("nom" AS ?kind) }
-      ?award rdfs:label ?awardLabel . FILTER(LANG(?awardLabel) = "en")
-      FILTER(STRSTARTS(?awardLabel, "Academy Award for ") || STRSTARTS(?awardLabel, "Primetime Emmy Award for ") || STRSTARTS(?awardLabel, "Golden Globe Award for "))
+    const rows = await wikidata(`SELECT ?st ?award ?who ?forWork ?time ?kind ?whoLabel WHERE {
+      VALUES ?award { ${batch.map((q) => `wd:${q}`).join(' ')} }
+      { ?who p:P166 ?st . ?st ps:P166 ?award . BIND("won" AS ?kind) } UNION { ?who p:P1411 ?st . ?st ps:P1411 ?award . BIND("nom" AS ?kind) }
       OPTIONAL { ?st pq:P585 ?time }
-      OPTIONAL { ?person rdfs:label ?personLabel . FILTER(LANG(?personLabel) = "en") }
+      OPTIONAL { ?st pq:P1686 ?forWork . ?who rdfs:label ?whoLabel . FILTER(LANG(?whoLabel) = "en") }
     }`).catch((e) => { failed++; log('  awards batch failed:', e.message); return []; });
     for (const r of rows) {
-      const label = r.awardLabel.value;
-      const [award, prefix] = AWARDS.find(([, p]) => label.startsWith(p));
-      const category = label.slice(prefix.length);
+      const work = (r.forWork ?? r.who).value.split('/').pop();
+      const title_id = byQ.get(work);
       const year = r.time ? Number(r.time.value.slice(0, 4)) : null;
-      if (!year || NOT_AWARDS.test(category)) continue;
+      if (!title_id || !year) continue;
+      const { award, category } = cats.get(r.award.value.split('/').pop());
       const st = r.st.value.split('/').pop();
       found.set(st, {
-        title_id: byQ.get(r.work.value.split('/').pop()), award, year, category,
+        title_id, award, year, category,
         short_category: category.replace(/^Outstanding /, 'Best '), rank: awardRank(category), won: r.kind.value === 'won',
-        person_name: r.personLabel?.value ?? null, ref: st,
+        person_name: r.forWork ? r.whoLabel?.value ?? null : null, ref: st,
       });
     }
   });
