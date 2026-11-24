@@ -1015,7 +1015,8 @@ async function syncAwards() {
       found.set(st, {
         title_id, award, year, category,
         short_category: category.replace(/^Outstanding /, 'Best '), rank: awardRank(category), won: r.kind.value === 'won',
-        person_name: r.forWork ? r.whoLabel?.value ?? null : null, ref: st,
+        // a best film/series award belongs to the title (Wikidata credits it to the producers)
+        person_name: r.forWork && awardRank(category) !== 1 ? r.whoLabel?.value ?? null : null, ref: st,
       });
     }
   });
