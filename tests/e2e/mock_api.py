@@ -75,7 +75,7 @@ def route(r):
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])
         return r.fulfill(json=[{"id":i} for i in hits])
-    if '/rest/v1/titles' in u and 'original_language' in u and '?id=eq.' not in u and '&id=eq.' not in u:
+    if '/rest/v1/titles' in u and ('original_language' in u or r.request.method=='HEAD') and '?id=eq.' not in u and '&id=eq.' not in u:
         from urllib.parse import unquote
         uu=unquote(u)
         def hit(i):
@@ -84,11 +84,13 @@ def route(r):
             return t
         m=re.search(r'id=in\.\(([\d,]+)\)',uu)
         if m: return r.fulfill(json=[hit(int(x)) for x in m.group(1).split(',')][::-1])
-        n=int(re.search(r'limit=(\d+)',uu).group(1))
-        out=[hit(i) for i in range(41,41+min(n,14)) if i%5]
-        if 'kind=eq.film' in uu: out=[t for t in out if t['kind']=='film']
-        if 'kind=eq.series' in uu: out=[t for t in out if t['kind']=='series']
-        return r.fulfill(json=out)
+        # a list made by filters: MODE['pool'] titles in popularity order (14 unless a test asks for more), in pages
+        pool=[hit(i) for i in range(41,41+MODE.get('pool',14)) if i%5]
+        if 'kind=eq.film' in uu: pool=[t for t in pool if t['kind']=='film']
+        if 'kind=eq.series' in uu: pool=[t for t in pool if t['kind']=='series']
+        if r.request.method=='HEAD': return r.fulfill(status=200, headers={'content-range':f'*/{len(pool)}','access-control-expose-headers':'content-range','access-control-allow-origin':'*'}, body='')
+        n=int(re.search(r'limit=(\d+)',uu).group(1)); o=int((re.search(r'offset=(\d+)',uu) or [0,0])[1])
+        return r.fulfill(json=pool[o:o+n])
     if '/rest/v1/titles' in u:
         if 'id=eq.' in u:
             t=card(1); t.update({"original_title":"The Sinner","end_year":2021,"runtime_min":45,"overview":"Detective Harry Ambrose takes on a new case each season, digging into why ordinary people commit shocking crimes. The first season follows a young mother who stabs a stranger on a crowded beach, and has no idea why she did it.","original_language":"en","genres":["Crime","Mystery"],

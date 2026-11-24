@@ -659,3 +659,12 @@ Measured on the database before and after:
   catalogue lacks after them (a moment later). Tapping one saves it (title, cast, crew) and opens its page.
   Not asked with a service ("on Netflix"), "my services" or the drawer's filters.
 - Awards were read again for the new titles: 13,238 wins and nominations, 883 titles with a win.
+
+## Search: filter lists count and load on (24 Nov)
+
+- A search made by filters alone ("90s thriller", "leaving soon") used to load the 60 most popular titles, and the
+  type pills counted those 60 while the filter panel counted the database. Now the pills show the database's totals
+  (All, Films, Series) and the list loads 60 more as it nears the end, so every title is reachable.
+- Pages follow popularity, then id, so a page never repeats or skips a title. The mixed list (All) shows only as far
+  as its own pages reached; Films and Series page on their own.
+- The filter panel's "Show N results" button is stacked above the blur under it, so it stays sharp while the panel opens.

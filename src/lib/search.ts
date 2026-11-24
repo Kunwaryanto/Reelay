@@ -18,6 +18,8 @@ export type Hit = {
   lang: string | null
   runtime: number | null
   seasons: number | null
+  /** TMDB's popularity: the order of a list made by filters (and where its next page starts) */
+  popularity: number
 }
 
 export type Filters = {
@@ -136,12 +138,12 @@ const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
-  genres: string[] | null; original_language: string | null; runtime_min: number | null; seasons: number | null
+  genres: string[] | null; original_language: string | null; runtime_min: number | null; seasons: number | null; popularity?: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
   scores: Score | Score[] | null
 }
 type Score = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,scores(imdb_rating,rt_critics,letterboxd)'
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,popularity,scores(imdb_rating,rt_critics,letterboxd)'
 /** a filter on a score only counts titles that have that score */
 const scored = (f: Filters) => !!(f.minRating || f.minRt || f.minLb)
 
@@ -149,7 +151,7 @@ function toHit(r: Raw): Hit {
   const score = Array.isArray(r.scores) ? r.scores[0] : r.scores
   const av = r.availability ?? []
   return {
-    id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
+    popularity: r.popularity ?? 0, id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
     rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null, seasons: r.seasons ?? null,
@@ -209,12 +211,22 @@ function narrow<Q>(query: Q, f: Filters): Q {
   return q as Q
 }
 
-/** Streaming titles that fit the filters, most popular first. */
-export async function byFilters(f: Filters, max = 60): Promise<Hit[]> {
+/** Streaming titles that fit the filters, most popular first (then by id, so pages follow on exactly). */
+export async function byFilters(f: Filters, max = PAGE, from = 0): Promise<Hit[]> {
   const fields = scored(f) ? FIELDS.replace('scores(', 'scores!inner(') : FIELDS
   const q = narrow(supabase.from('titles').select(`${fields},availability!inner(service_id,leaves_on)`), f)
-  const rows = unwrap(await q.order('popularity', { ascending: false }).limit(max) as never) as Raw[]
+  const rows = unwrap(await q.order('popularity', { ascending: false }).order('id').range(from, from + max - 1) as never) as Raw[]
   return rows.map(toHit)
+}
+/** A list made by filters loads this many titles at a time. */
+export const PAGE = 60
+/** How many streaming titles fit the filters (for the type pills and the filter drawer). */
+function countFiltered(f: Filters): Promise<number | null> {
+  return once(`count:${JSON.stringify(f)}`, async () => {
+    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${scored(f) ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
+    if (res.error) throw new Error(res.error.message)
+    return res.count as number | null
+  })
 }
 
 export type PersonHit = { id: number; name: string; profile_path: string | null; known_for: string | null }
@@ -228,8 +240,16 @@ async function people(text: string): Promise<PersonHit[]> {
   return rows.sort((a, b) => rank(a) - rank(b) || (a.profile_path ? 0 : 1) - (b.profile_path ? 0 : 1)).slice(0, 8)
 }
 
-/** `kind`: the words asked for films or series. That picks the type pill; it isn't a filter chip. */
-export type Found = { hits: Hit[]; tokens: Token[]; people: PersonHit[]; kind?: Hit['kind'] }
+/**
+ * `kind`: the words asked for films or series. That picks the type pill; it isn't a filter chip.
+ * A list made by filters alone has more than it loads at first: `paged` says how many there are of each type and
+ * how far the mixed list has loaded (`mixed`, in popularity order), so the pills show the real numbers and the list
+ * loads on as it is scrolled (`loadMore`).
+ */
+export type Found = {
+  hits: Hit[]; tokens: Token[]; people: PersonHit[]; kind?: Hit['kind']
+  paged?: { f: Filters; totals: { all: number; film: number; series: number }; mixed: number }
+}
 
 // Lookups made again within a few minutes (the same words with other filters, counts in the filter drawer) are reused.
 const memo = new Map<string, Promise<unknown>>()
@@ -284,11 +304,38 @@ export async function search(typed: string, removed: string[], extra: Filters = 
   const base = { tokens: p.tokens, people: p.people, kind: p.kind }
   if (p.pool) return { ...base, hits: p.pool.filter((h) => passes(h, f)) }
   if (!some(f) && !p.kind) return { ...base, hits: [] }
-  if (!p.kind) return { ...base, hits: await byFilters(f) }
+  const totals = Promise.all([countFiltered(f), countFiltered({ ...f, kind: 'film' }), countFiltered({ ...f, kind: 'series' })])
+    .then(([all, film, series]) => ({ all: all ?? 0, film: film ?? 0, series: series ?? 0 }))
+  if (!p.kind) {
+    const [hits, t] = await Promise.all([byFilters(f), totals])
+    return { ...base, hits, paged: { f, totals: t, mixed: hits.length } }
+  }
   // enough of the kind that was asked for, plus the mixed list so the other pills have something too
-  const [asked, mixed] = await Promise.all([byFilters({ ...f, kind: p.kind }), byFilters(f)])
+  const [asked, mixed, t] = await Promise.all([byFilters({ ...f, kind: p.kind }), byFilters(f), totals])
   const seen = new Set(asked.map((h) => h.id))
-  return { ...base, hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))] }
+  return { ...base, hits: [...asked, ...mixed.filter((h) => !seen.has(h.id))], paged: { f, totals: t, mixed: mixed.length } }
+}
+
+/** The next page of a list made by filters, for the type pill showing ('all' pages the mixed list). */
+export async function loadMore(found: Found, kind: 'all' | Hit['kind']): Promise<Found> {
+  const p = found.paged
+  if (!p) return found
+  // the titles of one type that are loaded are always the most popular of that type, so the next page starts after them
+  const from = kind === 'all' ? p.mixed : found.hits.filter((h) => h.kind === kind).length
+  const got = await byFilters(kind === 'all' ? p.f : { ...p.f, kind }, PAGE, from)
+  const have = new Set(found.hits.map((h) => h.id))
+  return { ...found, hits: [...found.hits, ...got.filter((h) => !have.has(h.id))], paged: { ...p, mixed: kind === 'all' ? p.mixed + got.length : p.mixed } }
+}
+
+/** The loaded titles a type pill shows, in popularity order. The mixed list stops where its own pages reached:
+ *  titles of one type loaded beyond that wait until the mixed list gets there (so nothing is slotted in above). */
+export function pagedList(found: Found, kind: 'all' | Hit['kind']): Hit[] {
+  const p = found.paged!
+  const byPop = (a: Hit, b: Hit) => b.popularity - a.popularity || a.id - b.id
+  if (kind !== 'all') return found.hits.filter((h) => h.kind === kind).sort(byPop)
+  // everything above the mixed list's frontier is loaded (its pages are the most popular titles of all), so its first
+  // `mixed` titles in popularity order are exactly what it has reached
+  return [...found.hits].sort(byPop).slice(0, p.mixed >= p.totals.all ? undefined : p.mixed)
 }
 
 /**
@@ -301,11 +348,7 @@ export async function countWith(typed: string, removed: string[], extra: Filters
   const f = { ...combine(p.f, extra), ...(kind ? { kind } : {}) }
   if (p.pool) return p.pool.filter((h) => passes(h, f)).length
   if (!some(combine(p.f, extra)) && !p.kind) return 0
-  return once(`count:${JSON.stringify(f)}`, async () => {
-    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${scored(f) ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
-    if (res.error) throw new Error(res.error.message)
-    return res.count as number | null
-  })
+  return countFiltered(f)
 }
 
 /** The genres and languages the filter drawer offers. */

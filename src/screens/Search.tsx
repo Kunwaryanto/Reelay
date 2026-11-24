@@ -14,7 +14,7 @@ import { FRESH, useQuery } from '../lib/query'
 import {
   addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
-  addFromTmdb, searchTmdb, type TmdbHit,
+  addFromTmdb, searchTmdb, loadMore, pagedList, type TmdbHit,
 } from '../lib/search'
 import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
 import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
@@ -90,12 +90,38 @@ function useSearch(typed: string, removed: string[], extra: Filters) {
     return () => window.removeEventListener('online', online)
   }, [])
 
+  // a list made by filters loads on as it is scrolled: one page at a time
+  const loading = useRef(false)
+  const more = (kind: 'all' | Hit['kind']) => {
+    const now = ready ?? (key && state.key === key ? state.found : null)
+    if (!now?.paged || loading.current) return
+    loading.current = true
+    loadMore(now, kind).then((next) => { keep(key, next); setState({ key, found: next, error: false }) }, () => {}).finally(() => { loading.current = false })
+  }
+
   return {
     found: ready ?? (key ? state.found : null),
     error: !ready && !!key && state.key === key && state.error,
     waiting: !ready && !!key && state.key !== key,
     retry: () => setAgain((n) => n + 1),
+    more,
   }
+}
+
+/** Loads the next page when the end of the list comes near (a screen ahead). */
+function LoadOn({ onNear }: { onNear: () => void }) {
+  const el = useRef<HTMLLIElement>(null)
+  const near = useRef(onNear)
+  near.current = onNear
+  useEffect(() => {
+    const node = el.current
+    const root = node?.closest('.page') ?? null
+    if (!node) return
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) near.current() }, { root, rootMargin: '0px 0px 900px 0px' })
+    io.observe(node)
+    return () => io.disconnect()
+  }, [])
+  return <li ref={el} className="s-loadon" aria-hidden="true" />
 }
 
 /** Everything else on TMDB: asked once the catalogue's own answer is on screen, for a plain name search (no filters,
@@ -229,7 +255,7 @@ export default function Search() {
   // chips from the words that the drawer has replaced
   const off = useMemo(() => [...removed, ...parseQuery(q).tokens.filter((t) => { const s = slot(t.key); return s !== null && extra[s] !== undefined }).map((t) => t.key)], [q, removed, extra])
   const xf = useMemo(() => toFilters(extra, myOnly ? picked : null, hiding ? seenIds : null), [extra, myOnly, picked, hiding, seenIds])
-  const { found, error, waiting, retry } = useSearch(q, off, xf)
+  const { found, error, waiting, retry, more: loadNext } = useSearch(q, off, xf)
   const hasQ = q.trim().length > 0
   // "films" or "series" in the words picks that pill (once per result, so All can still be tapped after)
   useEffect(() => { if (found?.kind) setKind(found.kind) }, [found])
@@ -244,8 +270,13 @@ export default function Search() {
   const all = useMemo(() => (hiding ? (found?.hits ?? []).filter((h) => !seen.has(h.id)) : found?.hits ?? []), [found, hiding, seen])
   const mine = all
   const folks = found?.people ?? []
-  const counts = { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
-  const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || h.kind === kind)
+  // a list made by filters counts what the database has, and shows what has loaded so far (it loads on as it scrolls)
+  const paged = found?.paged
+  const counts = paged
+    ? { all: paged.totals.all + folks.length, people: folks.length, series: paged.totals.series, film: paged.totals.film }
+    : { all: mine.length + folks.length, people: folks.length, series: mine.filter((h) => h.kind === 'series').length, film: mine.filter((h) => h.kind === 'film').length }
+  const shown = kind === 'people' ? [] : paged && found ? pagedList(found, kind) : mine.filter((h) => kind === 'all' || h.kind === kind)
+  const unloaded = !!paged && kind !== 'people' && shown.length < (kind === 'all' ? paged.totals.all : paged.totals[kind])
   const shownPeople = kind === 'people' ? folks : kind === 'all' ? folks.slice(0, 2) : []
   const list = sort === 'best' ? shown : [...shown].sort((a, b) => (sort === 'rated' ? (b.rating ?? 0) - (a.rating ?? 0) : (b.year ?? 0) - (a.year ?? 0)))
   // everything else on TMDB, after the catalogue's own answer, for a plain name search
@@ -497,6 +528,7 @@ export default function Search() {
               {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
               <ul className="s-results" key={kind} data-waiting={waiting}>
                 {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} before={() => input.current?.blur()} />)}
+                {unloaded && <LoadOn key={`${kind}:${shown.length}`} onNear={() => loadNext(kind)} />}
                 {extraHits.map((h) => <TmdbRow key={`${h.kind}:${h.tmdb_id}`} h={h} onOpen={(id) => { input.current?.blur(); remember({ t: 'title', id, text: h.title, sub: [h.year, h.kind === 'film' ? 'Film' : 'Series'].filter(Boolean).join(' · '), poster_path: h.poster_path }); push(paths.title(id)) }} />)}
               </ul>
 

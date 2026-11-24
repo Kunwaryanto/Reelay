@@ -950,12 +950,13 @@ html[data-runway] .tabbar { touch-action: none; }
 .fd-opt[aria-disabled='true'] { color: var(--text-faint); cursor: default; }
 /* Under the button: a soft blur that deepens downward and a fade into the sheet's colour, the way pages go under
    the tab bar. No line. Touches pass through it to the list. */
-.fd-fade { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--fd-foot) + 28px); pointer-events: none; }
+.fd-fade { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: calc(var(--fd-foot) + 28px); pointer-events: none; }
 .fd-fade i { position: absolute; inset: 0; }
 .fd-fade i:nth-child(1) { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); -webkit-mask-image: linear-gradient(transparent 0, #000 50%); mask-image: linear-gradient(transparent 0, #000 50%); }
 .fd-fade i:nth-child(2) { -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); -webkit-mask-image: linear-gradient(transparent 35%, #000 85%); mask-image: linear-gradient(transparent 35%, #000 85%); }
 .fd-fade i:nth-child(3) { background: linear-gradient(rgb(20 20 20 / 0) 0, rgb(20 20 20 / 0.55) 45%, var(--sheet) 92%); }
-.fd-action { position: absolute; left: 0; right: 0; bottom: calc(20px + var(--safe-bottom)); margin: 0; pointer-events: none; }
+/* the button always above the blur under it: while the sheet moves, Safari could draw the blur over it */
+.fd-action { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(20px + var(--safe-bottom)); margin: 0; pointer-events: none; }
 .fd-action .btn { pointer-events: auto; }
 /* The label is plain text inside the button (a flex box would drop the spaces around the number). Under it, in the
    same grid cell, an unseen "Show 000 films" keeps the button at least that wide, so counts up to three digits never
