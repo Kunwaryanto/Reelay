@@ -8,7 +8,7 @@ import {
 import { SERVICE_NAME, leavingFor, type Card } from '../lib/catalogue'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { useWatched } from '../lib/letterboxd'
-import { ALL_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
+import { ALL_ROWS, SERVER_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { paths } from '../lib/routes'
 import { categoryPage, coverPictures, coverSrc, coversPage, explorePage, fits, gridDef, gridPage, sectionCats, sectionPage, usePageQuery, warmPage } from '../lib/pages'
 import { ALL_TITLES, exploreCards, exploreCount, exploreKey, exploreOf, exploreTitle, type ExploreStart } from '../lib/explore'
@@ -333,7 +333,7 @@ function Explore({ start }: { start: ExploreStart }) {
       </main>
       {pull.indicator}
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={d} services={ctx.picked.map((s) => SERVICE_NAME[s] ?? s)}
-        noun={pick === 'film' ? ['film', 'films'] : pick === 'series' ? ['series', 'series'] : ['title', 'titles']} sorts={sorts} firstSort={firstSort} rows={ALL_ROWS}
+        noun={pick === 'film' ? ['film', 'films'] : pick === 'series' ? ['series', 'series'] : ['title', 'titles']} sorts={sorts} firstSort={firstSort} rows={SERVER_ROWS}
         countOf={countOf} apply={(x) => { setD(x); setSheet(false) }} />
     </>
   )

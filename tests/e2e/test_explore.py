@@ -55,3 +55,14 @@ def test_all_titles_from_browse_counts_and_loads_on(app):
 def test_a_list_that_is_not_filters_stays_fixed(app):
     pg = app(); pg.goto(m.B + '/browse/g/trending/list'); pg.wait_for_timeout(2500)
     assert heading(pg) == 'Trending' and chips(pg) == []
+
+def test_country_from_the_drawer(app):
+    pg = app(); pg.goto(m.B + '/browse/titles'); pg.wait_for_timeout(2500)
+    pg.evaluate(f"({TOP}).querySelector('.wl-tune').click()"); pg.wait_for_timeout(600)
+    pg.click('dialog[open] [data-row=country]'); pg.wait_for_timeout(600)
+    pg.evaluate("[...document.querySelectorAll('dialog[open] .fd-opt')].find(b => b.textContent.startsWith('Sweden')).click()"); pg.wait_for_timeout(300)
+    pg.evaluate("document.querySelector('dialog[open] .fd-action button').click()"); pg.wait_for_timeout(1200)
+    assert chips(pg) == ['From Sweden'], chips(pg)
+    assert heading(pg) == 'Sweden', heading(pg)
+    drop(pg, 'From Sweden')
+    assert heading(pg) == 'All titles'

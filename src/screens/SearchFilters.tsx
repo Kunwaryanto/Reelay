@@ -25,8 +25,14 @@ export const SOURCES: { key: Source; name: string; short: string; steps: number[
 const ratingNote = (d: Draft) => SOURCES.filter((s) => d[s.key]).map((s) => `${s.short} ${s.show(d[s.key])}`).join(', ')
 
 export const decadeName = (d: number) => DECADES.find((x) => x[1] === d)?.[0] ?? ''
-const COUNTRY: Record<string, string> = { SE: 'Sweden', KR: 'South Korea', ES: 'Spain', GB: 'the UK', DK: 'Denmark', NO: 'Norway', JP: 'Japan', FR: 'France', US: 'the US' }
-export const countryName = (code: string) => COUNTRY[code] ?? code
+/** Where a title was made (TMDB's production countries): the drawer's Country options, in this order. */
+export const COUNTRIES: [string, string][] = [
+  ['SE', 'Sweden'], ['DK', 'Denmark'], ['NO', 'Norway'], ['FI', 'Finland'], ['GB', 'UK'], ['US', 'US'], ['FR', 'France'], ['DE', 'Germany'],
+  ['ES', 'Spain'], ['IT', 'Italy'], ['KR', 'South Korea'], ['JP', 'Japan'], ['IN', 'India'], ['AU', 'Australia'], ['CA', 'Canada'],
+]
+const COUNTRY = Object.fromEntries(COUNTRIES)
+/** "Sweden", "the UK": as it reads after "From". */
+export const countryName = (code: string) => (code === 'GB' || code === 'US' ? `the ${COUNTRY[code]}` : COUNTRY[code] ?? code)
 export const lengthName = (l: Len) => LENGTHS.find((x) => x[1] === l)?.[0] ?? ''
 export const langName = (code: string) => LANG_OPTIONS.find((x) => x[0] === code)?.[1] ?? code
 export const sortName = (s: Sort) => SORTS.find((x) => x[0] === s)![1]
@@ -89,10 +95,13 @@ function quietFocus(el: HTMLElement | null | undefined) {
   el.focus({ preventScroll: true })
 }
 
-type Sub = 'sort' | 'genres' | 'decade' | 'rating' | 'length' | 'lang'
+type Sub = 'sort' | 'genres' | 'decade' | 'rating' | 'length' | 'lang' | 'country'
 export type FilterRow = Exclude<Sub, 'sort'>
+/** The rows a list filtered on the phone can offer (its titles don't carry their countries). */
 export const ALL_ROWS: FilterRow[] = ['genres', 'decade', 'rating', 'length', 'lang']
-const TITLES: Record<Sub, string> = { sort: 'Sort by', genres: 'Genre', decade: 'Released', rating: 'Ratings', length: 'Length', lang: 'Original language' }
+/** Lists filtered by the database (Search, Explore) can also filter by country. */
+export const SERVER_ROWS: FilterRow[] = ['genres', 'decade', 'rating', 'length', 'lang', 'country']
+const TITLES: Record<Sub, string> = { sort: 'Sort by', genres: 'Genre', decade: 'Released', rating: 'Ratings', length: 'Length', lang: 'Original language', country: 'Country' }
 
 export function FilterDrawer({ open, onClose, init, yearsNote = '', services, noun, countOf, apply, sorts = SORTS, firstSort = 'best', rows: shownRows = ALL_ROWS }: {
   open: boolean
@@ -137,13 +146,14 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
   const notes: Record<Exclude<Sub, 'sort'>, string> = {
     genres: d.genres.join(', '), decade: d.decades.length ? decadeNames(d.decades).join(', ') : yearsNote,
     rating: ratingNote(d), length: d.length ? lengthName(d.length) : '', lang: d.lang ? langName(d.lang) : '',
+    country: d.country ? COUNTRY[d.country] ?? d.country : '',
   }
-  const set_ = { genres: d.genres.length > 0, decade: d.decades.length > 0, rating: d.rating > 0 || d.rt > 0 || d.lb > 0, length: d.length !== null, lang: d.lang !== null, sort: d.sort !== firstSort }
-  const any = Object.values(set_).some(Boolean) || d.mine || d.hide || !!d.country || !!d.leaving || !!d.since
+  const set_ = { genres: d.genres.length > 0, decade: d.decades.length > 0, rating: d.rating > 0 || d.rt > 0 || d.lb > 0, length: d.length !== null, lang: d.lang !== null, country: !!d.country, sort: d.sort !== firstSort }
+  const any = Object.values(set_).some(Boolean) || d.mine || d.hide || !!d.leaving || !!d.since
   const seen = useWatched()
   const clear: Record<Sub, () => void> = {
     sort: () => set({ sort: firstSort }), genres: () => set({ genres: [] }), decade: () => set({ decades: [] }),
-    rating: () => set({ rating: 0, rt: 0, lb: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }),
+    rating: () => set({ rating: 0, rt: 0, lb: 0 }), length: () => set({ length: null }), lang: () => set({ lang: null }), country: () => set({ country: null }),
   }
   const shown = sub ?? last
 
@@ -174,6 +184,10 @@ export function FilterDrawer({ open, onClose, init, yearsNote = '', services, no
       case 'lang': return [
         <Option key="any" label="Any language" role="radio" checked={d.lang === null} pick={() => set({ lang: null })} count={count({ lang: null })} />,
         ...LANG_OPTIONS.map(([code, label]) => <Option key={code} label={label} role="radio" checked={d.lang === code} pick={() => set({ lang: code })} count={count({ lang: code })} />),
+      ]
+      case 'country': return [
+        <Option key="any" label="Any country" role="radio" checked={!d.country} pick={() => set({ country: null })} count={count({ country: null })} />,
+        ...COUNTRIES.map(([code, label]) => <Option key={code} label={label} role="radio" checked={d.country === code} pick={() => set({ country: code })} count={count({ country: code })} />),
       ]
     }
   }

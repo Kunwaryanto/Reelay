@@ -694,3 +694,10 @@ Measured on the database before and after:
   after Notify me, "We'll let you know when it's on." under it.
 - Watchlist › Not on your services: where a title is ends its meta line, as a service does in the other sections
   ("1968 · 2h 29m · Not streaming", "… · On Viaplay"), instead of a third line.
+
+## Country in the filters (24 Nov)
+
+- The filter panel has a Country row (Sweden, Denmark, Norway, Finland, UK, US, France, Germany, Spain, Italy,
+  South Korea, Japan, India, Australia, Canada) in Search and on Explore pages; the chip reads "From Sweden".
+  Lists filtered on the phone (the fixed Browse lists, Watchlist) don't offer it: their titles don't carry countries.
+- Name searches now also apply decades and country to their results.

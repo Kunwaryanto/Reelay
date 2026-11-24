@@ -20,6 +20,8 @@ export type Hit = {
   seasons: number | null
   /** TMDB's popularity: the order of a list made by filters (and where its next page starts) */
   popularity: number
+  /** where it was made (ISO codes) */
+  countries: string[]
 }
 
 export type Filters = {
@@ -142,12 +144,12 @@ const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 type Raw = {
   id: number; kind: Hit['kind']; title: string; year: number | null; poster_path: string | null
-  genres: string[] | null; original_language: string | null; runtime_min: number | null; seasons: number | null; popularity?: number | null
+  genres: string[] | null; original_language: string | null; countries?: string[] | null; runtime_min: number | null; seasons: number | null; popularity?: number | null
   availability: { service_id: string; leaves_on: string | null }[] | null
   scores: Score | Score[] | null
 }
 type Score = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
-const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,popularity,scores(imdb_rating,rt_critics,letterboxd)'
+const FIELDS = 'id,kind,title,year,poster_path,genres,original_language,countries,runtime_min,seasons,popularity,scores(imdb_rating,rt_critics,letterboxd)'
 /** a filter on a score only counts titles that have that score */
 const scored = (f: Filters) => !!(f.minRating || f.minRt || f.minLb)
 
@@ -155,7 +157,7 @@ function toHit(r: Raw): Hit {
   const score = Array.isArray(r.scores) ? r.scores[0] : r.scores
   const av = r.availability ?? []
   return {
-    popularity: r.popularity ?? 0, id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
+    popularity: r.popularity ?? 0, countries: r.countries ?? [], id: r.id, kind: r.kind, title: r.title, year: r.year, poster_path: r.poster_path,
     services: [...new Set(av.map((a) => a.service_id))],
     leaves: av.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? null,
     rating: score?.imdb_rating ?? null, rt: score?.rt_critics ?? null, lb: score?.letterboxd ?? null, genres: r.genres ?? [], lang: r.original_language, runtime: r.runtime_min ?? null, seasons: r.seasons ?? null,
@@ -170,6 +172,8 @@ function passes(h: Hit, f: Filters): boolean {
   if (f.to !== undefined && (h.year === null || h.year > f.to)) return false
   if (f.genres && !f.genres.some((g) => h.genres.includes(g))) return false
   if (f.lang && h.lang !== f.lang) return false
+  if (f.country && !h.countries.includes(f.country)) return false
+  if (f.decades?.length && !f.decades.some(([a, b]) => h.year !== null && (a === undefined || h.year >= a) && h.year <= b)) return false
   if (f.leaving && !(h.leaves && h.leaves <= inDays(30))) return false
   if (f.services && !h.services.some((s) => f.services!.includes(s))) return false
   if (f.minRating && !(h.rating !== null && h.rating >= f.minRating)) return false
