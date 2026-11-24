@@ -22,3 +22,12 @@ def test_hero_meta_is_service_length_genre(app):
     for t in metas:
         assert 'Film' not in t.split(' · ') and 'Series' not in t.split(' · ') or not re.search(r'\d', t), t
         assert re.search(r'\d+h( \d+m)?|\d+m|\d+ seasons?|Film|Series', t), t
+
+
+def test_poster_corner_shows_the_service_logo(app):
+    pg = app()
+    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    marks = pg.evaluate(f"[...({TOP}).querySelectorAll('.cover-mark')].map(e => [e.querySelector('img') ? 'img' : 'text', e.textContent])")
+    assert marks
+    # every service in the mock has a logo now: no names written out
+    assert all(kind == 'img' for kind, _ in marks), marks

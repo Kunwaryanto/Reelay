@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type 
 import { supabase } from '../lib/supabase'
 import { useQuery } from '../lib/query'
 import { standalone } from '../lib/runway'
+import { INVITE_TOKEN } from '../lib/routes'
 import { Button, GlassButton, Icon, IconButton, PosterWall, QuietButton, Sheet, Spinner, Wordmark } from '../ui'
 
 const LAST_EMAIL = 'reelay:last-email'
@@ -51,8 +52,11 @@ const CODE_ERR: Record<Exclude<CodeErr, ''>, string> = {
 }
 
 export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
-  const token = useRef(location.pathname.startsWith('/i/') ? location.pathname.slice(3).replace(/\/$/, '') : '').current
+  const token = INVITE_TOKEN
   const [invite, setInvite] = useState<Invite>(token ? 'checking' : 'none')
+  // An invite link says Join from the first frame, also while it is being checked or if the check couldn't be
+  // made: sending the email redeems it, and the server says then if it no longer works.
+  const joining = !!token && invite !== 'expired' && invite !== 'used'
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('email')
   // The email you last signed in with on this phone, filled in for you (kept on the phone only).
@@ -128,7 +132,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     setSending(true)
     setSendErr('')
     try {
-      if (invite === 'valid') {
+      if (joining) {
         const r = await redeem({ token, email: address })
         if (r.status !== 'created' && r.status !== 'existing') {
           if (r.status === 'expired' || r.status === 'used') { setInvite(r.status); setStep('gone'); return }
@@ -162,7 +166,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
       try { localStorage.setItem(LAST_EMAIL, email.trim()) } catch { /* private mode */ }
       setOk(true); setCodeErr('')
       // joined from an invite link in a browser tab: Safari and the Home Screen app don't share sign-in, so show how to add it
-      if (iosTab && invite === 'valid') setTimeout(() => { setJoined(true); setOpen(false) }, 700)
+      if (iosTab && joining) setTimeout(() => { setJoined(true); setOpen(false) }, 700)
       else setTimeout(onSignedIn, 700)
       return
     }
@@ -200,7 +204,6 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     return true
   }
 
-  const joining = invite === 'valid'
   const mm = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
   const shakeClass = shake ? (shake % 2 ? 'a' : 'b') : ''
 
@@ -229,7 +232,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
         </main>
       ) : (
         <main className="start-ui" data-ready={ready}>
-          <GlassButton onClick={openSheet} disabled={invite === 'checking'}>{joining ? 'Join Reelay' : 'Sign in'}</GlassButton>
+          <GlassButton onClick={openSheet}>{joining ? 'Join Reelay' : 'Sign in'}</GlassButton>
           <p>{joining ? 'You’re invited.' : 'Reelay is invite only.'}</p>
         </main>
       )}
