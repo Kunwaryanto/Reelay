@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { paths } from '../lib/routes'
 import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Award, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -127,42 +127,62 @@ function Awards({ awards }: { awards: Award[] }) {
     }
     return [...by.entries()]
   }, [groups])
-  const more = groups.length > AWARDS_SHOWN
+  const shown = groups.slice(0, AWARDS_SHOWN)
+  // a line cut short on this phone's width (measured, and again when the width changes)
+  const list = useRef<HTMLUListElement>(null)
+  const [cut, setCut] = useState(false)
+  useLayoutEffect(() => {
+    const ul = list.current
+    if (!ul) return
+    const measure = () => setCut([...ul.querySelectorAll('small')].some((el) => el.scrollWidth > el.clientWidth + 1))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(ul)
+    return () => ro.disconnect()
+  }, [shown.length])
+  // anything the page doesn't show (more awards, "+N" names, a cut line): View all, and every row opens the sheet
+  const hidden = groups.length > AWARDS_SHOWN || shown.some((g) => g.people.length > 1) || cut
+  const sheetList = useRef<HTMLDivElement>(null)
+  const openAt = (key?: string) => {
+    setOpen(true)
+    if (key) setTimeout(() => sheetList.current?.querySelector(`[data-award="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'center' }), 60)
+  }
   const wins = groups.filter((g) => g.won).length
+  const line = (g: AwardGroup) => (
+    <>
+      <Laurel size={16} won={g.won} />
+      <span className="row-text"><b>{g.won ? 'Won' : 'Nominated'} · {g.award} {g.year}</b><small>{[g.category, firstOf(g.people)].filter(Boolean).join(' · ')}</small></span>
+    </>
+  )
   return (
     <section className="block awards">
-      {more ? <SectionHeader title="Awards" viewAll={() => setOpen(true)} /> : <h2 className="block-title">Awards</h2>}
-      <ul className="rows">
-        {groups.slice(0, AWARDS_SHOWN).map((g) => (
-          <li key={g.key} className="row-plain">
-            <Laurel size={16} won={g.won} />
-            <span className="row-text"><b>{g.award} {g.year}</b><small>{[g.won ? 'Won' : 'Nominated', g.category, firstOf(g.people)].filter(Boolean).join(' · ')}</small></span>
-          </li>
-        ))}
+      {hidden ? <SectionHeader title="Awards" viewAll={() => openAt()} /> : <h2 className="block-title">Awards</h2>}
+      <ul className="rows" ref={list}>
+        {shown.map((g) => (hidden
+          ? <li key={g.key}><button type="button" onClick={() => openAt(g.key)}>{line(g)}</button></li>
+          : <li key={g.key} className="row-plain">{line(g)}</li>))}
       </ul>
-      {more && (
-        <Sheet open={open} onClose={() => setOpen(false)} label="Awards">
-          <div className="lb-head">
-            <h2>Awards</h2>
-            <span className="aw-sum">{wins > 0 ? `${wins} ${wins === 1 ? 'win' : 'wins'} · ` : ''}{groups.length} in all</span>
-          </div>
-          <div className="lb-list noscroll">
-            {ceremonies.map(([name, gs]) => (
-              <div key={name}>
-                <h3>{name}</h3>
-                <ul className="rows">
-                  {gs.map((g) => (
-                    <li key={g.key} className="row-plain">
-                      <Laurel size={16} won={g.won} />
-                      <span className="row-text"><b>{g.category}</b><small>{[g.won ? 'Won' : 'Nominated', g.people.join(', ')].filter(Boolean).join(' · ')}</small></span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </Sheet>
-      )}
+      <Sheet open={open} onClose={() => setOpen(false)} label="Awards">
+        <div className="lb-head">
+          <h2>Awards</h2>
+          <span className="aw-sum">{wins > 0 ? `${wins} ${wins === 1 ? 'win' : 'wins'} · ` : ''}{groups.length} in all</span>
+        </div>
+        <div className="lb-list noscroll" ref={sheetList}>
+          {ceremonies.map(([name, gs]) => (
+            <div key={name}>
+              <h3>{name}</h3>
+              <ul className="rows">
+                {gs.map((g) => (
+                  <li key={g.key} className="row-plain" data-award={g.key}>
+                    <Laurel size={16} won={g.won} />
+                    <span className="row-text"><b>{g.category}</b><small>{[g.won ? 'Won' : 'Nominated', g.people.join(', ')].filter(Boolean).join(' · ')}</small></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Sheet>
     </section>
   )
 }

@@ -707,3 +707,10 @@ Measured on the database before and after:
 - The Leaving soon suggestion (before typing) reads "On your services" for a member with services: tapping it
   searches with My services on (a chip that can be taken off), and its poster is the top title on their services.
   The other suggestions turn My services off.
+
+## Title page awards: one line, the sheet for the rest (24 Nov)
+
+- Each row: "Won · Oscars 1969" (or Nominated), then the category and the first name ("Harry Lange +2") on one line,
+  cut with … when it doesn't fit.
+- When the page hides anything (more than four awards, a "+N", or a line cut on this phone's width), the heading has
+  View all and every row opens the sheet at that award. When nothing is hidden, the rows are plain.
