@@ -110,22 +110,27 @@ Deno.serve(async (req) => {
     }
 
     // ---- search ----
-    const q = String(body.q ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    const clean = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 100);
+    const q = clean(body.q), alt = clean(body.alt);
     if (q.length < 2) return reply({ results: [] }, 200, origin);
-    const key = `multi:${q.toLowerCase()}`;
-    const { data: cached } = await admin.from('tmdb_search_cache').select('results, fetched_at').eq('query', key).maybeSingle();
-    let found: Any[];
-    if (cached && Date.now() - Date.parse(cached.fetched_at) < 24 * 3600 * 1000) found = cached.results;
-    else {
-      const r = await tmdb('/search/multi', { query: q, include_adult: 'false', language: 'en-US', page: '1' });
-      found = (r?.results ?? [])
+    // TMDB's films and series for some words, cached a day
+    const lookup = async (words: string): Promise<Any[]> => {
+      const key = `multi:${words}`;
+      const { data: cached } = await admin.from('tmdb_search_cache').select('results, fetched_at').eq('query', key).maybeSingle();
+      if (cached && Date.now() - Date.parse(cached.fetched_at) < 24 * 3600 * 1000) return cached.results;
+      const r = await tmdb('/search/multi', { query: words, include_adult: 'false', language: 'en-US', page: '1' });
+      const list = (r?.results ?? [])
         .filter((x: Any) => (x.media_type === 'movie' || x.media_type === 'tv') && (x.title || x.name) && (x.poster_path || (x.vote_count ?? 0) >= 5))
         .map((x: Any) => ({
           kind: x.media_type === 'movie' ? 'film' : 'series', tmdb_id: x.id, title: x.title ?? x.name,
           year: yearOf(x.release_date ?? x.first_air_date), poster_path: x.poster_path ?? null, popularity: x.popularity ?? 0,
         }));
-      await admin.from('tmdb_search_cache').upsert({ query: key, results: found, fetched_at: new Date().toISOString() });
-    }
+      await admin.from('tmdb_search_cache').upsert({ query: key, results: list, fetched_at: new Date().toISOString() });
+      return list;
+    };
+    // the whole text first ("2001 a space odyssey"), then only the name words if that finds nothing ("dune 2021" → "dune")
+    let found = await lookup(q);
+    if (!found.length && alt.length >= 2 && alt !== q) found = await lookup(alt);
     // the ones the catalogue has are in search already
     const ids = found.map((x) => x.tmdb_id);
     const { data: have } = ids.length ? await admin.from('titles').select('tmdb_id, kind').in('tmdb_id', ids) : { data: [] };
