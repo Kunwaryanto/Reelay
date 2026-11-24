@@ -644,3 +644,7 @@ Measured on the database before and after:
   so those stayed unmatched and weren't hidden. `letterboxd_resolve` now compares letters and digits only
   (`letterboxd_key`), year within one, exact match first. Re-run for everyone on 24 Nov: Adam +15, Lukas +11.
 - Films still unmatched aren't in the catalogue (not streaming here); the nightly sync matches them when they arrive.
+
+- (24 Nov, later) The logos are sized by visible ink, not by their box: each shows about the same amount of logo
+  (`MARK_SHAPE` holds each file's ratio and share of ink), 7–13 px tall, at most 36 wide. Thin logos (Disney+,
+  TriArt Play, Prime Video) grew, solid ones (HBO Max, Crunchyroll) calmed down.
