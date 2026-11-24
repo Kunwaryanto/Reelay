@@ -1,6 +1,6 @@
 // Browse: the categories (genres, lists, decades, countries), and the lookups behind their pages.
 // A category is a set of filters over streaming titles; nothing here is stored in the database.
-import type { Card } from './catalogue'
+import { MIN_ROW, type Card } from './catalogue'
 import { supabase } from './supabase'
 
 export type Kind = Card['kind']
@@ -190,7 +190,7 @@ export async function loadCategory(cat: Category, kind?: Kind): Promise<Category
     titlesIn(cat, { kind, limit: 3, art: true }),
     ...defs.map((r) => titlesIn(cat, { kind: r.kind, sort: r.sort, row: r.id, limit: ROW_SHOWS + 1 })),
   ])
-  return { hero, rows: defs.map((r, i) => ({ ...r, items: lists[i].slice(0, ROW_SHOWS), more: lists[i].length > ROW_SHOWS })).filter((r) => r.items.length >= 3) }
+  return { hero, rows: defs.map((r, i) => ({ ...r, items: lists[i].slice(0, ROW_SHOWS), more: lists[i].length > ROW_SHOWS })).filter((r) => r.items.length >= MIN_ROW) }
 }
 
 /** One picture per category for the Browse cards: its most popular title's artwork, no title used twice. */

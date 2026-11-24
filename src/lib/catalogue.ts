@@ -290,6 +290,9 @@ export function leavingFor(what: { availability: { leaves_on?: string | null }[]
 
 export const kindWord = (kind: Card['kind']) => (kind === 'film' ? 'Film' : 'Series')
 
+/** The fewest titles a row of posters may show, anywhere in the app: a shorter row is left out. */
+export const MIN_ROW = 7
+
 /** Runtime in the short form for poster cards and lists: 2h 6m, 2h, 45m. */
 export function shortRuntime(min: number | null | undefined): string | null {
   if (!min) return null

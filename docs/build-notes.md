@@ -565,3 +565,13 @@ Measured on the database before and after:
   slide waits. It runs only while the hero can be seen (app open, its tab showing, no page on top), and each time
   it comes back into view the current slide starts over with a full 5 seconds: nothing switches the moment you look.
   A finger on it holds the bar. With reduced motion there's no bar, and a plain 5-second timer follows the same rules.
+
+## Rows of 7 or more (24 Nov)
+
+- `MIN_ROW = 7`: Home, Browse and More like this leave out a row with fewer titles.
+- Home rows fill up: a title another row already shows can come again after the first 4 places (a row needs 4 new
+  ones of its own). Because you liked/saved add the source's own More like this list after TMDB's; More with
+  <person> counts every credit.
+- "Now streaming from your watchlist" and "Short enough for tonight" are folded into From your watchlist: what just
+  arrived leads, with "Now on Netflix" under the poster. Runtimes are under every poster now; the spotlight still
+  picks a short one ("Only 1h 40m"). Friends liked shows once 7 friends' ratings qualify.

@@ -38,3 +38,14 @@ def test_saving_rebuilds_quietly(app):
     pg.evaluate("document.querySelector('.now-in section.row .card').click()"); pg.wait_for_timeout(1500)
     pg.locator('.wl-btn').last.click(); pg.wait_for_timeout(2500)
     assert len(n) > k, 'saving a title builds Home again'
+
+
+def test_every_row_has_at_least_seven(app):
+    import mock_api as m
+    from conftest import TOP
+    pg = app()
+    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    counts = pg.evaluate(f"[...({TOP}).querySelectorAll('section.row')].filter(s => s.querySelector('.card')).map(s => [s.querySelector('h2')?.textContent, s.querySelectorAll('.card').length])")
+    assert counts
+    for title, n in counts: assert n >= 7, (title, n)
+    assert not any(t.startswith('Friends') for t, _ in counts)   # the mock's friends have 6 titles: left out

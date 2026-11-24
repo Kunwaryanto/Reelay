@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { paths } from '../lib/routes'
-import { SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type TitleDetail } from '../lib/catalogue'
+import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { firstName, fullDate, looseDate, times, useTitleLogs, useWatched, type TitleLogs } from '../lib/letterboxd'
 import { useServicesQuery } from '../lib/profile'
@@ -223,7 +223,7 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
         </section>
       )}
 
-      {more.length >= 3 && (
+      {more.length >= MIN_ROW && (
         <section className="block">
           <SectionHeader title="More like this" />
           <PosterRow>{more.map((c) => <TitleCard key={c.id} card={c} />)}</PosterRow>

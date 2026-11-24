@@ -4,7 +4,7 @@
 // A title is shown once: a row skips what a row above it already has. A row needs three titles to be shown.
 import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
-import { SERVICE_NAME, type Card } from './catalogue'
+import { MIN_ROW, SERVICE_NAME, shortRuntime, type Card } from './catalogue'
 import { supabase } from './supabase'
 
 export type HomeCard = Card & {
@@ -39,7 +39,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 9
+export const HOME_VERSION = 10
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -151,14 +151,19 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   // ---- Rows, in order. `seen` holds what is already on the page. ----
   const seen = new Set<number>()
   const watched = new Set(ask.hide ? ask.watched : [])
+  // A row takes the titles the page hasn't shown yet first, then fills up with ones another row already has (never
+  // in its first places, see `back`), so rows stay full. It needs FIRST new titles to be a row of its own.
+  const fresh = new WeakMap<HomeCard[], number>()
   const take = (list: HomeCard[], max = 20, skipWatched = false): HomeCard[] => {
-    const out: HomeCard[] = []
+    const out: HomeCard[] = [], again: HomeCard[] = []
     for (const t of list) {
-      if (!t || seen.has(t.id) || (skipWatched && watched.has(t.id))) continue
-      seen.add(t.id); out.push(t)
-      if (out.length >= max) break
+      if (!t || (skipWatched && watched.has(t.id)) || out.some((x) => x.id === t.id) || again.some((x) => x.id === t.id)) continue
+      if (seen.has(t.id)) again.push(t)
+      else if (out.length < max) { seen.add(t.id); out.push(t) }
     }
-    return out
+    const items = [...out, ...again].slice(0, max)
+    fresh.set(items, out.length)
+    return items
   }
   /** films and series in turn */
   const mix = (lists: Card[][]): Card[] => {
@@ -187,14 +192,15 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const playable: HomeCard[] = saved.map((s) => s.title).filter(Boolean)
     .sort((a, b) => (leavesOn.get(a.id) ?? '9').localeCompare(leavesOn.get(b.id) ?? '9'))
   const arrivedSaved = new Map(savedArrivals.map((a) => [a.title_id, a.service_id]))
-  const small = (list: HomeCard[]) => (list.length >= 3 ? list.slice(0, 10) : [])
-  const rowJustIn = small(playable.filter((t) => arrivedSaved.has(t.id)))
-  rowJustIn.forEach((t) => seen.add(t.id))
   const isShort = (t: HomeCard) => t.kind === 'film' && !!t.runtime_min && t.runtime_min > 40 && t.runtime_min <= 100
-  const rowTonight = small(playable.filter((t) => !seen.has(t.id) && isShort(t)))
-  rowTonight.forEach((t) => seen.add(t.id))
-  const savedCards = playable.filter((t) => !seen.has(t.id)).slice(0, 20)
+  // What just arrived from it leads the row, with a note saying where; the rest follow, leaving first. (Runtimes are
+  // under every poster now, so short films need no row of their own; the spotlight still picks one for tonight.)
+  const savedCards: HomeCard[] = [
+    ...playable.filter((t) => arrivedSaved.has(t.id)).map((t) => ({ ...t, note: `Now on ${svcName(arrivedSaved.get(t.id)!)}` })),
+    ...playable.filter((t) => !arrivedSaved.has(t.id)),
+  ].slice(0, 20)
   savedCards.forEach((t) => seen.add(t.id))
+  fresh.set(savedCards, savedCards.length)
   const rowBecause = take([...becauseCards].sort((a, b) => (rankOf.get(a.id) ?? 99) - (rankOf.get(b.id) ?? 99)))
   const rowFriends = take(friends.map((f) => friendCards.find((c) => c.id === f.title_id)).filter((c): c is Card => !!c)
     .map((c) => ({ ...c, note: `${first(friendOf.get(c.id)!.name)} ${Number(friendOf.get(c.id)!.rating).toFixed(1)}` })))
@@ -240,11 +246,10 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     }
   }
   if (alt.length) spot(altList, () => altReason)
-  const runtimeOf = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`)
   // the card says it's yours by what it is (you saved it); the reason only says what's new
   spot(playable.filter((t) => arrivedSaved.has(t.id)), (t) => `Now on ${svcName(arrivedSaved.get(t.id)!)}`)
   spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
-  spot(playable.filter(isShort), (t) => `Only ${runtimeOf(t.runtime_min!)}`)
+  spot(playable.filter(isShort), (t) => `Only ${shortRuntime(t.runtime_min)}`)
   spot(rowNew, (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
   spot(rowTheme, () => (themed === 'awards' ? 'Award winner' : 'Hidden gem'))
   spot(rowLeaving, (t) => leavesIn(leavesOn.get(t.id)) ?? 'Leaving soon')
@@ -273,9 +278,7 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     row('trending-films', 'Trending films', rowTrendF, trendF, paths.grid('trending', 'list', 'film')),
     row('trending-series', 'Trending series', rowTrendS, trendS, paths.grid('trending', 'list', 'series')),
     row('leaving', 'Leaving soon', rowLeaving, leaving, paths.grid('leaving-soon', 'list'), { notes: 'leaving' }),
-    row('just-in', 'Now streaming from your watchlist', rowJustIn, rowJustIn, 'tab:watchlist'),
     row('watchlist', 'From your watchlist', savedCards, saved, 'tab:watchlist'),
-    row('tonight', 'Short enough for tonight', rowTonight, rowTonight),
     row('because', because.length ? `Because you liked ${because[0].source}` : '', rowBecause, because),
     row('saved', savedRecs.length ? `Because you saved ${savedRecs[0].source}` : '', rowSaved, savedRecs),
     ...(spots.length >= 2 ? [{ id: 'spotlight', title: 'Picked for you', items: [], spotlight: spots }] : []),
@@ -287,5 +290,6 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     ...rowGenres.map(({ c, items }, i) => row(c.id, c.label, items, mix(genreLists[i] as Card[][]), paths.category(c.id))),
     row(decade.id, decade.label, rowDecade, mix(decadeLists), paths.category(decade.id)),
   ]
-  return { hero, rows: rows.filter((r) => r.spotlight || r.items.length >= 3).map((r) => ({ ...r, items: back(r.items) })) }
+  const full = (r: HomeRow) => r.items.length >= MIN_ROW && (fresh.get(r.items) ?? r.items.length) >= FIRST
+  return { hero, rows: rows.filter((r) => r.spotlight || full(r)).map((r) => ({ ...r, items: back(r.items) })) }
 }
