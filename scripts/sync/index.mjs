@@ -965,17 +965,30 @@ async function wikidata(query) {
 async function syncAwards() {
   const titles = (await db.query('select id, wikidata_id from public.titles where wikidata_id is not null')).rows;
   const byQ = new Map(titles.map((t) => [t.wikidata_id, Number(t.id)]));
-  // 1. The categories: every item whose English name starts with one of the three awards' prefixes. Found through
-  //    the statements that use them (an award that was never given to anything doesn't matter).
+  // 1. The categories: items whose English name starts with one of the three awards' prefixes, found with
+  //    Wikidata's label search (a SPARQL scan of every award statement times out).
+  const api = async (params) => {
+    const r = await fetch(`https://www.wikidata.org/w/api.php?${new URLSearchParams({ format: 'json', ...params })}`, {
+      headers: { 'user-agent': 'Reelay/1.0 (https://usereelay.vercel.app; personal non-commercial project)' } });
+    if (!r.ok) throw new Error(`Wikidata API ${r.status}`);
+    return r.json();
+  };
   const cats = new Map();
   for (const [award, prefix] of AWARDS) {
-    const rows = await wikidata(`SELECT DISTINCT ?award ?label WHERE {
-      { ?x wdt:P166 ?award } UNION { ?x wdt:P1411 ?award }
-      ?award rdfs:label ?label . FILTER(LANG(?label) = "en" && STRSTARTS(?label, "${prefix}"))
-    }`).catch((e) => { log(`  ${award} categories failed:`, e.message); return []; });
-    for (const r of rows) {
-      const category = r.label.value.slice(prefix.length);
-      if (!NOT_AWARDS.test(category)) cats.set(r.award.value.split('/').pop(), { award, category });
+    const ids = [];
+    for (let offset = 0; offset !== undefined && ids.length < 2000;) {
+      const r = await api({ action: 'query', list: 'search', srsearch: `inlabel:"${prefix.trim()}"@en`, srnamespace: '0', srlimit: '500', sroffset: String(offset) });
+      ids.push(...(r.query?.search ?? []).map((x) => x.title));
+      offset = r.continue?.sroffset;
+    }
+    for (let i = 0; i < ids.length; i += 50) {
+      const r = await api({ action: 'wbgetentities', ids: ids.slice(i, i + 50).join('|'), props: 'labels', languages: 'en' });
+      for (const [q, e] of Object.entries(r.entities ?? {})) {
+        const label = e.labels?.en?.value ?? '';
+        if (!label.startsWith(prefix)) continue;
+        const category = label.slice(prefix.length);
+        if (!NOT_AWARDS.test(category)) cats.set(q, { award, category });
+      }
     }
   }
   log(`awards: ${cats.size} categories (${AWARDS.map(([a]) => `${a} ${[...cats.values()].filter((c) => c.award === a).length}`).join(', ')})`);
