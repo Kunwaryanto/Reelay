@@ -212,8 +212,9 @@ button { font: inherit; color: inherit; }
 .title-art[data-poster='true'] { object-position: center top; }
 .title-head { position: relative; margin: 0 var(--margin); display: flex; align-items: flex-start; gap: 12px; }
 /* two-line titles are set tight, like the large headings in Search and onboarding (22px lines); the 2px above and
-   below keep a one-line title exactly where it was, centred on the 26px buttons beside it */
-.title-head h1 { flex: 1; min-width: 0; margin: 2px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
+   below keep a one-line title exactly where it was, centred on the 26px buttons beside it. The last line's g, j, p
+   and y reach below its 22px line: 4px more at the bottom (taken back by the margin) keeps them from being cut */
+.title-head h1 { flex: 1; min-width: 0; margin: 2px 0 -2px; padding-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); }
 .title-actions { flex: none; display: flex; align-items: center; gap: 6px; height: 26px; }
 .title-actions .icon-btn { margin: -6px; }
 .pill-open { height: var(--button-inline); padding: 0 10px 0 12px; border: 0; border-radius: var(--radius-pill-28); background: #fff; color: #000; display: flex; align-items: center; gap: 4px; font: var(--type-text); font-weight: 600; cursor: pointer; }
