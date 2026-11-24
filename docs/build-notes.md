@@ -648,3 +648,14 @@ Measured on the database before and after:
 - (24 Nov, later) The logos are sized by visible ink, not by their box: each shows about the same amount of logo
   (`MARK_SHAPE` holds each file's ratio and share of ink), 7–13 px tall, at most 36 wide. Thin logos (Disney+,
   TriArt Play, Prime Video) grew, solid ones (HBO Max, Crunchyroll) calmed down.
+
+## Big films that don't stream, and everything else on TMDB (24 Nov)
+
+- 2001: A Space Odyssey and Chinatown are only to rent in Sweden, so the sync never had them. Well-known titles
+  (500+ votes on TMDB: 9,438) are now kept whether or not they stream: 4,254 were added, the rest were already in.
+  `syncNotable` adds new ones on Sundays; the clean-up never removes them. Their title page says "Not streaming in
+  Sweden" with the notification offer.
+- Everything else on TMDB: Search asks the `tmdb` function once its own results are in and lists TMDB's titles the
+  catalogue lacks after them (a moment later). Tapping one saves it (title, cast, crew) and opens its page.
+  Not asked with a service ("on Netflix"), "my services" or the drawer's filters.
+- Awards were read again for the new titles: 13,238 wins and nominations, 883 titles with a win.

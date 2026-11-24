@@ -14,6 +14,7 @@ import { FRESH, useQuery } from '../lib/query'
 import {
   addRecent, countWith, genreNames, guess, loadIdeas, loadPopular, parseQuery, readRecents, search, writeRecents,
   type Filters, type Found, type Hit, type Idea, type Recent, type Token,
+  addFromTmdb, searchTmdb, type TmdbHit,
 } from '../lib/search'
 import { FilterDrawer, SOURCES, decadeName, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
 import { Icon, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
@@ -95,6 +96,46 @@ function useSearch(typed: string, removed: string[], extra: Filters) {
     waiting: !ready && !!key && state.key !== key,
     retry: () => setAgain((n) => n + 1),
   }
+}
+
+/** Everything else on TMDB: asked once the catalogue's own answer is on screen, for a plain name search (no filters,
+ *  not "only my services", which TMDB's titles can't meet). Kept per words for the session. */
+const tmdbKept = new Map<string, TmdbHit[]>()
+function useTmdb(text: string, words: string, on: boolean): { hits: TmdbHit[]; waiting: boolean } {
+  const key = text.replace(/\s+/g, ' ').trim().toLowerCase()
+  const [got, setGot] = useState<{ key: string; hits: TmdbHit[] } | null>(null)
+  useEffect(() => {
+    if (!on || key.length < 2 || tmdbKept.has(key)) return
+    let live = true
+    const t = setTimeout(() => {
+      searchTmdb(key, words).then((hits) => { tmdbKept.set(key, hits); if (live) setGot({ key, hits }) }, () => { tmdbKept.set(key, []); if (live) setGot({ key, hits: [] }) })
+    }, 150)
+    return () => { live = false; clearTimeout(t) }
+    // `words` follows `key`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, on])
+  if (!on || key.length < 2) return { hits: [], waiting: false }
+  const hits = tmdbKept.get(key) ?? (got?.key === key ? got.hits : undefined)
+  return { hits: hits ?? [], waiting: hits === undefined }
+}
+
+/** A TMDB title: tapping saves it to the catalogue, then opens its page like any other. */
+function TmdbRow({ h, onOpen }: { h: TmdbHit; onOpen: (id: number) => void }) {
+  const [state, setState] = useState<'idle' | 'adding' | 'failed'>('idle')
+  const open = () => {
+    if (state === 'adding') return
+    setState('adding')
+    addFromTmdb(h).then((id) => { setState('idle'); onOpen(id) }, () => setState('failed'))
+  }
+  const meta = state === 'adding' ? 'Opening…' : state === 'failed' ? 'Couldn’t open it. Tap to try again.' : [h.year, h.kind === 'film' ? 'Film' : 'Series'].filter(Boolean).join(' · ')
+  return (
+    <li className="s-tmdb">
+      <button type="button" className="s-row press-row" onClick={open} aria-busy={state === 'adding' || undefined}>
+        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading="lazy" decoding="async" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-text"><b>{h.title}</b><small>{meta}</small></span>
+      </button>
+    </li>
+  )
 }
 
 const cardOf = (h: Hit): Card => ({ id: h.id, kind: h.kind, title: h.title, year: h.year, runtime_min: h.runtime, seasons: h.seasons, poster_path: h.poster_path, availability: h.services.map((s) => ({ service_id: s, leaves_on: null })) })
@@ -207,6 +248,13 @@ export default function Search() {
   const shown = kind === 'people' ? [] : mine.filter((h) => kind === 'all' || h.kind === kind)
   const shownPeople = kind === 'people' ? folks : kind === 'all' ? folks.slice(0, 2) : []
   const list = sort === 'best' ? shown : [...shown].sort((a, b) => (sort === 'rated' ? (b.rating ?? 0) - (a.rating ?? 0) : (b.year ?? 0) - (a.year ?? 0)))
+  // everything else on TMDB, after the catalogue's own answer, for a plain name search
+  // asked whenever there are name words (film names often hold a year, "2001 a space odyssey"), not with a service
+  // or "my services" (TMDB's titles don't stream there) or the drawer's filters
+  const words = parseQuery(q).rest
+  const plain = hasQ && !!found && !waiting && !error && !myOnly && words.length >= 2 && !tokens.some((t) => t.filter.service || t.filter.services) && Object.keys(extra).length === 0 && kind !== 'people'
+  const more = useTmdb(q, words, plain)
+  const extraHits = more.hits.filter((h) => kind === 'all' || h.kind === kind)
 
   const remember = (r: Recent) => setRecents((old) => { const next = addRecent(old, r); writeRecents(next); return next })
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
@@ -317,7 +365,7 @@ export default function Search() {
   const swipe = useRef<{ x: number; y: number } | null>(null)
 
   // why there is nothing, and the one step that gets something back
-  const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0
+  const empty = hasQ && !waiting && !error && found !== null && list.length === 0 && shownPeople.length === 0 && extraHits.length === 0 && !more.waiting
   const other: 'film' | 'series' = kind === 'film' ? 'series' : 'film'
   const nothing = !empty ? null
     : myOnly ? {
@@ -449,6 +497,7 @@ export default function Search() {
               {/* keyed by the type pill: every switch plays the rows' entrance, also when the rows are the same */}
               <ul className="s-results" key={kind} data-waiting={waiting}>
                 {list.map((h, i) => <Row key={h.id} h={h} near={i < 10} onOpen={() => open(h)} before={() => input.current?.blur()} />)}
+                {extraHits.map((h) => <TmdbRow key={`${h.kind}:${h.tmdb_id}`} h={h} onOpen={(id) => { input.current?.blur(); remember({ t: 'title', id, text: h.title, sub: [h.year, h.kind === 'film' ? 'Film' : 'Series'].filter(Boolean).join(' · '), poster_path: h.poster_path }); push(paths.title(id)) }} />)}
               </ul>
 
               {nothing && online && (

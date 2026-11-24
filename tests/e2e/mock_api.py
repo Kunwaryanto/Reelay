@@ -66,6 +66,11 @@ def route(r):
     from urllib.parse import unquote
     _ids = re.search(r'[?&]id=in\.\(([\d,]+)\)', unquote(u)) if '/rest/v1/titles' in u and 'original_language' not in u else None
     if _ids: return r.fulfill(json=[card(int(x)) for x in _ids.group(1).split(',')][::-1])  # any order: the app puts them back in the list's
+    # everything else on TMDB: a search answer, and saving one returns its new id
+    if 'functions/v1/tmdb' in u:
+        b=json.loads(r.request.post_data or '{}')
+        if b.get('add'): return r.fulfill(json={'id': 777})
+        return r.fulfill(json={'results':[{'kind':'film','tmdb_id':62,'title':'2001: A Space Odyssey','year':1968,'poster_path':'/p62.jpg'}] if '2001' in b.get('q','') else []})
     if '/rest/v1/rpc/search_titles' in u:
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])

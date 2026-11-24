@@ -590,6 +590,9 @@ html[data-runway] .tabbar { touch-action: none; }
 .s-chips .ms { color: var(--text-muted); }
 .s-results { list-style: none; margin: 8px 0 0; padding: 0 0 16px; }
 .s-row { display: flex; align-items: center; gap: 14px; padding: 6px var(--margin); color: #fff; -webkit-touch-callout: none; }
+/* a TMDB title is a button (it is saved before it opens), drawn like the other rows */
+.s-tmdb .s-row { width: 100%; border: 0; background: none; font: inherit; text-align: left; }
+.s-tmdb .s-row[aria-busy] small { color: var(--text-faint); }
 .s-note { margin: 16px var(--margin) 0; font: var(--type-body); color: var(--text-muted); }
 .s-failed { margin: 16px var(--margin) 0; }
 .s-nothing { margin: 16px var(--margin) 0; animation: rise-in var(--dur-rise) var(--ease-out) both; }

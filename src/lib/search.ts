@@ -355,3 +355,31 @@ const same = (a: Recent, b: Recent) => (a.t === 'q' && b.t === 'q' ? a.text.toLo
 /** Newest first, 12 at most. A search replaces the shorter ones typed on the way to it ("sha" then "shaw"). */
 export const addRecent = (list: Recent[], r: Recent): Recent[] => [r, ...list.filter((x) =>
   !same(x, r) && !(r.t === 'q' && x.t === 'q' && r.text.toLowerCase().startsWith(x.text.toLowerCase())))].slice(0, 12)
+
+// ---- Everything else on TMDB (supabase/functions/tmdb) ----
+/** A film or series on TMDB that the catalogue doesn't have yet. */
+export type TmdbHit = { kind: 'film' | 'series'; tmdb_id: number; title: string; year: number | null; poster_path: string | null }
+
+async function callTmdb<T>(body: Record<string, unknown>): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('signed_out')
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tmdb`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error ?? `tmdb ${res.status}`)
+  return json as T
+}
+
+/** TMDB's films and series for the words that the catalogue doesn't have (asked after the catalogue's own answer).
+ *  `words` is the text without what was read as filters ("dune 2021" → "dune"), tried when the whole finds nothing. */
+export async function searchTmdb(text: string, words = ''): Promise<TmdbHit[]> {
+  return (await callTmdb<{ results: TmdbHit[] }>({ q: text, alt: words })).results ?? []
+}
+
+/** Save a TMDB title to the catalogue (with its cast and crew) and return its id, to open its page. */
+export async function addFromTmdb(h: TmdbHit): Promise<number> {
+  return Number((await callTmdb<{ id: number }>({ add: { kind: h.kind, tmdb_id: h.tmdb_id } })).id)
+}
