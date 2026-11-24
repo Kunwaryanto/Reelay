@@ -954,12 +954,14 @@ function awardRank(cat) {
 }
 async function wikidata(query) {
   for (let attempt = 0; ; attempt++) {
+    // a dropped connection ("terminated") is retried like a busy server
     const r = await fetch('https://query.wikidata.org/sparql', {
       method: 'POST', body: new URLSearchParams({ query }),
       headers: { 'user-agent': 'Reelay/1.0 (https://usereelay.vercel.app; personal non-commercial project)', accept: 'application/sparql-results+json', 'content-type': 'application/x-www-form-urlencoded' },
-    });
-    if (r.ok) return (await r.json()).results.bindings;
-    if (attempt >= 3 || ![429, 500, 502, 503, 504].includes(r.status)) throw new Error(`Wikidata ${r.status}`);
+    }).then(async (res) => (res.ok ? { ok: true, rows: (await res.json()).results.bindings } : { ok: false, status: res.status }))
+      .catch((e) => ({ ok: false, status: 0, error: e.message }));
+    if (r.ok) return r.rows;
+    if (attempt >= 3 || ![0, 429, 500, 502, 503, 504].includes(r.status)) throw new Error(`Wikidata ${r.status || r.error}`);
     await new Promise((ok) => setTimeout(ok, 5000 * (attempt + 1)));
   }
 }
@@ -998,7 +1000,8 @@ async function syncAwards() {
   let failed = 0;
   const keys = [...cats.keys()];
   const batches = [];
-  for (let i = 0; i < keys.length; i += 25) batches.push(keys.slice(i, i + 25));
+  // 10 categories a request: Best Picture-sized categories have thousands of statements, and big answers got cut
+  for (let i = 0; i < keys.length; i += 10) batches.push(keys.slice(i, i + 10));
   await pool(batches, 2, async (batch) => {
     const rows = await wikidata(`SELECT ?st ?award ?who ?forWork ?time ?kind ?whoLabel WHERE {
       VALUES ?award { ${batch.map((q) => `wd:${q}`).join(' ')} }
