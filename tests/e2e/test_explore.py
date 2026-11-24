@@ -66,3 +66,15 @@ def test_country_from_the_drawer(app):
     assert heading(pg) == 'Sweden', heading(pg)
     drop(pg, 'From Sweden')
     assert heading(pg) == 'All titles'
+
+def test_browse_title_sits_where_the_other_tabs_have_it(app):
+    pg = app()
+    top = "document.querySelector('.tab-head h1').getBoundingClientRect().top"
+    pg.goto(m.B + '/watchlist'); pg.wait_for_timeout(2000); w = pg.evaluate(top)
+    pg.goto(m.B + '/browse'); pg.wait_for_timeout(2000); b = pg.evaluate(top)
+    assert abs(w - b) < 0.5, (w, b)
+    # All titles on the title's baseline: the bottoms of their text lines differ only by the fonts' descents
+    gap = pg.evaluate("""(() => { const r = (el) => { const g = document.createRange(); g.selectNodeContents(el); return g.getBoundingClientRect() }
+      const h = r(document.querySelector('.br-head h1')), a = r(document.querySelector('.br-head a'))
+      return (h.bottom - 26 * 0.24) - (a.bottom - 16 * 0.24) })()""")
+    assert abs(gap) < 3, gap
