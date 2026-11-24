@@ -65,6 +65,12 @@ function initialState(): State {
   return { tab: 'now', stacks }
 }
 
+// On the iPhone Home Screen the app keeps no history of its own: iOS 26 gives a Home Screen web app Safari's
+// edge swipe back whenever there is an entry to go back to, and that swipe fought ours (on Home it slid in a
+// snapshot of Home; on a pushed page it competed for the same edge). Our swipe and back button do going back, so
+// every page change replaces the one entry. Elsewhere (a browser) pages are history entries and its back button works.
+const ONE_ENTRY = typeof navigator !== 'undefined' && (navigator as Navigator & { standalone?: boolean }).standalone === true
+
 export function NavProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState(initialState)
   const [dimmed, setDimmed] = useState(false)
@@ -101,8 +107,8 @@ export function NavProvider({ children }: { children: ReactNode }) {
     warmPage(path)
     const s = stateRef.current
     if (topPath(s) === path) return
-    depth.current++
-    history.pushState({ depth: depth.current }, '', path)
+    if (ONE_ENTRY) history.replaceState({ depth: 0 }, '', path)
+    else { depth.current++; history.pushState({ depth: depth.current }, '', path) }
     setDimmed(false)
     setState({ ...s, stacks: { ...s.stacks, [s.tab]: [...s.stacks[s.tab], page(path)] } })
   }, [])

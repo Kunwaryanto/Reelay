@@ -859,7 +859,7 @@ html[data-runway] .tabbar { touch-action: none; }
 .page[data-launch] .now-in { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
 /* The cog's glass circle fades itself (with the icon in it and the dot beside it): fading a parent instead makes
    Safari draw the icon first and the frosted circle a moment later. */
-.page[data-launch] .now-settings .icon-btn > span, .page[data-launch] .now-settings > i { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
+.page[data-launch] .now-settings .icon-btn > span, .page[data-launch] .now-settings .settings-btn > i { animation: launch-fade var(--dur-launch) var(--ease-launch) both; }
 @keyframes launch-fade { from { opacity: 0; } }
 .now-holders { position: absolute; inset: 0; overflow: hidden; animation: launch-fade 400ms var(--ease-out) both; }
 .now-holders > div { height: 540px; margin-bottom: var(--row-gap); background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 60%, #000 100%); }
@@ -905,7 +905,9 @@ html[data-runway] .tabbar { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .s-skel .s-row, .s-results > li, .s-chips button { animation: none !important; } }
 
 /* ---- Update: a small white dot by the Settings cog, and a card at the top of Settings ---- */
-.now-settings > i { position: absolute; top: 12px; right: 11px; width: 5px; height: 5px; border-radius: 50%; background: #fff; pointer-events: none; animation: dot-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 300ms both; }
+/* the update dot on every Settings button: springs in when it appears */
+.settings-btn { position: relative; display: inline-flex; }
+.settings-btn > i { position: absolute; top: 12px; right: 11px; width: 5px; height: 5px; border-radius: 50%; background: #fff; pointer-events: none; animation: dot-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 300ms both; }
 @keyframes dot-in { from { transform: scale(0); } }
 .update-card { margin-top: 20px; padding: 14px 14px 14px 16px; border-radius: 14px; corner-shape: squircle; background: var(--surface); display: flex; align-items: center; gap: 12px; animation: rise-in var(--dur-rise) var(--ease-out) both; }
 .update-card .row-text b { color: #fff; font-weight: 500; }

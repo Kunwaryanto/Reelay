@@ -12,7 +12,7 @@ import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, PageLink, GearIcon, Icon, IconButton, LoadFailed, PillCount, useLongPress, useSwitched, useHold, usePageRefresh } from '../ui'
+import { Button, PageLink, Icon, SettingsButton, LoadFailed, PillCount, useLongPress, useSwitched, useHold, usePageRefresh } from '../ui'
 import { useWatched } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 
@@ -109,7 +109,7 @@ export default function Watchlist() {
   const header = (
     <div className="tab-head">
       <h1>Watchlist</h1>
-      <IconButton label="Settings" onClick={() => push(paths.settings())}><GearIcon /></IconButton>
+      <SettingsButton />
     </div>
   )
 

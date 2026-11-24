@@ -600,3 +600,16 @@ Measured on the database before and after:
 - After a deploy, a screen the open app loads only when it's opened (Settings, Browse, Title…) is gone under its
   old file name, and opening it crashed ("Something went wrong"; 3 reports on 24 Nov). The app now reloads into the
   new version instead (`reloadForNewVersion` in errors.ts, at most once a minute), and doesn't report it.
+
+## iOS's own back swipe (24 Nov)
+
+- iOS 26 gives Home Screen web apps Safari's edge swipe back whenever there's a history entry to go back to. Our
+  pages were history entries (and some were left behind, e.g. after tapping a tab to its start), so on Home the
+  swipe slid in a snapshot of Home, and on a page it competed with our own swipe for the same edge.
+- In the Home Screen app (`navigator.standalone`) the app now keeps one history entry: every page change replaces
+  it, and going back is our swipe and back button only. In a browser, pages stay history entries.
+
+## Update dot on every Settings button (24 Nov)
+
+- `SettingsButton` (src/ui) is the one Settings button: Home and Watchlist use it, and it carries the white update
+  dot when a new version is out. The dot springs in when it appears, also while the button is on screen.

@@ -14,8 +14,7 @@ import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
-import { useNewVersion } from '../lib/update'
-import { NearImage, NearRow, PageLink, PinnedArt, GearIcon, Icon, IconButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { NearImage, NearRow, PageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
@@ -340,7 +339,7 @@ function decodeFold(data: HomeData): Promise<void> {
 }
 
 export default function Now() {
-  const { push, setTab } = useNavActions()
+  const { setTab } = useNavActions()
   const { tab, path } = useNav()
   // Home is built for this member: their services, and whether films they have logged are left out
   const uid = useAuth().session?.user.id
@@ -356,7 +355,6 @@ export default function Now() {
     () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
-  const fresh = useNewVersion()
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its
   // title logo, and the first posters of the first row. Ready within 300 ms: Now just rises.
   // Later than that: the wordmark rises on black and always finishes (900 ms) before fading into the page; still
@@ -436,7 +434,7 @@ export default function Now() {
     <main className="page noscroll" data-launch={show && launching ? '' : undefined} ref={bind.ref} onScroll={onScroll}>
       <h1 className="sr-only">Home</h1>
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
-      {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push(paths.settings())}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
+      {(show || failed || phase === 'late') && <div className="now-settings"><SettingsButton glass /></div>}
 
       {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
       {cover !== 'none' && <div className="launch" data-leaving={cover === 'leaving' || undefined}><Wordmark height={32} rise /></div>}
