@@ -5,7 +5,11 @@
 //  - opening: a Home that is out of date is rebuilt while the launch screen is up (up to 1.5 s). Ready in
 //    time, today's Home is the first thing shown; not ready, the saved one is shown and the new one waits.
 //  - a new one that waits is put in place when the member comes back to the Home tab, pulls to refresh, or
-//    opens the app again; or at once if they haven't touched the page since the app came back to the front.
+//    opens the app again.
+//  - coming back to the app on a new day (the rotating rows, and usually last night's sync): the launch wordmark
+//    covers the page at once (`waking`) while today's Home is built and its first pictures decoded (up to 2 s),
+//    then it rises into it, as at a fresh start. Not ready by then, the page stays and the new Home waits.
+//  - a new Home is never put on screen before its first pictures are decoded (`prepare`), so it never goes black.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HomeData } from './home'
 import { isDirty, readQueryData, setQueryData } from './query'
@@ -13,6 +17,8 @@ import { checkStamp, currentStamp, recentlyChecked } from './stamp'
 
 type Saved = { data: HomeData; stamp: string | null; day: string }
 const WAIT = 1500
+/** coming back on a new day: how long the wordmark may cover the page while today's Home is made */
+const WAKE_WAIT = 2000
 
 /** the member's local day: the rotating rows change at midnight */
 const today = () => new Date().toLocaleDateString('sv-SE')
@@ -33,23 +39,31 @@ export type HomeQuery = {
   retrying: boolean
   /** build Home again now and show it (pull to refresh, Try again) */
   retry: () => Promise<void>
+  /** back on a new day: the wordmark covers the page while today's Home is made */
+  waking: boolean
 }
 
 /**
  * @param key   what Home depends on that can be part of a name (version, services, the hide switch)
  * @param changes goes up when the member's own things that shape Home change (watchlist, Letterboxd: `useChanges`)
  * @param active Home is the page in front: a waiting Home is put in place when this turns true
+ * @param prepare decodes a Home's first pictures; a new Home goes on screen only after it
  */
-export function useHome(key: string | null, load: () => Promise<HomeData>, changes: number, active: boolean): HomeQuery {
+export function useHome(key: string | null, load: () => Promise<HomeData>, changes: number, active: boolean,
+  prepare: (data: HomeData) => Promise<void> = async () => {}): HomeQuery {
   const [view, setView] = useState<{ data: HomeData; day: string } | undefined>()
   const [error, setError] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const pending = useRef<{ data: HomeData; day: string } | null>(null)
   const loadRef = useRef(load)
   loadRef.current = load
-  const touched = useRef(false)
   const activeRef = useRef(active)
   activeRef.current = active
+  const prepareRef = useRef(prepare)
+  prepareRef.current = prepare
+  const [waking, setWaking] = useState(false)
+  const shownDay = useRef<string | null>(null)
+  shownDay.current = view?.day ?? null
 
   const build = useCallback(async (stamp: string | null): Promise<{ data: HomeData; day: string }> => {
     const data = await loadRef.current()
@@ -105,32 +119,35 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
     if (active && pending.current) { setView(pending.current); pending.current = null }
   }, [active])
 
-  // Back to the front after a while (the app was in the background): check again. A new Home goes in at once
-  // only if the page hasn't been touched since; otherwise it waits like any other.
+  // Back to the front after a while (the app was in the background): check again. On a new day with Home in
+  // front, the wordmark covers the page while today's Home is made; otherwise a new one waits, out of sight.
   useEffect(() => {
     if (!key) return
     let hiddenAt = 0
-    const onTouch = () => { touched.current = true }
     const onVis = () => {
       if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return }
       if (Date.now() - hiddenAt < 5 * 60 * 1000) return
-      touched.current = false
       const saved = readQueryData<Saved>(key)
+      const newDay = !!shownDay.current && shownDay.current !== today()
+      if (newDay && activeRef.current) {
+        setWaking(true)
+        const made = loadStamp().then((stamp) => build(stamp)).then(async (v) => { await prepareRef.current(v.data); return v })
+        void Promise.race([made.catch(() => null), sleep(WAKE_WAIT)]).then((v) => {
+          if (v) { pending.current = null; setView(v) }
+          else made.then((late) => { pending.current = late }, () => {})
+          setWaking(false)
+        })
+        return
+      }
       loadStamp().then(async (stamp) => {
         if (stamp === null || current(key, saved, stamp)) return
         const v = await build(stamp)
-        if (!touched.current && activeRef.current) setView(v)
-        else pending.current = v
+        await prepareRef.current(v.data)
+        pending.current = v
       }, () => {})
     }
     document.addEventListener('visibilitychange', onVis)
-    window.addEventListener('touchstart', onTouch, { passive: true })
-    window.addEventListener('scroll', onTouch, { passive: true, capture: true })
-    return () => {
-      document.removeEventListener('visibilitychange', onVis)
-      window.removeEventListener('touchstart', onTouch)
-      window.removeEventListener('scroll', onTouch, { capture: true })
-    }
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [key, build])
 
   const retry = useCallback(async () => {
@@ -140,6 +157,7 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
     try {
       const stamp = await checkStamp() // a pull asks the server, however recently it was asked
       const v = await build(stamp)
+      await prepareRef.current(v.data)
       pending.current = null
       setView(v); setError(false)
     } catch { if (!view) setError(true) } finally {
@@ -147,5 +165,5 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
     }
   }, [key, build, view])
 
-  return { data: view?.data, loading: !view && !error, error: error && !view, stale: !!view && view.day !== today(), retrying, retry }
+  return { data: view?.data, loading: !view && !error, error: error && !view, stale: !!view && view.day !== today(), retrying, retry, waking }
 }

@@ -584,3 +584,13 @@ Measured on the database before and after:
 - Home has an award row every day, in turn: Oscar winners, Emmy-winning series, Best Picture winners, Golden Globe
   winners. Under each poster: its top category in that award and how many more it won ("Best Picture +3").
   Hidden gems shows every other day. The title page's Awards section now has data too.
+
+## Coming back to Home (24 Nov)
+
+- Coming back to the app on a new day with Home in front: the launch wordmark covers the page at once while
+  today's Home is built and its first pictures decoded (up to 2 s), then fades over it, as at a fresh start.
+  Not ready in time, the page stays and the new Home waits for the next visit to the tab.
+- Other new content (a sync that ran during the day) never swaps in front of you: it is put in place when you come
+  back to the Home tab, pull to refresh or open the app.
+- A new Home only goes on screen with its first pictures decoded (`prepare` in `useHome`), and once Home has shown
+  it never hides again: the black screen before the swap is gone.

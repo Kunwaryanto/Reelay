@@ -4,7 +4,7 @@ import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
 import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
-import { HOME_VERSION, loadHome, type HomeCard } from '../lib/home'
+import { HOME_VERSION, loadHome, type HomeCard, type HomeData } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
 import { useLetterboxd } from '../lib/letterboxd'
@@ -319,6 +319,26 @@ function Spotlight({ cards }: { cards: HomeCard[] }) {
   )
 }
 
+/** Decode a Home's first pictures (the first hero's art and title logo, the first row's first posters), so it can
+ *  go on screen whole. Resolves when they're decoded or have failed. */
+function decodeFold(data: HomeData): Promise<void> {
+  const decode = (src: string | null | undefined, srcset?: string) => {
+    if (!src) return Promise.resolve()
+    const img = new Image()
+    // the same candidates as the card, so this is the file the card will show
+    if (srcset) { img.sizes = '147px'; img.srcset = srcset }
+    img.src = src
+    return img.decode().catch(() => {})
+  }
+  const first = data.hero[0]
+  const art = first ? tmdbImage(first.backdrop_path, 'w1280') ?? tmdbImage(first.poster_path, 'w780') : undefined
+  const posters = (data.rows[0]?.items ?? []).slice(0, 3)
+  return Promise.all([
+    decode(art), decode(tmdbImage(first?.logo_path, 'w500')),
+    ...posters.map((c) => decode(tmdbImage(c.poster_path, 'w342'), posterSrcSet(c.poster_path))),
+  ]).then(() => {})
+}
+
 export default function Now() {
   const { push, setTab } = useNavActions()
   const { tab, path } = useNav()
@@ -333,7 +353,7 @@ export default function Now() {
   const savedLoaded = useSaved().loaded
   const settled = svc !== undefined && lb.account !== undefined && savedLoaded
   const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), changes, tab === 'now' && path === '/')
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(`lb-watched:${uid}`)) || [] }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   const fresh = useNewVersion()
@@ -349,19 +369,7 @@ export default function Now() {
     if (!q.data || foldKey === null) return
     let live = true
     const done = () => { if (live) setArtFor(foldKey) }
-    const decode = (src: string | null | undefined, srcset?: string) => {
-      if (!src) return Promise.resolve()
-      const img = new Image()
-      // the same candidates as the card, so this is the file the card will show
-      if (srcset) { img.sizes = '147px'; img.srcset = srcset }
-      img.src = src
-      return img.decode().catch(() => {})
-    }
-    const posters = (q.data.rows[0]?.items ?? []).slice(0, 3)
-    void Promise.all([
-      decode(firstArt), decode(tmdbImage(first?.logo_path, 'w500')),
-      ...posters.map((c) => decode(tmdbImage(c.poster_path, 'w342'), posterSrcSet(c.poster_path))),
-    ]).then(done)
+    void decodeFold(q.data).then(done)
     const t = setTimeout(done, 2500) // slow pictures don't hold the page back for ever
     return () => { live = false; clearTimeout(t) }
     // `foldKey` stands for the data
@@ -369,7 +377,9 @@ export default function Now() {
   }, [foldKey])
   const [icons, setIcons] = useState(false)
   useEffect(() => { let live = true; void iconsReady.then(() => { if (live) setIcons(true) }); return () => { live = false } }, [])
-  const ready = !!q.data && artFor === foldKey && icons
+  // once the page has shown, it never hides again: a new Home is only put in place with its pictures decoded
+  const [launched, setLaunched] = useState(false)
+  const ready = !!q.data && (launched || artFor === foldKey) && icons
   const readyRef = useRef(ready)
   readyRef.current = ready
   // The start-up wordmark (index.html) is usually already rising when this mounts: Home takes it over as its own
@@ -384,6 +394,7 @@ export default function Now() {
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
   }, [booted])
   const show = ready && phase !== 'mark'
+  if (show && !launched) setLaunched(true)
   // The wordmark stays mounted while it fades out over the arriving page (mounting it again would replay its rise).
   const [mark, setMark] = useState<'none' | 'on' | 'gone'>('none')
   if (phase === 'mark' && mark === 'none' && !booted) setMark('on')
@@ -392,6 +403,15 @@ export default function Now() {
     const t = setTimeout(() => setMark('gone'), 700)
     return () => clearTimeout(t)
   }, [show, mark])
+  // Back on a new day: the wordmark covers the page while today's Home is made, then fades over it
+  const [cover, setCover] = useState<'none' | 'on' | 'leaving'>('none')
+  if (q.waking && cover !== 'on') setCover('on')
+  if (!q.waking && cover === 'on') setCover('leaving')
+  useEffect(() => {
+    if (cover !== 'leaving') return
+    const t = setTimeout(() => setCover('none'), 700)
+    return () => clearTimeout(t)
+  }, [cover])
   // The tab bar arrives with the page, as part of the same movement.
   const failed = !!q.error
   useEffect(() => {
@@ -419,6 +439,7 @@ export default function Now() {
       {(show || failed || phase === 'late') && <div className="now-settings"><IconButton label={fresh ? 'Settings, a new version is ready' : 'Settings'} glass onClick={() => push(paths.settings())}><GearIcon /></IconButton>{fresh && <i aria-hidden="true" />}</div>}
 
       {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
+      {cover !== 'none' && <div className="launch" data-leaving={cover === 'leaving' || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
         <div className="now-holders" aria-hidden="true">
           <div />
