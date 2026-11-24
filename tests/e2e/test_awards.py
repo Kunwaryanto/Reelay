@@ -17,7 +17,7 @@ def test_awards_group_by_category(app):
         pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2500)
         r = rows(pg)
         assert r == ['Oscars 1969 | Won · Best Visual Effects · Stanley Kubrick', 'Oscars 1969 | Nominated · Best Director · Stanley Kubrick',
-                     'Oscars 1969 | Nominated · Production Design · Harry Lange, Ernest Archer'], r
+                     'Oscars 1969 | Nominated · Production Design · Harry Lange +1'], r
         assert pg.evaluate(f"!({TOP}).querySelector('.awards .view-all')")
     finally:
         m.MODE.pop('awards', None)

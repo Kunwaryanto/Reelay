@@ -672,7 +672,7 @@ Measured on the database before and after:
 ## Title page: awards grouped, View all opens a sheet (24 Nov)
 
 - One row per category: the title's own award and the people given it for the title are one row
-  ("Nominated · Production Design · Harry Lange, Ernest Archer"; more than three names end in "+N").
+  ("Nominated · Production Design · Harry Lange +2" on the page; the sheet names everyone).
 - The page shows four rows, wins first. When there are more, the Awards heading has View all (as poster rows do),
   which opens a sheet with every award under a heading per ceremony and year, newest first, wins first in each.
   The sheet's heading says "3 wins · 9 in all".

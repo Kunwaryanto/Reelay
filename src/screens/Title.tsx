@@ -109,7 +109,8 @@ function groupAwards(awards: Award[]): AwardGroup[] {
   }
   return [...groups.values()]
 }
-const people = (names: string[]) => (names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', '))
+/** On the page: the first name and how many more ("Harry Lange +2"), so a row stays one line; the sheet names them all. */
+const firstOf = (names: string[]) => (names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] ?? '')
 /** The page shows this many (wins first); more are in the sheet behind View all. */
 const AWARDS_SHOWN = 4
 
@@ -135,7 +136,7 @@ function Awards({ awards }: { awards: Award[] }) {
         {groups.slice(0, AWARDS_SHOWN).map((g) => (
           <li key={g.key} className="row-plain">
             <Laurel size={16} won={g.won} />
-            <span className="row-text"><b>{g.award} {g.year}</b><small>{[g.won ? 'Won' : 'Nominated', g.category, people(g.people)].filter(Boolean).join(' · ')}</small></span>
+            <span className="row-text"><b>{g.award} {g.year}</b><small>{[g.won ? 'Won' : 'Nominated', g.category, firstOf(g.people)].filter(Boolean).join(' · ')}</small></span>
           </li>
         ))}
       </ul>
@@ -153,7 +154,7 @@ function Awards({ awards }: { awards: Award[] }) {
                   {gs.map((g) => (
                     <li key={g.key} className="row-plain">
                       <Laurel size={16} won={g.won} />
-                      <span className="row-text"><b>{g.category}</b><small>{[g.won ? 'Won' : 'Nominated', people(g.people)].filter(Boolean).join(' · ')}</small></span>
+                      <span className="row-text"><b>{g.category}</b><small>{[g.won ? 'Won' : 'Nominated', g.people.join(', ')].filter(Boolean).join(' · ')}</small></span>
                     </li>
                   ))}
                 </ul>
