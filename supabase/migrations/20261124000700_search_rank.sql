@@ -9,6 +9,9 @@
 --      near miss (typos)
 --   4. most popular first (near misses: closest first)
 -- The member's own services are not put first: that ranked Gods of Egypt above The Godfather for "god".
+-- load pg_trgm in this session first: setting its threshold on the function needs the library loaded
+select extensions.similarity('a', 'a');
+
 create or replace function public.search_titles(q text, max_results int default 30)
 returns table (
   id bigint, kind text, title text, year int, poster_path text,
