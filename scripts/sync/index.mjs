@@ -218,6 +218,19 @@ export function akaOf(kind, d) {
   return out.slice(0, 6);
 }
 
+/** The title page's picture, picked from all of TMDB's images (`images` with include_image_language en,null): a
+ *  textless poster (no language: the key art without its title), else a textless backdrop at least 1920 wide (the
+ *  page crops it tall, so a smaller one turns soft), best voted first. [path, isPoster], or [null, false]. */
+export function heroOf(d) {
+  const best = (list, minW) => (list ?? [])
+    .filter((i) => !i.iso_639_1 && i.file_path && (i.width ?? 0) >= minW)
+    .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0) || (b.vote_count ?? 0) - (a.vote_count ?? 0) || (b.width ?? 0) - (a.width ?? 0))[0];
+  const poster = best(d.images?.posters, 1000);
+  if (poster) return [poster.file_path, true];
+  const backdrop = best(d.images?.backdrops, 1920);
+  return backdrop ? [backdrop.file_path, false] : [null, false];
+}
+
 async function fetchTitle(key) {
   const [kind, id] = key.split(':');
   const append = ['external_ids', 'images', 'alternative_titles', 'translations', kind === 'movie' ? 'credits,release_dates' : 'aggregate_credits,content_ratings'].join(',');
@@ -269,6 +282,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     d.popularity ?? 0,
     /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? first : null,
     akaOf(kind, d),
+    ...heroOf(d),
   ];
   // Top 10 cast, plus directors (films) or creators (series).
   const cast = film
@@ -295,11 +309,11 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     const t = await c.query(
       `insert into public.titles (tmdb_id, kind, imdb_id, wikidata_id, title, original_title, year, end_year,
          runtime_min, seasons, last_season_on, overview, genres, original_language, countries, age_rating,
-         poster_path, backdrop_path, logo_path, popularity, released_on, aka, keep_reason, synced_at)
+         poster_path, backdrop_path, logo_path, popularity, released_on, aka, hero_path, hero_poster, keep_reason, synced_at)
        values ($1,$2,
          case when exists (select 1 from public.titles o where o.imdb_id = $3 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $3 end,
          case when exists (select 1 from public.titles o where o.wikidata_id = $4 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $4 end,
-         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'streaming', now())
+         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'streaming', now())
        on conflict (tmdb_id, kind) do update set
          imdb_id = excluded.imdb_id, wikidata_id = excluded.wikidata_id, title = excluded.title,
          original_title = excluded.original_title, year = excluded.year, end_year = excluded.end_year,
@@ -307,7 +321,8 @@ async function saveTitleOnce({ kind, d }, dropIds) {
          overview = excluded.overview, genres = excluded.genres, original_language = excluded.original_language,
          countries = excluded.countries, age_rating = excluded.age_rating, poster_path = excluded.poster_path,
          backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path, popularity = excluded.popularity,
-         released_on = excluded.released_on, aka = excluded.aka, synced_at = now()
+         released_on = excluded.released_on, aka = excluded.aka, hero_path = excluded.hero_path,
+         hero_poster = excluded.hero_poster, synced_at = now()
        returning id`,
       row,
     );
@@ -1188,6 +1203,28 @@ async function main() {
       if (++done % 2000 === 0) log(`  ${done} of ${all.length} read, ${changed} with new names`);
     });
     log(`other names: ${all.length} titles read, ${changed} changed${failed ? `, ${failed} failed` : ''}`);
+    await stamp();
+    await db.end();
+    return;
+  }
+  // SYNC_ONLY=hero: once, every title's page picture (the Title pictures workflow); the nightly sync keeps it from
+  // then on as it refreshes titles. Only titles whose picture changed are written.
+  if (ONLY === 'hero') {
+    log('title pictures only');
+    const all = (await db.query(`select id, tmdb_id, kind, hero_path from public.titles order by popularity desc`)).rows;
+    let done = 0, changed = 0, failed = 0, posters = 0, backdrops = 0;
+    await pool(all, 8, async (t) => {
+      const kind = t.kind === 'film' ? 'movie' : 'tv';
+      try {
+        const images = await tmdb(`/${kind}/${t.tmdb_id}/images`, { include_image_language: 'en,null' });
+        if (!images) { failed++; return; }
+        const [path, poster] = heroOf({ images });
+        if (path) { if (poster) posters++; else backdrops++; }
+        if (path !== t.hero_path) { await db.query('update public.titles set hero_path = $2, hero_poster = $3 where id = $1', [t.id, path, poster]); changed++ }
+      } catch (e) { failed++; if (failed <= 5) log(`  ${kind}:${t.tmdb_id} failed:`, e.message) }
+      if (++done % 4000 === 0) log(`  ${done} of ${all.length} read, ${changed} changed`);
+    });
+    log(`title pictures: ${all.length} titles, ${posters} textless posters, ${backdrops} backdrops, ${all.length - posters - backdrops - failed} with neither (fall back); ${changed} changed${failed ? `, ${failed} failed` : ''}`);
     await stamp();
     await db.end();
     return;
