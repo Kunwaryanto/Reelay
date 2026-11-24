@@ -70,6 +70,7 @@ def route(r):
     if 'functions/v1/tmdb' in u:
         b=json.loads(r.request.post_data or '{}')
         if b.get('add'): return r.fulfill(json={'id': 777})
+        if 'tmdb' in MODE: return r.fulfill(json={'results': MODE['tmdb']})
         return r.fulfill(json={'results':[{'kind':'film','tmdb_id':62,'title':'2001: A Space Odyssey','year':1968,'poster_path':'/p62.jpg'}] if '2001' in b.get('q','') else []})
     if '/rest/v1/rpc/search_titles' in u:
         q=json.loads(r.request.post_data)['q'].lower()

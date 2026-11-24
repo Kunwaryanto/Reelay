@@ -17,3 +17,16 @@ def test_no_tmdb_titles_with_a_service(app):
     pg.goto(m.B + '/search'); pg.wait_for_timeout(2000)
     pg.fill('input[type=search], input', '2001 on netflix'); pg.wait_for_timeout(2500)
     assert pg.evaluate("document.querySelectorAll('.s-tmdb').length") == 0
+
+def test_a_title_listed_above_is_not_listed_again(app):
+    # the server leaves out what the catalogue has; if one slips through, the same type, name and year isn't repeated
+    m.MODE['tmdb'] = [{'kind': 'series', 'tmdb_id': 1, 'title': 'Fargo', 'year': 2002, 'poster_path': None},
+                      {'kind': 'film', 'tmdb_id': 2, 'title': 'Fargo', 'year': 1996, 'poster_path': None}]
+    try:
+        pg = app()
+        pg.goto(m.B + '/search'); pg.wait_for_timeout(2000)
+        pg.fill('input[type=search], input', 'fargo'); pg.wait_for_timeout(2500)
+        rows = pg.evaluate("[...document.querySelectorAll('.s-tmdb .wl-text')].map(t => t.innerText.replace(/\\n/g, ' | '))")
+        assert rows == ['Fargo | 1996 · Film'], rows
+    finally:
+        m.MODE.pop('tmdb', None)

@@ -271,7 +271,10 @@ export default function Search() {
   const words = parseQuery(q).rest
   const plain = hasQ && !!found && !waiting && !error && !myOnly && words.length >= 2 && !tokens.some((t) => t.filter.service || t.filter.services) && Object.keys(extra).length === 0 && kind !== 'people'
   const more = useTmdb(q, words, plain)
-  const extraHits = more.hits.filter((h) => kind === 'all' || h.kind === kind)
+  // TMDB's titles leave out what the catalogue has (by TMDB id, on the server); as a second guard, one listed above
+  // with the same type, name and year isn't listed again
+  const listed = new Set(all.map((h) => `${h.kind}|${h.title.toLowerCase()}|${h.year}`))
+  const extraHits = more.hits.filter((h) => (kind === 'all' || h.kind === kind) && !listed.has(`${h.kind}|${h.title.toLowerCase()}|${h.year}`))
 
   const remember = (r: Recent) => setRecents((old) => { const next = addRecent(old, r); writeRecents(next); return next })
   const forget = (list: Recent[]) => { setRecents(list); writeRecents(list) }
