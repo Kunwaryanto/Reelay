@@ -303,6 +303,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* first opening: invisible while the keyboard comes up and is measured, then placed below the screen and slid up */
 .sheet[data-waiting] { opacity: 0; pointer-events: none; transition: none; }
 .sheet[data-entering] { transform: translateY(110%); transition: none; }
+.sheet[data-moving] :is(input, textarea) { caret-color: transparent; }
 /* the sheet is dragged, not scrolled; a list inside scrolls without Safari's bounce, so at its top a pull down moves only the sheet */
 .sheet-body { touch-action: none; }
 /* lists in a sheet scroll natively, momentum and bounce included; the bounce stays inside the list (contain), and at

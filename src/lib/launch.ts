@@ -14,10 +14,15 @@ export function markLaunched() {
   launched = true
   watchers.forEach((w) => w())
 }
-// whatever happens to Now, the app is never left without its tab bar
-setTimeout(markLaunched, 6000)
-
-export const useLaunched = () => useSyncExternalStore((w) => { watchers.add(w); return () => watchers.delete(w) }, () => launched)
+// Whatever happens to Now, the app is never left without its tab bar: 6 s after the signed-in app starts (its first
+// listener). Not from the page load: after a sign-in that took longer than that, the tab bar showed on black
+// before Home and its wordmark.
+let fallback = 0
+export const useLaunched = () => useSyncExternalStore((w) => {
+  watchers.add(w)
+  if (!fallback && !launched) fallback = window.setTimeout(markLaunched, 6000)
+  return () => watchers.delete(w)
+}, () => launched)
 
 /** Resolves once the icon font can draw (at once after the first visit), so icons never pop in one by one. */
 export const iconsReady: Promise<unknown> = Promise.race([

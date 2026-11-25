@@ -637,6 +637,16 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
       // Without a field to type in, focus the sheet itself rather than its first button
       // (which would wear a focus ring and could be scrolled into view).
       if (!keyboard) { d.tabIndex = -1; d.setAttribute('autofocus', '') }
+      // iOS draws a field's caret where the field was, not where the moving sheet has taken it: the caret sat
+      // below the field while the sheet rose. Hidden until the sheet has settled.
+      d.dataset.moving = 'true'
+      const settled = (e?: TransitionEvent) => {
+        if (e && (e.target !== d || e.propertyName !== 'transform')) return
+        if (d.dataset.waiting || d.dataset.entering) return
+        delete d.dataset.moving; d.removeEventListener('transitionend', settled); clearTimeout(t)
+      }
+      d.addEventListener('transitionend', settled)
+      const t = window.setTimeout(() => { delete d.dataset.moving; d.removeEventListener('transitionend', settled) }, 2000)
       d.show()
     }
     else if (!open && d.open) {

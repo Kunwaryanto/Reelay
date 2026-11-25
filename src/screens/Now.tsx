@@ -420,11 +420,14 @@ export default function Now() {
   // The wordmark stays mounted while it fades out over the arriving page (mounting it again would replay its rise).
   const [mark, setMark] = useState<'none' | 'on' | 'gone'>('none')
   if (phase === 'mark' && mark === 'none' && !booted) setMark('on')
+  // it fades as the page arrives, or as the placeholders come in when Home is slow (the start-up wordmark does the
+  // same: it sat over the placeholders for seconds after a first sign-in)
+  const markOff = show || phase === 'late'
   useEffect(() => {
-    if (!show || mark !== 'on') return
+    if (!markOff || mark !== 'on') return
     const t = setTimeout(() => setMark('gone'), 700)
     return () => clearTimeout(t)
-  }, [show, mark])
+  }, [markOff, mark])
   // Back on a new day: the wordmark covers the page while today's Home is made, then fades over it
   const [cover, setCover] = useState<'none' | 'on' | 'leaving'>('none')
   if (q.waking && cover !== 'on') setCover('on')
@@ -460,7 +463,7 @@ export default function Now() {
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
       {(show || failed || phase === 'late') && <div className="now-settings"><SettingsButton glass /></div>}
 
-      {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
+      {mark === 'on' && !q.error && <div className="launch" data-leaving={markOff || undefined}><Wordmark height={32} rise /></div>}
       {cover !== 'none' && <div className="launch" data-leaving={cover === 'leaving' || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
         <div className="now-holders" aria-hidden="true">

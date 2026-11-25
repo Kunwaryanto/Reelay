@@ -27,12 +27,11 @@ def test_catching_a_throw_holds_the_wall_where_it_is(app):
     pg.mouse.move(250, 600); pg.mouse.down()
     for i in range(1, 6): pg.mouse.move(250 - i * 25, 600 - i * 40); pg.wait_for_timeout(5)
     pg.mouse.up(); pg.wait_for_timeout(60)   # gliding now, far from where it will stop
-    before = pg.evaluate(PAN)
-    pg.mouse.down(); pg.wait_for_timeout(30)
-    after = pg.evaluate(PAN)
+    # caught in the same moment the position is read (a slow test machine can't let the glide run on in between)
+    before = pg.evaluate("""(() => { const p = PAN_JS(); const w = document.querySelector('.ob-wall')
+      w.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 400, pointerId: 1, isPrimary: true })); return p })()""".replace('PAN_JS', '(() => ' + PAN + ')'))
     pg.wait_for_timeout(300)
     still = pg.evaluate(PAN)
-    pg.mouse.up()
-    # held where it was caught (only the few pixels it glid between the two reads), and it stays there
-    assert abs(after[0] - before[0]) < 20 and abs(after[1] - before[1]) < 20, (before, after)
-    assert abs(still[0] - after[0]) < 1 and abs(still[1] - after[1]) < 1, (after, still)
+    pg.evaluate("document.querySelector('.ob-wall').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))")
+    # held where it was caught, and it stays there (it used to jump on to where the glide was going)
+    assert abs(still[0] - before[0]) < 3 and abs(still[1] - before[1]) < 3, (before, still)
