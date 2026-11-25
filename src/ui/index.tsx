@@ -666,29 +666,35 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
 
 
   // First time only: wait for the keyboard to settle, measure the room it takes, keep it, then slide up.
+  // While the sheet is open the room only ever grows: a keyboard measured late (it can take longer than the
+  // 900 ms wait on a first launch) still lifts the sheet, and the keyboard going down later (Send code, leaving
+  // for Mail) never shrinks it back to an ordinary sheet.
   useEffect(() => {
     const d = ref.current
     if (!open || !keyboard || !d || !d.dataset.waiting) return
     const vv = window.visualViewport
-    let quiet = 0
-    const place = () => {
-      clearTimeout(quiet); clearTimeout(limit)
-      // once: kept listening, the keyboard going down later (Send code) measured "no keyboard" and the sheet
-      // dropped to an ordinary sheet's height
-      vv?.removeEventListener('resize', moved)
-      const box = d.offsetParent
-      const room = vv && box ? Math.round(openHeight - vv.height) : 0
-      if (room > 150) {
-        d.style.setProperty('--kb-room', `${room}px`)
-        try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
-      } else d.style.setProperty('--kb-room', '0px') // no on-screen keyboard: an ordinary sheet
+    let quiet = 0, best = 0
+    const show = () => {
+      if (!d.dataset.waiting) return
       d.dataset.entering = 'true'
       delete d.dataset.waiting
       requestAnimationFrame(() => requestAnimationFrame(() => { delete d.dataset.entering }))
     }
-    // settled = no keyboard movement for 120 ms; give up after 900 ms (no keyboard came up)
+    const place = () => {
+      clearTimeout(quiet)
+      const room = vv ? Math.round(openHeight - vv.height) : 0
+      if (room > 150 && room > best) {
+        best = room
+        clearTimeout(limit)
+        d.style.setProperty('--kb-room', `${room}px`)
+        try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
+        show()
+      }
+    }
+    // settled = no keyboard movement for 120 ms; after 900 ms with no keyboard, an ordinary sheet (a hardware
+    // keyboard), which a keyboard that turns up after all still lifts
     const moved = () => { clearTimeout(quiet); quiet = window.setTimeout(place, 120) }
-    const limit = window.setTimeout(place, 900)
+    const limit = window.setTimeout(() => { if (!best) { d.style.setProperty('--kb-room', '0px'); show() } }, 900)
     vv?.addEventListener('resize', moved)
     return () => { clearTimeout(quiet); clearTimeout(limit); vv?.removeEventListener('resize', moved) }
   }, [open, keyboard])
