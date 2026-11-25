@@ -11,4 +11,8 @@ for (let r = 0; r < 8; r++) console.log('  ' + w.slice(r * 8, r * 8 + 8).map((x)
 const s = (await db.query(`select p.pos, t.kind, t.year, t.title from public.start_wall_posters p join lateral (select * from public.titles t where t.poster_path = p.poster_path limit 1) t on true order by p.pos`)).rows;
 console.log(`\nSTART (${s.length})`);
 for (let r = 0; r < 6; r++) console.log('  ' + s.slice(r * 8, r * 8 + 8).map((x) => `${x.kind === 'film' ? 'F' : 'S'}${x.year} ${x.title.slice(0, 16)}`).join(' | '));
+const c = (await db.query(`select t.title, t.year, sc.letterboxd from public.titles t join public.scores sc on sc.title_id = t.id
+  where public.wall_part(t.kind, t.year, t.imdb_votes, sc.letterboxd, 2026) = 'canon' and exists (select 1 from public.availability a where a.title_id = t.id)
+  order by sc.letterboxd desc`)).rows;
+console.log(`\nCANON STREAMING (${c.length})`); console.log('  ' + c.slice(0, 60).map((x) => `${x.title.slice(0, 22)} ${x.year} ${x.letterboxd}`).join(' | '));
 await db.end();
