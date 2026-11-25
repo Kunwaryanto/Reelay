@@ -217,8 +217,6 @@ export function Cover({ path, service, eager, sizes = '147px', watched }: { path
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
-      {/* logged on Letterboxd: a check in the other corner from the service */}
-      {watched && <span className="cover-seen" aria-hidden="true"><Icon name="check" size={14} /></span>}
     </div>
   )
 }

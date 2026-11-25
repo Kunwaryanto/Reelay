@@ -495,7 +495,6 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-section-head { margin: 0 var(--margin); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .wl-section-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
 .wl-section-head > span { font: var(--type-meta); color: var(--text-faint); white-space: nowrap; }
-.wl-section ul { list-style: none; margin: 4px var(--margin) 0; padding: 0; }
 .wl-row { position: relative; min-width: 0; overflow: hidden; }
 /* --x: how far the row is slid (px, negative is left), --r the same as a plain number; both written by the swipe */
 .wl-slide { position: relative; display: flex; align-items: center; background: var(--bg); touch-action: pan-y; user-select: none; -webkit-user-select: none; transform: translateX(var(--x, 0px)); transition: transform 320ms var(--ease-sheet); will-change: transform; }
@@ -1142,10 +1141,8 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 @media (prefers-reduced-motion: reduce) { .wl-row[data-fresh] { animation: none; } }
 
 /* ---- Letterboxd ---- */
-/* Posters of films the person has logged: a check in the corner opposite the service mark (the picture itself is left alone). */
-.cover-seen { position: absolute; top: 7px; left: 7px; height: 14px; display: flex; align-items: center; color: #fff; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
-.cover-seen .ms { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
-.cover[data-ready='true'] > .cover-seen { opacity: 1; }
+/* Posters of films the person has logged on Letterboxd are greyed (the service mark stays as it is). */
+.cover[data-watched] > img { filter: grayscale(1) brightness(0.55); }
 
 /* Title page: who has watched it, under the scores */
 /* part of the top block (meta, scores, this row, the text): an even 32px of visible space above and below,
@@ -1223,14 +1220,11 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .page-plain > .rows.sg-more { margin-left: 0; margin-right: 0; }
 .sg-done { height: var(--hit); margin-right: -8px; padding: 0 8px; border: 0; background: none; font: var(--type-text); color: var(--text-faint); cursor: pointer; }
 
-/* Watchlist as one wall: 4 posters a row, edge to edge (4px in from the screen), leaving soonest first, what isn't on
-   the member's services greyed at the end */
-.wl-wall { list-style: none; margin: 8px 4px 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+/* Watchlist as posters, three a row, under the two section headings */
+.wl-wall { list-style: none; margin: 10px var(--margin) 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .wl-tile { position: relative; min-width: 0; }
 .wl-tile > a { display: block; position: relative; color: inherit; -webkit-touch-callout: none; transition: transform var(--dur-press) var(--ease-out); }
 .wl-tile > a[data-pressed] { transform: scale(0.96); }
-.wl-tile .cover { border-radius: 6px; }
-.wl-tile[data-off] .cover > img { filter: grayscale(1) brightness(0.5); }
 .wl-soon { position: absolute; left: 5px; bottom: 5px; padding: 0 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.72); font-family: var(--font); font-weight: 600; font-size: 10px; line-height: 16px; color: var(--text-primary); white-space: nowrap; }
 .wl-bellmark { position: absolute; right: 5px; top: 5px; display: flex; color: var(--text-primary); }
 @media (prefers-reduced-motion: no-preference) { .wl-tile[data-fresh] { animation: wl-tile-in 500ms var(--ease-out) both; } }

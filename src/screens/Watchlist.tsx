@@ -1,5 +1,6 @@
-// Watchlist: what you've saved, as one wall of posters: leaving soonest first, then what's on your services, then what
-// isn't (greyed). A tap opens the title, holding it gives Remove and Notify me. Empty: a wall of posters to pick from.
+// Watchlist: what you've saved, as posters three across in two parts: on your services (leaving soonest first), then
+// what isn't. Seen films are greyed, like everywhere. A tap opens the title, holding it gives Remove and Notify me.
+// Empty: a wall of posters to pick from.
 import { useServicesQuery } from '../lib/profile'
 import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
@@ -14,7 +15,7 @@ import { useDimOnScroll, useNav } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { Button, Cover, Icon, SettingsButton, LoadFailed, PillCount, joinHandlers, useLongPress, usePageLink, useSwitched, useHold, usePageRefresh } from '../ui'
-import { useWatched } from '../lib/letterboxd'
+import { useWatched, useWatchedMark } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 
 type Kind = 'all' | 'film' | 'series'
@@ -93,9 +94,14 @@ export default function Watchlist() {
 
   // leaving within a month counts as Leaving soon
   const note = (r: Row) => leavingFor(r.leaves, { stale: q.stale, within: 30 })
-  // one wall: leaving soonest first, then the rest on the member's services (in the chosen order), then the others
+  // on the member's services: leaving soonest first, then the rest in the chosen order; then what isn't
   const leaving = list.filter((r) => r.mine && note(r)).sort((a, b) => (a.leaves ?? '9').localeCompare(b.leaves ?? '9'))
-  const wall = [...leaving, ...list.filter((r) => r.mine && !note(r)), ...list.filter((r) => !r.mine)]
+  const on = [...leaving, ...list.filter((r) => r.mine && !note(r))]
+  const off = list.filter((r) => !r.mine)
+  const sections = [
+    { id: 'on', title: hasPicked ? 'On your services' : 'Streaming now', sub: String(on.length), rows: on },
+    { id: 'off', title: hasPicked ? 'Not on your services' : 'Not streaming in Sweden', sub: 'Notify when it is', rows: off },
+  ].filter((x) => x.rows.length)
 
   const header = (
     <div className="tab-head">
@@ -133,13 +139,18 @@ export default function Watchlist() {
         </div>
       )}
 
-      <ul key={kind} className={`wl-wall${switched ? ' pill-in' : ''}`} aria-label="Saved titles">
-        {wall.map((r) => (
-          <WallPoster key={r.t.id} row={r} fresh={isNew(r.t.id)} note={r.mine ? note(r) : null} notifying={!r.mine && saved.isNotifying(r.t.id)}
-            where={r.mine ? null : r.service ? `on ${nameOf(r.service)}` : 'not streaming'} />
-        ))}
-      </ul>
-      {wall.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
+      {sections.map((x) => (
+        <section key={x.id} className="wl-section">
+          <div className="wl-section-head"><h2>{x.title}</h2><span>{x.sub}</span></div>
+          <ul key={kind} className={`wl-wall${switched ? ' pill-in' : ''}`} aria-label={x.title}>
+            {x.rows.map((r) => (
+              <WallPoster key={r.t.id} row={r} fresh={isNew(r.t.id)} note={r.mine ? note(r) : null} notifying={!r.mine && saved.isNotifying(r.t.id)}
+                where={r.mine ? null : r.service ? `on ${nameOf(r.service)}` : 'not streaming'} />
+            ))}
+          </ul>
+        </section>
+      ))}
+      {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
         noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />
@@ -149,22 +160,23 @@ export default function Watchlist() {
   )
 }
 
-/** One saved title on the wall: its poster with the service it's on, how soon it leaves, or greyed when it isn't on
- *  the member's services (a small bell when they'll be told it arrives). Tap opens it; hold gives the poster menu. */
+/** One saved title: its poster with the service it's on and how soon it leaves, or, when it isn't on the member's
+ *  services, a small bell if they'll be told it arrives. Greyed once seen. Tap opens it; hold gives the poster menu. */
 function WallPoster({ row, fresh, note, notifying, where }: { row: Row; fresh?: boolean; note: string | null; notifying: boolean; where: string | null }) {
   const { t, service, mine } = row
   const onHold = useHold()
   const hold = useLongPress((el) => onHold(t as unknown as Card, el.querySelector<HTMLElement>('.cover')!))
   const link = usePageLink(paths.title(t.id))
   const { push } = useNav()
+  const watched = useWatchedMark(t.id)
   // "Leaves in 3 days" says it on a poster as "3 days"
   const soon = note?.replace(/^Leaves (in )?/, '').replace(/^./, (c) => c.toUpperCase())
-  const label = [t.title, mine && service ? nameOf(service) : where, note, notifying ? 'you will be notified' : null].filter(Boolean).join(', ')
+  const label = [t.title, mine && service ? nameOf(service) : where, note, notifying ? 'you will be notified' : null, watched ? 'watched' : null].filter(Boolean).join(', ')
   return (
-    <li className="wl-tile" data-off={!mine || undefined} data-fresh={fresh || undefined}>
+    <li className="wl-tile" data-fresh={fresh || undefined}>
       <a href={paths.title(t.id)} aria-label={label} {...joinHandlers(hold.handlers, link)}
         onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(t.id)) }}>
-        <Cover path={t.poster_path} service={mine ? service ?? undefined : undefined} sizes="96px" />
+        <Cover path={t.poster_path} service={mine ? service ?? undefined : undefined} sizes="128px" watched={watched} />
         {soon && <span className="wl-soon" aria-hidden="true">{soon}</span>}
         {notifying && <span className="wl-bellmark" aria-hidden="true"><Icon name="notifications" size={14} fill /></span>}
       </a>
