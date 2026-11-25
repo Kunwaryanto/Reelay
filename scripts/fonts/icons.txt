@@ -24,9 +24,8 @@ ios_share
 language
 lock
 logout
-menu
+notes
 mail
-more_horiz
 north_east
 notifications
 notifications_active

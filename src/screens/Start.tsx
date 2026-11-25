@@ -213,7 +213,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
             <h2>{joined ? 'You’re in. Add Reelay to your Home Screen' : inAppBrowser ? 'Open this page in Safari' : 'Add to Home Screen'}</h2>
             {inAppBrowser ? <p>Reelay is added to your Home Screen from Safari. This app’s own browser can’t do that.</p> : (
               <ol>
-                <li><span>1</span><span>Tap <Icon name="menu" size={16} />, then <Icon name="ios_share" size={16} /> <b>Share</b></span></li>
+                <li><span>1</span><span>Tap <Icon name="notes" size={16} />, then <Icon name="ios_share" size={16} /> <b>Share</b></span></li>
                 <li><span>2</span><span>Tap <Icon name="add_box" size={16} /> <b>Add to Home Screen</b></span></li>
                 <li><span>3</span><span>Tap <b>Add</b></span></li>
               </ol>
