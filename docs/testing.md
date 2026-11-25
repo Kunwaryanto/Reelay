@@ -2,7 +2,8 @@
 
 Browser tests live in `tests/e2e` (Python, pytest and Playwright). They run the **built** app in Chromium at
 iPhone size (390 x 844, touch) against a mock Supabase and mock TMDB pictures (`tests/e2e/mock_api.py`), so they
-need no network or account. The `Browser tests` workflow runs them on every push to `sprint-2` and `main`.
+need no network or account. Run them before every push to `sprint-2`. The `Browser tests` workflow runs them on GitHub only when app code
+reaches `main` (with lint and the vercel.json check), to stay within the free Actions minutes.
 
 What they cover: every kind of address and the tab bar (`test_routes`), Home loading only after a sync and never
 swapping under you (`test_home`), preloading on press (`test_preload`), pull to refresh (`test_pull`), the launch
