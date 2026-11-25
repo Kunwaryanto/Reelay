@@ -72,3 +72,6 @@ def test_service_always_at_the_bottom_never_in_the_reason(app):
     names = ['Netflix', 'HBO Max', 'Viaplay', 'SkyShowtime', 'Disney+', 'Prime Video', 'Apple TV', 'SVT Play', 'TV4 Play']
     assert out and all(any(n in o['meta'] for n in names) for o in out), out
     assert not any(n in o['reason'] for o in out for n in names), out
+    # nor the length: a short saved film is "Under 100 minutes", with its length below
+    assert not any(o['reason'].startswith('Only ') for o in out), out
+    assert any(o['reason'] == 'Under 100 minutes' for o in out), out

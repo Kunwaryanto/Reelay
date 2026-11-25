@@ -4,7 +4,7 @@
 // A title is shown once: a row skips what a row above it already has. A row needs three titles to be shown.
 import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
-import { MIN_ROW, SERVICE_NAME, namesLine, shortRuntime, type Card } from './catalogue'
+import { MIN_ROW, SERVICE_NAME, namesLine, type Card } from './catalogue'
 import { supabase } from './supabase'
 import { suggestable } from './hidden'
 import { dayNumber, daysUntil, localDay } from './days'
@@ -77,7 +77,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 17
+export const HOME_VERSION = 18
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -416,7 +416,8 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   const since = new Map(saved.filter((x) => x.title && x.added_at).map((x) => [x.title.id, x.added_at!]))
   const longSaved = playable.filter((t) => since.has(t.id) && daysUntil(since.get(t.id)!.slice(0, 10)) <= -45)
   spot(longSaved, (t) => `On your watchlist since ${monthOf(since.get(t.id)!)}`)
-  spot(playable.filter(isShort), (t) => `Only ${shortRuntime(t.runtime_min)}`)
+  // the length itself is on the card's bottom line; exactly 100 minutes isn't "under"
+  spot(playable.filter((t) => isShort(t) && t.runtime_min! < 100), () => 'Under 100 minutes')
   spot(rowLeaving, (t) => leavingLine(leavesOn.get(t.id)), { bar: true, again: true, via: (t) => leavingVia(t, leavesOn.get(t.id)) })
   spot(rowNew, (t) => newLine(t), { bar: true, via: (t) => arrivedOn.get(t.id) })
   spot(rowAwards, (t) => wins.get(t.id)!.line, { bar: true })
