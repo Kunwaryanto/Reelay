@@ -787,3 +787,8 @@ Measured on the database before and after:
   the last 5 years; long-running shows with a new season don't count); films are half new (last 5 years) and half classics (20+ years
   old, well known). Films from 5 to 20 years ago, the ones people have most likely seen, are left out. Onboarding's
   wall is chosen by the database in one request instead of one per service.
+- The walls' classics now include the canon: 2 of every 8 posters are films rated 4.0+ on Letterboxd (with 25,000+
+  IMDb votes, 20+ years old), best rated first, such as Seven Samurai, Harakiri, Ran, Cinema Paradiso and Persona;
+  1 of 8 is another well-known classic (Home Alone, Titanic). IMDb's ratings were tried first and gave the crowd's
+  favourites instead (Shawshank, Fight Club). 270 canon films stream now; 2001: A Space Odyssey isn't one of them.
+- Fixed: an outer poster on onboarding's wall that the phone already had could stay blank.

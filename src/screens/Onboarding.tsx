@@ -25,7 +25,7 @@ const CAM: Record<Cam, string> = {
 // 8 columns of 8: Services and Notifications frame the middle 6 columns (as when the wall had 6), Pick pans out to
 // all 64. The middle 36 are what the wall waits for; the rest load while Services is up (`inner`).
 const COLS = 8, PER = 8, CELL = 126.24
-const WALL_VERSION = 3 // 2: three films for every series (onboarding_wall); 3: the canon
+const WALL_VERSION = 4 // 2: three films for every series (onboarding_wall); 4: the canon (Letterboxd)
 const inner = (c: number, r: number) => c >= 1 && c <= COLS - 2 && r < 6
 // each column drifts into place when the wall first shows: a different distance and pace, alternating direction
 // (the middle six keep the look they had: the outer columns sit either side of them)
