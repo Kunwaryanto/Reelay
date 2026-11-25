@@ -114,7 +114,7 @@ if True:
     # the system Chrome where there is one (this sandbox), Playwright's own Chromium otherwise (CI)
     b=p.chromium.launch(executable_path='/usr/bin/google-chrome') if _os.path.exists('/usr/bin/google-chrome') else p.chromium.launch()
     def ctx(signed):
-        c=b.new_context(viewport={'width':390,'height':844},device_scale_factor=2,has_touch=True,service_workers='block')
+        c=b.new_context(viewport={'width':390,'height':844},device_scale_factor=2,has_touch=True,service_workers='block',**({'timezone_id':MODE['tz']} if MODE.get('tz') else {}))
         c.route(re.compile(r'https://(mock\.supabase\.co|image\.tmdb\.org)/.*'),route)
         if signed: c.add_init_script(f"localStorage.setItem('sb-mock-auth-token',{json.dumps(json.dumps(SESSION))})")
         pg=c.new_page(); pg.on('pageerror',lambda e: print('pageerror',str(e)[:300]))
@@ -189,7 +189,7 @@ def hroute2(r):
     if 'rpc/home_taste' in u: return r.fulfill(json=[{"genre":"Thriller","average":4.2,"films":12},{"genre":"Science Fiction","average":4.1,"films":9},{"genre":"Drama","average":3.9,"films":30}] if CASE['personal'] else [])
     # wins in today's award: one title can have several (the row shows it once, with "+n")
     if '/awards' in u: return r.fulfill(json=[{"award":"Oscars","short_category":["Best Picture","Best Director","Best Actress"][i%3],"rank":1+i%3,"year":2025-i,"title":card(400+i//2)} for i in range(20)])
-    if '/watchlist' in u and 'titles!inner' in u: return r.fulfill(json=[{"added_at":"2026-11-20","title":dict(card(500+i,(datetime.date.today()+datetime.timedelta(days=3)).isoformat() if MODE.get('leave') and i==5 else None), kind='film' if i>=4 else card(500+i)['kind'], runtime_min=[95,88,140,130,92,85,99,150,97,120,91,110][i%12])} for i in range(12)] if CASE['personal'] else [])
+    if '/watchlist' in u and 'titles!inner' in u: return r.fulfill(json=[{"added_at":"2026-11-20","title":dict(card(500+i,(MODE['leave'] if isinstance(MODE.get('leave'),str) else (datetime.date.today()+datetime.timedelta(days=3)).isoformat()) if MODE.get('leave') and i==5 else None), kind='film' if i>=4 else card(500+i)['kind'], runtime_min=[95,88,140,130,92,85,99,150,97,120,91,110][i%12])} for i in range(12)] if CASE['personal'] else [])
     if '/titles' in u and '&id=in.' in u and 'backdrop_path' in u:
         ids=[int(x) for x in re.search(r'&id=in\.\(([\d,]+)\)',u).group(1).split(',')]; return r.fulfill(json=[card(i) for i in ids])
     if '/titles' in u and 'trend_rank' in u: 

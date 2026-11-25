@@ -1,5 +1,6 @@
 // Search: what the words mean (filters such as a service, a decade or a genre) and the lookups behind the screen.
 import { supabase } from './supabase'
+import { localDay } from './days'
 
 export type Hit = {
   id: number
@@ -139,7 +140,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   if (res.error) throw new Error(res.error.message)
   return res.data as T
 }
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+const inDays = localDay
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 type Raw = {

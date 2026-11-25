@@ -6,6 +6,7 @@ import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
 import { MIN_ROW, SERVICE_NAME, shortRuntime, type Card } from './catalogue'
 import { supabase } from './supabase'
+import { dayNumber, daysUntil, localDay } from './days'
 
 export type HomeCard = Card & {
   runtime_min?: number | null
@@ -69,11 +70,9 @@ const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons
 type Kind = Card['kind']
 type Res<T> = PromiseLike<{ data: T | null; error: { message: string } | null }>
 
-const today = () => new Date().toISOString().slice(0, 10)
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+const today = () => localDay()
+const inDays = localDay
 const YEAR = new Date().getFullYear()
-/** A number that changes once a day, for the rows that rotate. */
-const dayNumber = () => Math.floor(Date.now() / 864e5)
 const svcName = (id: string) => SERVICE_NAME[id] ?? id
 
 /** A row that fails to load is left out; it never takes the page with it. */
@@ -86,7 +85,7 @@ function hard<T>(r: { data: T | null; error: { message: string } | null }): T {
 
 function leavesIn(day: string | null | undefined): string | null {
   if (!day) return null
-  const n = Math.round((Date.parse(day) - Date.parse(today())) / 864e5)
+  const n = daysUntil(day)
   if (n < 0 || n > 30) return null
   return n === 0 ? 'Leaves today' : n === 1 ? 'Leaves tomorrow' : `Leaves in ${n} days`
 }

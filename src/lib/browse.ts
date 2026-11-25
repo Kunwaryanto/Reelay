@@ -2,6 +2,7 @@
 // A category is a set of filters over streaming titles; nothing here is stored in the database.
 import { MIN_ROW, type Card } from './catalogue'
 import { supabase } from './supabase'
+import { localDay } from './days'
 
 export type Kind = Card['kind']
 /** 'home': lists that only Home's rows open (View all); they aren't shown in Browse */
@@ -129,7 +130,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   if (res.error) throw new Error(res.error.message)
   return res.data as T
 }
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+const inDays = localDay
 const today = () => inDays(0)
 
 const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'

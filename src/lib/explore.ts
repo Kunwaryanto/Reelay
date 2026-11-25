@@ -6,6 +6,7 @@ import { CATEGORIES, rowsOf, type Category, type Kind, type Sort } from './brows
 import type { Card } from './catalogue'
 import { genreNames, narrow, type Filters } from './search'
 import { supabase } from './supabase'
+import { localDay } from './days'
 
 export type Pick = 'all' | Kind
 /** Where a list starts: its filters as chips, the type pill and the sort. */
@@ -99,7 +100,7 @@ function filtersOf(d: Draft, ctx: Ctx, kind?: Kind): Filters & { leaving?: boole
   return f
 }
 const scored = (d: Draft) => !!(d.rating || d.rt || d.lb)
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => localDay()
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function query(d: Draft, ctx: Ctx, kind: Kind | undefined, fields: string, head = false): any {

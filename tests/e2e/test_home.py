@@ -109,3 +109,17 @@ def test_news_forgets_what_was_seen(app):
         assert head == 'Leaving soon' and 'leaves' in sub, (head, sub)
     finally:
         m.MODE.pop('leave', None)
+
+
+def test_days_are_the_phones(app):
+    # half past midnight in Stockholm is still yesterday in UTC: "tomorrow" is the phone's tomorrow
+    from conftest import TOP
+    m.MODE.update(tz='Europe/Stockholm', leave='2026-11-27', news=False)
+    try:
+        pg = app()
+        pg.clock.set_fixed_time('2026-11-25T23:30:00Z')   # 26 Nov, 00:30 in Stockholm
+        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        sub = pg.evaluate(f"({TOP}).querySelector('.news small')?.textContent")
+        assert sub and 'leaves' in sub and sub.endswith('tomorrow'), sub
+    finally:
+        for k in ('tz', 'leave', 'news'): m.MODE.pop(k, None)

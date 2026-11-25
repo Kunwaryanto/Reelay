@@ -1,5 +1,6 @@
 // Reads the catalogue (titles, where they stream, scores, cast) and the user's watchlist.
 import { supabase } from './supabase'
+import { daysUntil } from './days'
 
 // link: the whole link, before links were stored in two parts (kept readable until that database change is live)
 export type Avail = { service_id: string; leaves_on: string | null; type?: string; link_path?: string | null; link?: string | null; service?: { link_base?: string | null } | null }
@@ -25,7 +26,6 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   return res.data as T
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
 
 
 // Now mixes films and series, and recent titles with classics, so popularity alone (which favours
@@ -270,7 +270,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 export function leavingNote(date: string | null | undefined): string | null {
   if (!date) return null
-  const days = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(today() + 'T00:00:00Z')) / 864e5)
+  const days = daysUntil(date)
   if (days < 0) return null
   if (days === 0) return 'Leaves today'
   if (days === 1) return 'Leaves tomorrow'
@@ -289,7 +289,7 @@ export const leavesOn = (t: { availability: { leaves_on?: string | null }[] }) =
 export function leavingFor(what: { availability: { leaves_on?: string | null }[] } | string | null | undefined, { stale = false, within }: { stale?: boolean; within?: number } = {}): string | null {
   const date = typeof what === 'string' || what == null ? what : leavesOn(what)
   if (stale || !date) return null
-  if (within !== undefined && (Date.parse(date + 'T00:00:00Z') - Date.now()) / 864e5 > within) return null
+  if (within !== undefined && daysUntil(date) > within) return null
   return leavingNote(date)
 }
 

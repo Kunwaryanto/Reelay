@@ -749,3 +749,8 @@ Measured on the database before and after:
 - The line forgets what you've seen: an arrival goes once you've opened its title (or tapped the line to open the
   Watchlist, which counts as seeing all of them). Something leaving stays until it leaves. A film you've logged on
   Letterboxd goes. Remembered on the phone, so Safari and the Home Screen app each keep their own.
+
+## Days by the phone's clock (25 Nov)
+
+- "Leaves today", "Leaves in 3 days", what counts as new or leaving, and Home's daily rows follow the phone's own
+  date. Before, they followed UTC, so just after midnight in Sweden they were a day behind.
