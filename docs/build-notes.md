@@ -802,3 +802,5 @@ Measured on the database before and after:
 - One film per series on the walls (one Lord of the Rings, one Harry Potter), the modern canon with the less obvious
   first (La Haine and Paris, Texas before Shawshank and Fight Club), and series need 90%+ from critics and IMDb 8.0+.
 - Series on the walls also need an Emmy or Golden Globe nomination: critics' scores alone let in Clarkson's Farm, Bosch: Legacy and Dexter: Resurrection. Now Severance, Shōgun, Andor, The Bear, The Pitt, Hacks, Slow Horses.
+- Search holds still (25 Nov): with the keyboard up, a drag on anything that can't scroll (the prompt, ideas, the field) no longer moves the whole page up under the keyboard; result lists that can scroll still do.
+- Black launch screens (25 Nov): `apple-touch-startup-image` per iPhone size (`public/splash`, plain black), so the one frame of the web view's dark grey before the first paint is covered. iOS reads them when the app is added to the Home Screen: re-add it to get them.

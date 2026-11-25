@@ -3,7 +3,7 @@
 import { useServicesQuery } from '../lib/profile'
 import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -350,6 +350,22 @@ export default function Search() {
   // lands on the empty page where the field used to be, which takes the focus away and closes the keyboard again.
   // React's onTouchStart is passive and can't cancel the tap, so this listens on the element itself.
   const box = useRef<HTMLDivElement>(null)
+  // With the keyboard up, iOS lets a drag on anything that doesn't scroll move the whole page up under it (the
+  // prompt and the field slide away, then snap back). Only a list that can really scroll may move: every other
+  // drag on Search is held still.
+  const page = useCallback((el: HTMLElement | null) => {
+    if (!el) return
+    const hold = (e: TouchEvent) => {
+      for (let n = e.target as HTMLElement | null; n && n !== el; n = n.parentElement) {
+        const cs = getComputedStyle(n)
+        if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return
+        if (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1) return
+      }
+      if (e.cancelable) e.preventDefault()
+    }
+    el.addEventListener('touchmove', hold, { passive: false })
+    return () => el.removeEventListener('touchmove', hold)
+  }, [])
   const focusedAt = useRef(0)
   useEffect(() => {
     const el = box.current
@@ -415,7 +431,7 @@ export default function Search() {
   const up = typing && room > 0
 
   return (
-    <main className="search" data-drawer={drawer} data-arriving={arriving} data-kb={typing ? 'up' : 'down'} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
+    <main ref={page} className="search" data-drawer={drawer} data-arriving={arriving} data-kb={typing ? 'up' : 'down'} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
       onTouchStart={(e) => { swipe.current = drawer ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
       onTouchMove={(e) => {
         const s = swipe.current
