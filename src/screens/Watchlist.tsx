@@ -99,8 +99,8 @@ export default function Watchlist() {
   const on = [...leaving, ...list.filter((r) => r.mine && !note(r))]
   const off = list.filter((r) => !r.mine)
   const sections = [
-    { id: 'on', title: hasPicked ? 'On your services' : 'Streaming now', sub: String(on.length), rows: on },
-    { id: 'off', title: hasPicked ? 'Not on your services' : 'Not streaming in Sweden', sub: String(off.length), rows: off },
+    { id: 'on', title: hasPicked ? 'On your services' : 'Streaming now', rows: on },
+    { id: 'off', title: hasPicked ? 'Not on your services' : 'Not streaming in Sweden', rows: off },
   ].filter((x) => x.rows.length)
 
   const header = (
@@ -141,7 +141,7 @@ export default function Watchlist() {
 
       {sections.map((x) => (
         <section key={x.id} className="wl-section">
-          <div className="wl-section-head"><h2>{x.title}</h2><span>{x.sub}</span></div>
+          <div className="wl-section-head"><h2>{x.title}</h2></div>
           <ul key={kind} className={`wl-wall${switched ? ' pill-in' : ''}`} aria-label={x.title}>
             {x.rows.map((r) => (
               <WallPoster key={r.t.id} row={r} fresh={isNew(r.t.id)} note={r.mine ? note(r) : null} notifying={!r.mine && saved.isNotifying(r.t.id)}

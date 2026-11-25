@@ -1082,7 +1082,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .skel[data-kind='rows'] { padding-top: calc(540px + var(--row-gap)); }
 .skel[data-kind='rows'] section { margin-left: var(--margin); }
 .skel[data-kind='rows'] i { width: 150px; height: 12px; margin: 4px 0; border-radius: 6px; }
-.skel[data-kind='rows'] section > div { margin-top: 12px; display: flex; gap: 16px; overflow: hidden; }
+.skel[data-kind='rows'] section > div { margin-top: 16px; display: flex; gap: 16px; overflow: hidden; }
 .skel[data-kind='rows'] span { flex: none; width: 147px; aspect-ratio: 147 / 220; border-radius: var(--radius-media); corner-shape: squircle; }
 /* grid: three across, fading out down the page */
 .grid-wrap { position: relative; }
@@ -1093,7 +1093,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .grid-wrap > .skel[data-kind='grid'] { margin-top: 0; }
 .skel[data-kind='grid'] span { aspect-ratio: 147 / 220; border-radius: 10px; corner-shape: squircle; }
 /* title: where the name and the first lines will be, under the (dark) top picture */
-.skel[data-kind='title'] { padding: 514px var(--margin) 0; }
+.skel[data-kind='title'] { padding: 510px var(--margin) 0; }
 .skel[data-kind='title'] i { height: 22px; border-radius: 8px; width: 62%; }
 .skel[data-kind='title'] i + i { height: 10px; border-radius: 5px; width: 45%; margin-top: 14px; }
 .skel[data-kind='title'] i + i + i { width: 30%; margin-top: 8px; }
@@ -1107,11 +1107,11 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .skel[data-kind='person'] header div { flex: 1; }
 .skel[data-kind='person'] header b { height: 18px; width: 55%; border-radius: 7px; }
 .skel[data-kind='person'] header b + b { height: 10px; width: 40%; margin-top: 10px; border-radius: 5px; }
-.skel[data-kind='person'] > div { margin-top: 72px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 62px; }
+.skel[data-kind='person'] > div { margin-top: 70px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 62px; }
 .skel[data-kind='person'] > div span { aspect-ratio: 147 / 220; border-radius: 10px; corner-shape: squircle; }
 /* cards: Browse's category tiles, two across */
 .br-body { position: relative; }
-.br-body > .skel[data-kind='cards'] { padding-top: 56px; }
+.br-body > .skel[data-kind='cards'] { padding-top: 45px; }
 .skel[data-kind='cards'] { padding: calc(var(--safe-top) + 70px) var(--margin) 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   -webkit-mask-image: linear-gradient(180deg, #000 40%, transparent 95%); mask-image: linear-gradient(180deg, #000 40%, transparent 95%); }
 .skel[data-kind='cards'] span { height: 96px; border-radius: var(--radius-media); corner-shape: squircle; }
