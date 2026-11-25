@@ -41,3 +41,15 @@ def test_picks_change_from_day_to_day(app):
     repeated = [c for c in cards if c['id'] in first]
     assert cards and all(c['reason'].startswith(('Just arrived', 'Leaves')) for c in repeated), (first, cards)
     assert len(repeated) < len(cards), (first, cards)
+
+def test_card_text_is_never_cut(app):
+    # A long title, reason or credit wraps instead of being clipped or cut with an ellipsis, and descenders (the g in
+    # Bugonia) show whole: nothing on the card clips its text. 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    out = pg.evaluate("""(() => { const s = document.querySelector('.spot')
+      s.querySelector('.spot-top b').textContent = 'Everything Everywhere All at Once: The Longest Title'
+      s.querySelector('.spot-top small').textContent = 'Because you liked Portrait of a Lady on Fire and two more'
+      return [...s.querySelectorAll('.spot-top b, .spot-top small, .spot-meta span')].map(e => { const c = getComputedStyle(e)
+        return { t: e.className || e.tagName, text: e.textContent, overflow: c.overflow, ellipsis: c.textOverflow, clamp: c.webkitLineClamp } }) })()""")
+    bad = [o for o in out if o["overflow"] != "visible" or o["ellipsis"] == "ellipsis" or o["clamp"] not in ("none", "", None)]
+    assert not bad, bad

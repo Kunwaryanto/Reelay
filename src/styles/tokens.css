@@ -40,6 +40,7 @@
 
   /* size / line-height / weight / tracking */
   --type-wordmark: 600 34px/40px var(--font);  --track-wordmark: -0.02em;   /* Start only */
+  --type-display: 700 28px/32px var(--font);  --track-display: -0.02em;   /* film names on Home: hero (no logo), spotlight */
   --type-title: 600 20px/26px var(--font);     --track-title: -0.012em;     /* page titles */
   --type-prompt: 500 20px/22px var(--font);    --track-prompt: -0.012em;    /* two-line question titles */
   --type-nav-title: 600 17px/22px var(--font); --track-nav-title: -0.01em;  /* centred bar titles */
