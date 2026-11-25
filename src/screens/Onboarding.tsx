@@ -25,7 +25,7 @@ const CAM: Record<Cam, string> = {
 // 8 columns of 8: Services and Notifications frame the middle 6 columns (as when the wall had 6), Pick pans out to
 // all 64. The middle 36 are what the wall waits for; the rest load while Services is up (`inner`).
 const COLS = 8, PER = 8, CELL = 126.24
-const WALL_VERSION = 2 // 2: three films for every series (onboarding_wall)
+const WALL_VERSION = 3 // 2: three films for every series (onboarding_wall); 3: the canon
 const inner = (c: number, r: number) => c >= 1 && c <= COLS - 2 && r < 6
 // each column drifts into place when the wall first shows: a different distance and pace, alternating direction
 // (the middle six keep the look they had: the outer columns sit either side of them)
@@ -275,7 +275,9 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
                             onClick={() => { if (picking && !dragged.current) setSel((s) => (chosen ? s.filter((x) => x !== card.id) : [...s, card.id])) }}>
                             {/* the outer posters load once Services is up, and fade in when they arrive */}
                             {card.poster_path && (inner(c, r) || started) && <img src={tmdbImage(card.poster_path, 'w342')} alt="" draggable={false} decoding="async"
-                              data-late={inner(c, r) ? undefined : ''} onLoad={(e) => { e.currentTarget.dataset.in = '' }} />}
+                              data-late={inner(c, r) ? undefined : ''} onLoad={(e) => { e.currentTarget.dataset.in = '' }}
+                              // already there (from the phone's cache) before React listened, or it failed: show it, don't leave a blank
+                              ref={(el) => { if (el?.complete) el.dataset.in = '' }} onError={(e) => { e.currentTarget.dataset.in = '' }} />}
                             <i aria-hidden="true" /><b aria-hidden="true" />
                           </button>
                         )
