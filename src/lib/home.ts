@@ -30,7 +30,8 @@ export type HomeRow = {
 /** One title in the watchlist news under the hero: what arrived on the member's services in the last two weeks,
  *  then what leaves them within two weeks. `what`: "on Netflix", "leaves Viaplay in 3 days". */
 export type NewsItem = { card: HomeCard; kind: 'arrived' | 'leaving'; what: string }
-export type HomeData = { hero: HomeCard[]; news: NewsItem[]; rows: HomeRow[] }
+/** `partial`: only the generic rows (a quick Home, from the server's base) */
+export type HomeData = { hero: HomeCard[]; news: NewsItem[]; rows: HomeRow[]; partial?: boolean }
 
 /** The line as shown, from the news the member hasn't seen: an arrival goes once seen (opened), something leaving
  *  stays until it leaves; anything they have watched goes. Null: no line. */
@@ -106,7 +107,20 @@ function genreOrder(taste: { genre: string }[]): Category[] {
 }
 const DECADES = CATEGORIES.filter((c) => c.section === 'decades' && (c.rule.from ?? 0) >= 1980 && (c.rule.from ?? 0) <= 2010)
 
-export async function loadHome(ask: HomeAsk): Promise<HomeData> {
+/** The generic part of Home, built on the server per set of services (home_base): a phone with no Home saved
+ *  shows it at once and builds the whole Home after, out of sight. */
+type Base = {
+  trendF: Card[]; trendS: Card[]; newF: Card[]; newS: Card[]
+  arrivals: { happened_on: string; service_id: string; title: Card & { popularity: number } }[]
+  leaving: { leaves_on: string; service_id: string; title: Card }[]
+}
+
+/**
+ * Home for the member. `quick`: only the rows everybody gets (trending, new on their services, leaving soon, new
+ * films and series), from the ready-made base in one request, fitted to the member here (their hidden tags);
+ * for a first Home, while the whole one is built. Without a base it builds the whole Home.
+ */
+export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Promise<HomeData> {
   const svc = ask.services
   const mine = svc.length > 0
   // titles (and what is embedded under them) narrowed to the member's services
@@ -140,7 +154,18 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   if (awardRow.category) awardsQ = awardsQ.eq('category', awardRow.category)
   if (awardRow.kind) awardsQ = awardsQ.eq('title.kind', awardRow.kind)
 
-  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people] = await Promise.all([
+  let base: Base | null = null
+  if (opts.quick) {
+    const r = await supabase.rpc('home_base', { p_services: mine ? svc : null })
+    if (!r.error && r.data) base = r.data as Base
+  }
+  const fits = (c: Card | undefined) => !!c && !c.tags?.some((t) => ask.hidden.includes(t))
+  const fetched = base ? [
+    base.trendF.filter(fits).slice(0, 40), base.trendS.filter(fits).slice(0, 40),
+    base.arrivals.filter((a) => fits(a.title)), base.leaving.filter((l) => fits(l.title)).slice(0, 60),
+    [], [], [], [], [], base.newF.filter(fits).slice(0, 25), base.newS.filter(fits).slice(0, 25), [], [], [], [],
+  ] : null
+  const all = base ? null : Promise.all([
     titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     soft<Arrival>(ok(on(arrivalsQ, 'title.availability.service_id'), 'title') as never),
@@ -161,6 +186,8 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     soft<{ source: string; source_id: number; title_id: number; rank: number }>(supabase.rpc('home_saved', { p_day: day, ...rpcArgs }) as never),
     soft<{ person_id: number; name: string; title_id: number }>(supabase.rpc('home_people', { p_day: day, ...rpcArgs }) as never),
   ])
+  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people] =
+    all ? await all : (fetched as unknown as NonNullable<Awaited<typeof all>>)
 
   // second step: the titles behind the two personal lists, and the rows that depend on the member's taste
   // taste: the genres the member rates highest; without enough ratings, the genres they save most
@@ -183,7 +210,9 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   let savedArrivalsQ = supabase.from('availability_events').select('title_id,service_id,happened_on').eq('event', 'added')
     .gte('happened_on', inDays(-30)).in('title_id', savedIds).order('happened_on', { ascending: false })
   if (mine) savedArrivalsQ = savedArrivalsQ.in('service_id', svc)
-  const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, savedArrivals, decadeLists, ...genreLists] = await Promise.all([
+  const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, savedArrivals, decadeLists, ...genreLists] = base
+    ? [[], [], [], [], [], [], [[], []], ...picks.map(() => [[], []])] as unknown as [Card[], Card[], Card[], Card[], Card[], SavedArrival[], Card[][], ...Card[][][]]
+    : await Promise.all([
     byIds(because.map((b) => b.title_id)), byIds(alt.map((b) => b.title_id)), byIds(friends.map((f) => f.title_id)),
     byIds(savedRecs.map((b) => b.title_id)), byIds(people.map((p) => p.title_id)),
     savedIds.length ? soft<SavedArrival>(savedArrivalsQ as never) : Promise.resolve([] as SavedArrival[]),
@@ -362,5 +391,5 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     row(decade.id, decade.label, rowDecade, mix(decadeLists), paths.category(decade.id)),
   ]
   const full = (r: HomeRow) => r.items.length >= MIN_ROW && (fresh.get(r.items) ?? r.items.length) >= FIRST
-  return { hero, news, rows: rows.filter((r) => r.spotlight || full(r)).map((r) => ({ ...r, items: back(r.items) })) }
+  return { hero, news, rows: rows.filter((r) => r.spotlight || full(r)).map((r) => ({ ...r, items: back(r.items) })), ...(base ? { partial: true } : {}) }
 }

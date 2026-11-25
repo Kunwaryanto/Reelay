@@ -379,7 +379,7 @@ export default function Now() {
   const settled = svc !== undefined && lb.account !== undefined && savedLoaded
   const hidden = useHiddenTags()
   const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}${hiddenKey(hidden)}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [], hidden }), changes, tab === 'now' && path === '/', decodeFold)
+    (quick?: boolean) => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [], hidden }, { quick }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its

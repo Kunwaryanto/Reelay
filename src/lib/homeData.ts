@@ -10,12 +10,14 @@
 //    covers the page at once (`waking`) while today's Home is built and its first pictures decoded (up to 2 s),
 //    then it rises into it, as at a fresh start. Not ready by then, the page stays and the new Home waits.
 //  - a new Home is never put on screen before its first pictures are decoded (`prepare`), so it never goes black.
+//  - nothing saved at all (a first sign-in, a new phone): the quick Home first, from the server's ready-made
+//    generic part (home_base, one request), then the whole one is built and waits like any new Home.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HomeData } from './home'
 import { isDirty, readQueryData, setQueryData } from './query'
 import { checkStamp, currentStamp, recentlyChecked } from './stamp'
 
-type Saved = { data: HomeData; stamp: string | null; day: string }
+type Saved = { data: HomeData; stamp: string | null; day: string; partial?: boolean }
 const WAIT = 1500
 /** coming back on a new day: how long the wordmark may cover the page while today's Home is made */
 const WAKE_WAIT = 2000
@@ -28,7 +30,7 @@ const sleep = (ms: number) => new Promise<undefined>((r) => setTimeout(() => r(u
 const loadStamp = () => (recentlyChecked() ? Promise.resolve(currentStamp()) : checkStamp())
 
 /** The saved Home can be shown as it is: built today, from the latest sync, and nothing it is built from changed since. */
-const current = (key: string, s: Saved | undefined, stamp: string | null) => !!s && s.day === today() && s.stamp === stamp && !isDirty(key)
+const current = (key: string, s: Saved | undefined, stamp: string | null) => !!s && !s.partial && s.day === today() && s.stamp === stamp && !isDirty(key)
 
 export type HomeQuery = {
   data: HomeData | undefined
@@ -49,7 +51,7 @@ export type HomeQuery = {
  * @param active Home is the page in front: a waiting Home is put in place when this turns true
  * @param prepare decodes a Home's first pictures; a new Home goes on screen only after it
  */
-export function useHome(key: string | null, load: () => Promise<HomeData>, changes: number, active: boolean,
+export function useHome(key: string | null, load: (quick?: boolean) => Promise<HomeData>, changes: number, active: boolean,
   prepare: (data: HomeData) => Promise<void> = async () => {}): HomeQuery {
   const [view, setView] = useState<{ data: HomeData; day: string } | undefined>()
   const [error, setError] = useState(false)
@@ -65,11 +67,12 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
   const shownDay = useRef<string | null>(null)
   shownDay.current = view?.day ?? null
 
-  const build = useCallback(async (stamp: string | null): Promise<{ data: HomeData; day: string }> => {
-    const data = await loadRef.current()
+  const build = useCallback(async (stamp: string | null, quick = false): Promise<{ data: HomeData; day: string }> => {
+    const data = await loadRef.current(quick)
     const day = today()
-    // saved with what it is built from: a change to either marks it out of date (see `changed`)
-    if (key) setQueryData<Saved>(key, { data, stamp, day }, true, ['watchlist', 'letterboxd'])
+    // saved with what it is built from: a change to either marks it out of date (see `changed`); a quick one is
+    // saved too (it shows at the next opening if need be), but never counts as current
+    if (key) setQueryData<Saved>(key, { data, stamp, day, ...(data.partial ? { partial: true } : {}) }, true, ['watchlist', 'letterboxd'])
     return { data, day }
   }, [key])
 
@@ -94,6 +97,15 @@ export function useHome(key: string | null, load: () => Promise<HomeData>, chang
         return
       }
       if (saved && current(key, saved, stamp ?? null)) { show({ data: saved.data, day: saved.day }); return }
+      if (!saved) {
+        // nothing to show: the quick Home first (one request), then the whole one, which waits out of sight
+        const quick = await build(stamp ?? null, true).catch(() => null)
+        if (quick && live) {
+          show(quick)
+          if (quick.data.partial) build(stamp ?? null).then(keep, () => {}) // (no base: it was the whole Home already)
+          return
+        }
+      }
       const built = build(stamp ?? null)
       const got = await Promise.race([built.catch(() => null), sleep(Math.max(0, WAIT - (Date.now() - started)))])
       if (got) { show(got); return }

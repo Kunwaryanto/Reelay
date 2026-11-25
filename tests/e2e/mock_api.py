@@ -206,6 +206,14 @@ def hroute2(r):
     u=unquote(r.request.url); seenq.append(u.split('/rest/v1/')[-1][:90])
     if '/availability_events' in u and 'title_id=in.' in u: return r.fulfill(json=[{"title_id":500+i,"service_id":"netflix","happened_on":(datetime.date.today()-datetime.timedelta(days=2+i*10)).isoformat()} for i in range(4)] if MODE.get('news',True) else [])
     if 'availability_events' in u: return r.fulfill(json=[{"happened_on":"2026-11-%02d"%(22-i//3),"service_id":['netflix','hbo-max','viaplay'][i%3],"title":dict(card(200+i),popularity=100-i)} for i in range(12)])
+    if 'rpc/home_base' in u:
+        # the ready-made generic part of Home (only when a test asks for it: otherwise Home is built whole)
+        if not MODE.get('base'): return r.fulfill(status=404, json={})
+        MODE['base_asked']=MODE.get('base_asked',0)+1
+        def cs(lo,n,kind): return [dict(card(i),kind=kind) for i in range(lo,lo+n)]
+        return r.fulfill(json={"day":datetime.date.today().isoformat(),"trendF":cs(600,20,'film'),"trendS":cs(640,20,'series'),"newF":cs(680,12,'film'),"newS":cs(700,12,'series'),
+          "arrivals":[{"happened_on":"2026-11-%02d"%(22-i//3),"service_id":['netflix','hbo-max','viaplay'][i%3],"title":dict(card(720+i),popularity=100-i)} for i in range(12)],
+          "leaving":[{"leaves_on":(datetime.date.today()+datetime.timedelta(days=3+i)).isoformat(),"service_id":"netflix","title":card(760+i,(datetime.date.today()+datetime.timedelta(days=3+i)).isoformat())} for i in range(10)]})
     if 'rpc/home_because' in u:
         day=json.loads(r.request.post_data)['p_day']; alt=day%2==1
         return r.fulfill(json=[{"source":"Arrival" if alt else "Heat","title_id":(340 if alt else 300)+i,"rank":i+1} for i in range(8)] if CASE['personal'] else [])
