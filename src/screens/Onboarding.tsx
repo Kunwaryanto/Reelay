@@ -226,7 +226,16 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
       <div className="ob-wall" data-on={wallOn} data-blur={blur} data-leaving={leaving ? '' : undefined} style={{ pointerEvents: step === 'pick' ? 'auto' : 'none' }}
         onPointerDown={(e) => {
           if (!picking) return
-          d.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }
+          // caught while a throw is still gliding: start from where the wall is on screen, not where the glide was
+          // going (that made the wall jump ahead for a frame)
+          let px = pan.x, py = pan.y
+          const el = e.currentTarget.querySelector<HTMLElement>('.ob-pan')
+          if (el && pan.tr !== 'none') {
+            const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
+            px = m.m41; py = m.m42
+            setPan({ x: px, y: py, tr: 'none' })
+          }
+          d.current = { x: e.clientX, y: e.clientY, px, py, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }
           dragged.current = false
         }}
         onPointerMove={(e) => {
