@@ -19,7 +19,7 @@ def test_sign_in_sheet_keeps_the_keyboard_and_hides_the_moving_caret(app):
         caret = pg.evaluate("getComputedStyle(document.querySelector('dialog.sheet input')).caretColor")
         assert caret != 'rgba(0, 0, 0, 0)', caret   # and back once it has settled
         pg.evaluate(WATCH)
-        pg.keyboard.type('someone@example.com'); pg.keyboard.press('Enter')   # (a tap on Send code doesn't take the focus on iOS)
+        pg.keyboard.type('someone@example.com'); pg.get_by_role('button', name='Send code').click()   # the tap keeps the field's focus
         pg.wait_for_function("document.activeElement && document.activeElement.name === 'code'", timeout=8000)
         assert pg.evaluate("window.__drops") == [], 'the focus fell to the page on the way to the code'
     finally:

@@ -667,6 +667,9 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     let quiet = 0
     const place = () => {
       clearTimeout(quiet); clearTimeout(limit)
+      // once: kept listening, the keyboard going down later (Send code) measured "no keyboard" and the sheet
+      // dropped to an ordinary sheet's height
+      vv?.removeEventListener('resize', moved)
       const box = d.offsetParent
       const room = vv && box ? Math.round(openHeight - vv.height) : 0
       if (room > 150) {
@@ -699,8 +702,15 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
       e.preventDefault()
       field.focus({ preventScroll: true })
     }
+    // A tap on one of the sheet's buttons while a field has the focus: keep the focus (and so the keyboard) where
+    // it is. iOS otherwise blurs the field on the tap, and the keyboard dropped at Send code.
+    const keep = (e: MouseEvent) => {
+      const a = document.activeElement
+      if ((a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) && d.contains(a) && (e.target as HTMLElement).closest('button')) e.preventDefault()
+    }
     d.addEventListener('touchstart', onTouch, { passive: false })
-    return () => d.removeEventListener('touchstart', onTouch)
+    d.addEventListener('mousedown', keep)
+    return () => { d.removeEventListener('touchstart', onTouch); d.removeEventListener('mousedown', keep) }
   }, [open])
 
   // Drag the sheet down to close it, from anywhere on it: rows and buttons included (a touch that moves is a drag,
