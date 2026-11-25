@@ -784,6 +784,6 @@ Measured on the database before and after:
 ## Walls: mostly films (25 Nov)
 
 - The Start wall and onboarding's wall now show three films for every series. Series are new ones only (started in
-  the last 5 years; long-running shows with a new season don't count); films are half new (last 5 years) and half classics (15+ years
-  old, well known). Films from 5 to 15 years ago, the ones people have most likely seen, are left out. Onboarding's
+  the last 5 years; long-running shows with a new season don't count); films are half new (last 5 years) and half classics (20+ years
+  old, well known). Films from 5 to 20 years ago, the ones people have most likely seen, are left out. Onboarding's
   wall is chosen by the database in one request instead of one per service.
