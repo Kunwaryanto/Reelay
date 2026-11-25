@@ -28,53 +28,6 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   return res.data as T
 }
 
-
-
-// Now mixes films and series, and recent titles with classics, so popularity alone (which favours
-// long-running series) doesn't fill the page. A title is shown once: rows skip anything already above them.
-const YEAR = new Date().getFullYear()
-const RECENT_FROM = YEAR - 4 // the last five years
-const CLASSIC_TO = YEAR - 15 // fifteen years and older
-
-type Kind = Card['kind']
-type Bucket = { kind: Kind; from?: number; to?: number }
-
-const MIXED: Bucket[] = [
-  { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM },
-  { kind: 'film', to: CLASSIC_TO }, { kind: 'series', to: CLASSIC_TO },
-]
-
-/** Round robin over the buckets, skipping titles already on the page, until the row is full. */
-function interleave(lists: Card[][], seen: Set<number>, max = 20): Card[] {
-  const out: Card[] = []
-  const at = lists.map(() => 0)
-  while (out.length < max && lists.some((l, i) => at[i] < l.length)) {
-    lists.forEach((l, i) => {
-      while (at[i] < l.length && out.length < max) {
-        const t = l[at[i]++]
-        if (seen.has(t.id)) continue
-        seen.add(t.id)
-        out.push(t)
-        break
-      }
-    })
-  }
-  return out
-}
-
-type Filter = { genresAny?: string[]; genresAll?: string[]; from?: number; to?: number }
-
-async function cards(b: Bucket, f: Filter, limit: number): Promise<Card[]> {
-  let q = supabase.from('titles').select(CARD).eq('kind', b.kind)
-  const from = Math.max(b.from ?? -Infinity, f.from ?? -Infinity)
-  const to = Math.min(b.to ?? Infinity, f.to ?? Infinity)
-  if (Number.isFinite(from)) q = q.gte('year', from)
-  if (Number.isFinite(to)) q = q.lte('year', to)
-  if (f.genresAny) q = q.overlaps('genres', f.genresAny)
-  if (f.genresAll) q = q.contains('genres', f.genresAll)
-  return unwrap((await q.order('popularity', { ascending: false }).limit(limit)) as never)
-}
-
 export type Person = { id: number; name: string; profile_path: string | null }
 export type Credit = { role: 'cast' | 'director' | 'creator' | 'writer'; character: string | null; sort_order: number; person: Person }
 export type Award = { id: number; award: string; year: number; short_category: string; won: boolean; person_name: string | null; rank: number }
@@ -173,10 +126,6 @@ export async function loadMyServices(): Promise<string[]> {
 }
 
 /** Posters to pick from when the Watchlist is empty: recent and classic films and series, mixed. */
-export async function loadPicks(): Promise<Card[]> {
-  const lists = await Promise.all(MIXED.map((b) => cards(b, {}, 15)))
-  return interleave(lists, new Set(), 49)
-}
 
 /**
  * Onboarding's wall of posters, chosen by the database (`onboarding_wall`): three films for every series (new series;

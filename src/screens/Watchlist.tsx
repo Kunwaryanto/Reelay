@@ -1,21 +1,21 @@
 // Watchlist: what you've saved, as posters three across in two parts: on your services (leaving soonest first), then
 // what isn't. Seen films are greyed, like everywhere. A tap opens the title, holding it gives Remove and Notify me.
 // Empty: a wall of posters to pick from.
-import { useServicesQuery } from '../lib/profile'
+import { loadServices, useMyServices, useServicesQuery, type Service } from '../lib/profile'
 import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
-  SERVICE_NAME, leavingFor, loadPicks, loadWatchlistTitles,
+  SERVICE_NAME, leavingFor, loadWatchlistTitles,
   type Card, type SavedTitle,
 } from '../lib/catalogue'
-import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { Button, Cover, Icon, SettingsButton, LoadFailed, PillCount, joinHandlers, useLongPress, usePageLink, useSwitched, useHold, usePageRefresh } from '../ui'
 import { useWatched, useWatchedMark } from '../lib/letterboxd'
+import { PICK_CAM, WallColumns, useWall, useWallPan, useWallScale } from './PosterWall'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 
 type Kind = 'all' | 'film' | 'series'
@@ -184,66 +184,35 @@ function WallPoster({ row, fresh, note, notifying, where }: { row: Row; fresh?: 
   )
 }
 
-const COLS = 7, ROWS = 7
-const PICKS = COLS * ROWS
-const BX = 150, BY = 140 // how far the wall pans; past it, it pulls back like iOS
-const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
-const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
-
-/** The wall of posters to pick from. Used when the Watchlist is empty, and as a step in onboarding (`bare`: no tab bar, no hint). */
-export function PickWall({ header, onAdd, bare }: { header: React.ReactNode; onAdd: (ids: number[]) => void; bare?: boolean }) {
-  const q = useQuery<Card[]>(`picks:${PICKS}`, loadPicks, FRESH.catalogue)
+/** The empty Watchlist: the same wall of posters as onboarding's Pick step (PosterWall), with the titles for the
+ *  member's services (or the common ones while they have none), the Watchlist's heading and its Add button. */
+export function PickWall({ header, onAdd }: { header: React.ReactNode; onAdd: (ids: number[]) => void }) {
+  const { mine, loaded } = useMyServices()
+  const services = useQuery<Service[]>('services', loadServices, FRESH.catalogue)
+  const ids = !loaded ? [] : mine.length ? mine : (services.data ?? []).filter((x) => x.popular).slice(0, 9).map((x) => x.id)
+  const { wall, started, query } = useWall(ids)
+  const k = useWallScale()
+  const pan = useWallPan(true)
   const [sel, setSel] = useState<number[]>([])
-  const [pan, setPan] = useState({ x: 0, y: 0, settle: false })
-  const d = useRef<{ x: number; y: number; px: number; py: number; moved: boolean; lx: number; ly: number; lt: number; vx: number; vy: number } | null>(null)
-  const dragged = useRef(false)
   const n = sel.length
 
   return (
-    <main className="page pick" data-bare={bare}>
-      <div className="pick-pan"
-        onPointerDown={(e) => { d.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }; dragged.current = false }}
-        onPointerMove={(e) => {
-          const s = d.current
-          if (!s) return
-          const mx = e.clientX - s.x, my = e.clientY - s.y
-          if (!s.moved && Math.hypot(mx, my) < 6) return
-          s.moved = true
-          const now = Date.now(), dt = Math.max(1, now - s.lt)
-          s.vx = 0.8 * ((e.clientX - s.lx) / dt) + 0.2 * s.vx
-          s.vy = 0.8 * ((e.clientY - s.ly) / dt) + 0.2 * s.vy
-          s.lx = e.clientX; s.ly = e.clientY; s.lt = now
-          setPan({ x: band(s.px + mx, BX), y: band(s.py + my, BY), settle: false })
-        }}
-        onPointerUp={() => {
-          const s = d.current
-          d.current = null
-          if (!s?.moved) return
-          dragged.current = true
-          setTimeout(() => { dragged.current = false }, 0)
-          // throw: carry the release speed a little further, then settle inside the range
-          setPan((p) => ({ x: clamp(p.x + s.vx * 220, BX), y: clamp(p.y + s.vy * 220, BY), settle: true }))
-        }}
-        onPointerCancel={() => { d.current = null }}>
-        <div className="pick-wall" data-settle={pan.settle} style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) rotate(-6deg)` }}>
-          {(q.data ?? []).map((c, i) => {
-            const col = i % COLS, row = Math.floor(i / COLS)
-            const on = sel.includes(c.id)
-            return (
-              <button key={c.id} type="button" className="pick-poster" aria-pressed={on} aria-label={c.title} data-dim={n > 0 && !on}
-                style={{ left: col * 136, top: row * 200 + (col % 2 ? 0 : 96) }}
-                onClick={() => { if (!dragged.current) setSel((s) => (on ? s.filter((x) => x !== c.id) : [...s, c.id])) }}>
-                {c.poster_path && <img src={tmdbImage(c.poster_path, 'w342')} alt="" draggable={false} decoding="async" />}
-                <i aria-hidden="true" />
-              </button>
-            )
-          })}
+    <main className="page pick" style={{ '--k': k } as React.CSSProperties}>
+      <div className="ob-wall" data-on={started} {...pan.handlers}>
+        <div className="ob-pan" {...pan.layer}>
+          <div className="ob-scale">
+            <div className="ob-cam" style={{ transform: PICK_CAM }}>
+              <WallColumns wall={wall} started={started} sel={sel} picking shade={n > 0} dragged={pan.dragged}
+                onPick={(id) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))} />
+            </div>
+          </div>
         </div>
       </div>
-      <div className="pick-fade" aria-hidden="true" />
+      <div className="ob-shade ob-shade-top" aria-hidden="true" data-on="true" />
+      <div className="ob-shade ob-shade-pick" aria-hidden="true" data-on="true" />
       {header}
-      {!bare && <p className="pick-hint" aria-hidden={n > 0} data-hide={n > 0}>Tap what you want to watch.</p>}
-      {q.error && <div className="page-center"><LoadFailed what="titles to pick from" retry={q.retry} retrying={q.retrying} /></div>}
+      <p className="pick-hint" aria-hidden={n > 0} data-hide={n > 0}>Tap what you want to watch.</p>
+      {query.error && <div className="page-center"><LoadFailed what="titles to pick from" retry={query.retry} retrying={query.retrying} /></div>}
       <div className="pick-add" data-show={n > 0}>
         <Button tabIndex={n ? 0 : -1} aria-label={`Add ${n === 1 ? '1 title' : `${n} titles`} to Watchlist`} onClick={() => onAdd(sel)}>Add {n} to Watchlist</Button>
       </div>

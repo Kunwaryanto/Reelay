@@ -2,14 +2,13 @@
 // One wall of posters and one camera (canvas: Onboarding v19): every step change is a single move of the wall,
 // and the step's text and controls fade out as it starts and rise in together as it settles. Every step can be skipped.
 // Shown once (profiles.onboarded_at), and again from Settings while testing.
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { loadWall, type Card } from '../lib/catalogue'
-import { tmdbImage } from '../lib/images'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { loadServices, useMyServices, useProfile, type NotifyKey, type Service } from '../lib/profile'
 import { askPermission, permission } from '../lib/push'
 import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
 import { Button, Icon, Sheet, useToast } from '../ui'
+import { PICK_CAM, WallColumns, clamp, useWall, useWallPan, useWallScale } from './PosterWall'
 
 type Step = 'svc' | 'pick' | 'notify'
 type Cam = 'enter' | Step | 'exit'
@@ -18,21 +17,10 @@ type Cam = 'enter' | Step | 'exit'
 const CAM: Record<Cam, string> = {
   enter: 'translate3d(0, -150px, 0) rotate(-15deg) scale(1.14)',
   svc: 'translate3d(0, -150px, 0) rotate(-8deg) scale(1)',
-  pick: 'translate3d(0, 0, 0) rotate(-6deg) scale(1.58)',
+  pick: PICK_CAM,
   notify: 'translate3d(0, -90px, 0) rotate(-8deg) scale(0.9)',
   exit: 'translate3d(0, -60px, 0) rotate(-6.5deg) scale(1.2)',
 }
-// 8 columns of 8: Services and Notifications frame the middle 6 columns (as when the wall had 6), Pick pans out to
-// all 64. The middle 36 are what the wall waits for; the rest load while Services is up (`inner`).
-const COLS = 8, PER = 8, CELL = 126.24
-const WALL_VERSION = 10 // 2: three films for every series (onboarding_wall); 4: the canon; 5: all acclaimed; 6: films in thirds; 7: less anime; 8–9: one per series; 10: series with awards
-const inner = (c: number, r: number) => c >= 1 && c <= COLS - 2 && r < 6
-// each column drifts into place when the wall first shows: a different distance and pace, alternating direction
-// (the middle six keep the look they had: the outer columns sit either side of them)
-const DRIFT_MS = [2750, 2500, 2650, 2600, 2800, 2700, 2900, 2550]
-const BX = 285, BY = 360 // how far the wall pans while picking; past it, it pulls back like iOS
-const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
-const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
 
 // On to start with, so the wall shows straight away what picking a service does.
 const DEFAULTS = ['netflix', 'hbo-max', 'svt-play']
@@ -74,6 +62,7 @@ function Head({ onBack, onSkip }: { onBack?: () => void; onSkip: () => void }) {
 
 export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => void; onLeave?: () => void; replay?: boolean }) {
   const { mine, loaded, setAll } = useMyServices()
+  const k = useWallScale()
   const { update } = useProfile()
   const saved = useSaved()
   const toast = useToast()
@@ -81,9 +70,6 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const all = services.data ?? []
   const popular = all.filter((s) => s.popular).slice(0, 9)
   const rest = all.filter((s) => !popular.includes(s))
-  // WALL_VERSION: part of the saved wall's name, raised when what the wall holds changes (a phone keeps it till the sync)
-  const wallKey = popular.length ? `wall:${WALL_VERSION}:${popular.map((s) => s.id).join()}` : null
-  const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id), PER, COLS), FRESH.catalogue)
   // What's switched on here: your own services, or three common ones when you have none yet (and always when this
   // is shown again from Settings, to see it as a new person does; that run saves nothing at all).
   // Saved when you continue; Skip saves nothing.
@@ -104,7 +90,6 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const [revealed, setRevealed] = useState(false)
   const [revealing, setRevealing] = useState(false) // that first lighting-up is a slow fade from grey to colour
   const [sel, setSel] = useState<number[]>([])
-  const [pan, setPan] = useState({ x: 0, y: 0, tr: 'none' })
   const [cards, setCards] = useState(NO_CARDS)
   const [want, setWant] = useState<Record<NotifyKey, boolean>>({ notify_leaving: true, notify_arrivals: true, notify_new_seasons: true })
   const [more, setMore] = useState(false)
@@ -115,25 +100,12 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)) }
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
-  // The wall: the first 64 picks in eight columns. It waits for the middle 36 posters (1.5 s at most), then fades up from
-  // black while the columns drift into place and the camera turns and settles; the step's UI rises after.
-  const wall = useMemo(() => (picks.data ?? []).slice(0, COLS * PER), [picks.data])
-  const [started, setStarted] = useState(false)
-  useEffect(() => {
-    if (started || (!picks.data && !picks.error && !services.error)) return
-    let live = true
-    const go = () => { if (live) { live = false; setStarted(true) } }
-    // the tiles' logos are waited for too, so the tiles arrive whole with the heading and the button
-    const srcs = [...wall.filter((_, i) => inner(i % COLS, Math.floor(i / COLS))).map((c) => tmdbImage(c.poster_path, 'w342')), ...Object.values(LOGOS).map(([file]) => `/icons/services/logos/${file}`)]
-    void Promise.all(srcs.map((src) => {
-      if (!src) return null
-      const img = new Image()
-      img.src = src
-      return img.decode().catch(() => {})
-    })).then(go)
-    const t = window.setTimeout(go, 1500)
-    return () => { live = false; clearTimeout(t) }
-  }, [picks.data, picks.error, services.error, started, wall])
+  // The wall (PosterWall: the same as the empty Watchlist's): it waits for the middle posters and the services' logos,
+  // so the tiles arrive whole with the heading and the button, then fades up from black while the columns drift into
+  // place and the camera turns and settles; the step's UI rises after.
+  const { wall, started } = useWall(popular.map((s) => s.id), { alsoWait: Object.values(LOGOS).map(([file]) => `/icons/services/logos/${file}`), failed: !!services.error })
+  const picking = step === 'pick' && !locked
+  const pan = useWallPan(picking)
   useEffect(() => {
     if (!started) return
     later(() => { setWallOn(true); setCam({ at: 'svc', tr: 'transform 2700ms cubic-bezier(0.25, 1, 0.5, 1)' }) }, 40)
@@ -142,13 +114,6 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
     later(() => setLocked(false), 2600)
   }, [started])
 
-  // the phone's size against the board's 390 × 844, so the wall covers any iPhone the same way
-  const [k, setK] = useState(() => Math.max(window.innerWidth / 390, window.innerHeight / 844))
-  useEffect(() => {
-    const on = () => setK(Math.max(window.innerWidth / 390, window.innerHeight / 844))
-    window.addEventListener('resize', on)
-    return () => window.removeEventListener('resize', on)
-  }, [])
 
   const extra = rest.filter((s) => on.includes(s.id)).length
   const toggle = (s: Service) => setEdits(on.includes(s.id) ? on.filter((x) => x !== s.id) : [...on, s.id])
@@ -162,7 +127,7 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const go = (to: Step) => {
     if (locked) return
     setLocked(true); setUi(false); setMore(false)
-    setPan({ x: 0, y: 0, tr: 'transform 500ms var(--ease-out)' })
+    pan.reset('transform 500ms var(--ease-out)')
     if (to !== 'svc') setGrey(false)
     if (step === 'notify') fadeCards()
     setStep(to)
@@ -211,25 +176,6 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
     later(onDone, 1350)
   }
 
-  // Picking: drag to look around the wall, tap a poster to choose it.
-  const d = useRef<{ x: number; y: number; px: number; py: number; moved: boolean; lx: number; ly: number; lt: number; vx: number; vy: number } | null>(null)
-  const dragged = useRef(false)
-  // while a finger drags, the wall's layer is moved directly (once a frame); the state catches up when it lets go
-  const panEl = useRef<HTMLDivElement>(null)
-  const held = useRef<{ x: number; y: number } | null>(null)
-  const raf = useRef(0)
-  const movePan = (x: number, y: number) => {
-    held.current = { x, y }
-    if (raf.current) return
-    raf.current = requestAnimationFrame(() => {
-      raf.current = 0
-      const el = panEl.current, at = held.current
-      if (!el || !at) return
-      el.style.transition = 'none'
-      el.style.transform = `translate3d(${at.x}px, ${at.y}px, 0)`
-    })
-  }
-  const picking = step === 'pick' && !locked
   const n = sel.length
 
   const [now] = useState(() => new Date())
@@ -239,85 +185,16 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   return (
     <div className="ob" data-step={step} data-leaving={leaving || undefined} style={{ '--k': k } as CSSProperties}>
       <div className="ob-wall" data-on={wallOn} data-blur={blur} data-leaving={leaving ? '' : undefined} style={{ pointerEvents: step === 'pick' ? 'auto' : 'none' }}
-        onPointerDown={(e) => {
-          if (!picking) return
-          // caught while a throw is still gliding: start from where the wall is on screen, not where the glide was
-          // going (that made the wall jump ahead for a frame)
-          let px = pan.x, py = pan.y
-          const el = panEl.current
-          if (el && pan.tr !== 'none') {
-            const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
-            px = m.m41; py = m.m42
-            el.style.transition = 'none'; el.style.transform = `translate3d(${px}px, ${py}px, 0)`
-            setPan({ x: px, y: py, tr: 'none' })
-          }
-          d.current = { x: e.clientX, y: e.clientY, px, py, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }
-          dragged.current = false
-        }}
-        onPointerMove={(e) => {
-          const s = d.current
-          if (!s) return
-          const mx = e.clientX - s.x, my = e.clientY - s.y
-          if (!s.moved && Math.hypot(mx, my) < 6) return
-          s.moved = true
-          const t = Date.now(), dt = Math.max(1, t - s.lt)
-          s.vx = 0.8 * ((e.clientX - s.lx) / dt) + 0.2 * s.vx
-          s.vy = 0.8 * ((e.clientY - s.ly) / dt) + 0.2 * s.vy
-          s.lx = e.clientX; s.ly = e.clientY; s.lt = t
-          // straight onto the layer, once a frame: drawing the whole wall again for every finger move made it stutter
-          movePan(band(s.px + mx, BX), band(s.py + my, BY))
-        }}
-        onPointerUp={() => {
-          const s = d.current
-          d.current = null
-          if (!s?.moved) return
-          dragged.current = true
-          setTimeout(() => { dragged.current = false }, 0)
-          // throw: carry the release speed a little further, then settle inside the range
-          if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0 }
-          const at = held.current ?? { x: s.px, y: s.py }
-          held.current = null
-          const to = { x: clamp(at.x + s.vx * 220, BX), y: clamp(at.y + s.vy * 220, BY), tr: 'transform 600ms var(--ease-out)' }
-          // set on the layer too: if the state comes out the same as before, React leaves the style alone
-          if (panEl.current) { panEl.current.style.transition = to.tr; panEl.current.style.transform = `translate3d(${to.x}px, ${to.y}px, 0)` }
-          setPan(to)
-        }}
-        onPointerCancel={() => { d.current = null }}>
-        <div className="ob-pan" ref={panEl} style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`, transition: pan.tr }}>
+        {...pan.handlers}>
+        <div className="ob-pan" {...pan.layer}>
           <div className="ob-scale">
             <div className="ob-cam" style={{ transform: CAM[cam.at], transition: cam.tr }}>
-              <div className="ob-cols" data-reveal={revealing || undefined}>
-                {Array.from({ length: COLS }, (_, c) => {
-                  const col = wall.filter((_, i) => i % COLS === c)
-                  // each column holds its posters three times, so the wall has no edge wherever the camera is
-                  const odd = (c + 1) % 2 === 1 // column 1 is the old first column
-                  const top = -(col.length * CELL) + (odd ? CELL * 0.48 : 0)
-                  return (
-                    <div key={c} className="ob-col" data-drift={started || undefined}
-                      style={{ marginTop: top, '--S': `${(odd ? -1 : 1) * col.length * CELL * 0.45}px`, animationDuration: `${DRIFT_MS[c]}ms`, animationDelay: `${Math.max(0, c - 1) * 50}ms` } as CSSProperties}>
-                      {[0, 1, 2].flatMap((copy) => col.map((card, r) => {
-                        const chosen = sel.includes(card.id)
-                        const lit = !(step === 'svc' && grey) || (revealed && card.availability.some((a) => on.includes(a.service_id)))
-                        const y = top + (copy * col.length + r) * CELL + CELL / 2
-                        const dd = sweep && !lit ? Math.round(clamp((818 - y) / 818, 1) * 280) : 0
-                        return (
-                          <button key={`${copy}-${card.id}`} type="button" className="ob-tile" data-svc={card.availability[0]?.service_id} data-lit={lit} data-shade={step === 'pick' && n > 0 && !chosen}
-                            aria-pressed={step === 'pick' ? chosen : undefined} aria-label={card.title} aria-hidden={copy !== 1 || undefined}
-                            tabIndex={picking && copy === 1 ? 0 : -1} style={dd > 0 ? { '--dd': `${dd}ms` } as CSSProperties : undefined}
-                            onClick={() => { if (picking && !dragged.current) setSel((s) => (chosen ? s.filter((x) => x !== card.id) : [...s, card.id])) }}>
-                            {/* the outer posters load once Services is up, and fade in when they arrive */}
-                            {card.poster_path && (inner(c, r) || started) && <img src={tmdbImage(card.poster_path, 'w342')} alt="" draggable={false} decoding="async"
-                              data-late={inner(c, r) ? undefined : ''} onLoad={(e) => { e.currentTarget.dataset.in = '' }}
-                              // already there (from the phone's cache) before React listened, or it failed: show it, don't leave a blank
-                              ref={(el) => { if (el?.complete) el.dataset.in = '' }} onError={(e) => { e.currentTarget.dataset.in = '' }} />}
-                            <i aria-hidden="true" /><b aria-hidden="true" />
-                          </button>
-                        )
-                      }))}
-                    </div>
-                  )
-                })}
-              </div>
+              <WallColumns wall={wall} started={started} revealing={revealing} sel={sel} picking={picking} shade={step === 'pick' && n > 0} dragged={pan.dragged}
+                onPick={(id) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))}
+                tile={(card, y) => {
+                  const lit = !(step === 'svc' && grey) || (revealed && card.availability.some((a) => on.includes(a.service_id)))
+                  return { lit, dd: sweep && !lit ? Math.round(clamp((818 - y) / 818, 1) * 280) : 0 }
+                }} />
             </div>
           </div>
         </div>
