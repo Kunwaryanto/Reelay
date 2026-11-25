@@ -3,7 +3,7 @@ import pytest
 import mock_api as m
 from conftest import TOP
 
-@pytest.mark.parametrize('path,sel', [('/', '.now-in .card'), ('/browse/c/drama', '.card'), ('/watchlist', '.wl-slide a')])
+@pytest.mark.parametrize('path,sel', [('/', '.now-in .card'), ('/browse/c/drama', '.card'), ('/watchlist', '.wl-tile > a')])
 def test_long_press_opens_the_menu(app, path, sel):
     pg = app()
     pg.goto(m.B + path); pg.wait_for_timeout(3000)

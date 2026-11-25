@@ -1,18 +1,19 @@
-// Watchlist: what you've saved, grouped by whether you can watch it tonight. Empty: a wall of posters to pick from.
+// Watchlist: what you've saved, as one wall of posters: leaving soonest first, then what's on your services, then what
+// isn't (greyed). A tap opens the title, holding it gives Remove and Notify me. Empty: a wall of posters to pick from.
 import { useServicesQuery } from '../lib/profile'
 import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
-  SERVICE_NAME, leavingFor, metaLine, loadPicks, loadWatchlistTitles,
+  SERVICE_NAME, leavingFor, loadPicks, loadWatchlistTitles,
   type Card, type SavedTitle,
 } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import { useSaved } from '../lib/saved'
-import { Button, PageLink, Icon, SettingsButton, LoadFailed, PillCount, useLongPress, useSwitched, useHold, usePageRefresh } from '../ui'
+import { Button, Cover, Icon, SettingsButton, LoadFailed, PillCount, joinHandlers, useLongPress, usePageLink, useSwitched, useHold, usePageRefresh } from '../ui'
 import { useWatched } from '../lib/letterboxd'
 import { FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 
@@ -21,16 +22,12 @@ type Sort = 'added' | 'leaving' | 'rated' | 'az'
 const SORTS: [Sort, string][] = [['added', 'Recently added'], ['leaving', 'Leaving soonest'], ['rated', 'Highest rated'], ['az', 'A–Z']]
 
 const nameOf = (id: string) => SERVICE_NAME[id] ?? id
-function servicesLabel(names: string[]): string {
-  if (names.length <= 3 && names.join(', ').length <= 26) return names.join(', ')
-  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
-}
 
 type Row = { t: SavedTitle; service: string | null; mine: boolean; leaves: string | null }
 
 export default function Watchlist() {
   const { session } = useAuth()
-  const { push, tab } = useNav()
+  const { tab } = useNav()
   const saved = useSaved()
   const onDim = useDimOnScroll()
   const uid = session?.user.id
@@ -44,7 +41,6 @@ export default function Watchlist() {
   const [f, setF] = useState<Draft>({ ...NO_FILTERS, sort: 'added' })
   const sort = f.sort as Sort
   const [sheet, setSheet] = useState(false)
-  const [open, setOpen] = useState<number | null>(null) // the row swiped open
 
   // Titles saved elsewhere in the app aren't in this list's data yet: fetch again when one is missing.
   const have = useMemo(() => new Set((q.data ?? []).map((t) => t.id)), [q.data])
@@ -97,14 +93,9 @@ export default function Watchlist() {
 
   // leaving within a month counts as Leaving soon
   const note = (r: Row) => leavingFor(r.leaves, { stale: q.stale, within: 30 })
-  const leaving = list.filter((r) => r.mine && note(r))
-  const on = list.filter((r) => r.mine && !note(r))
-  const off = list.filter((r) => !r.mine)
-  const sections = [
-    { id: 'leaving', title: 'Leaving soon', sub: '', rows: leaving },
-    { id: 'on', title: hasPicked ? 'On your services' : 'Streaming now', sub: hasPicked ? servicesLabel(picked.map(nameOf)) : '', rows: on },
-    { id: 'off', title: hasPicked ? 'Not on your services' : 'Not streaming in Sweden', sub: 'Notify when it is', rows: off },
-  ].filter((s) => s.rows.length)
+  // one wall: leaving soonest first, then the rest on the member's services (in the chosen order), then the others
+  const leaving = list.filter((r) => r.mine && note(r)).sort((a, b) => (a.leaves ?? '9').localeCompare(b.leaves ?? '9'))
+  const wall = [...leaving, ...list.filter((r) => r.mine && !note(r)), ...list.filter((r) => !r.mine)]
 
   const header = (
     <div className="tab-head">
@@ -121,7 +112,7 @@ export default function Watchlist() {
 
   return (
     <>
-    <main className="page noscroll" ref={pull.bind.ref} onScroll={(e) => { onDim(e); if (open !== null) setOpen(null) }}>
+    <main className="page noscroll" ref={pull.bind.ref} onScroll={onDim}>
       {header}
       <div className="wl-filters">
         <div role="group" aria-label="Type">
@@ -142,25 +133,13 @@ export default function Watchlist() {
         </div>
       )}
 
-      {sections.map((s) => (
-        <section key={s.id} className="wl-section">
-          <div className="wl-section-head"><h2>{s.title}</h2>
-            {s.sub && (s.id === 'on'
-              ? <button type="button" className="wl-services" onClick={() => push(paths.settings('services'))}>{s.sub}<Icon name="chevron_right" size={14} /></button>
-              : <span>{s.sub}</span>)}
-          </div>
-          <ul key={kind} className={switched ? 'pill-in' : undefined}>
-            {s.rows.map((r) => (
-              <WatchRow key={r.t.id} fresh={isNew(r.t.id)} row={r} group={s.id} note={s.id === 'leaving' ? note(r) : null}
-                open={open === r.t.id} setOpen={(v) => setOpen(v ? r.t.id : null)}
-                where={s.id !== 'off' ? null : r.service ? `On ${nameOf(r.service)}` : hasPicked ? 'Not streaming' : null}
-                onNotify={() => saved.toggleNotify(r.t.id)}
-                onOpen={() => push(paths.title(r.t.id))} onRemove={() => { setOpen(null); saved.toggleSaved(r.t.id, r.t.title) }} />
-            ))}
-          </ul>
-        </section>
-      ))}
-      {sections.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
+      <ul key={kind} className={`wl-wall${switched ? ' pill-in' : ''}`} aria-label="Saved titles">
+        {wall.map((r) => (
+          <WallPoster key={r.t.id} row={r} fresh={isNew(r.t.id)} note={r.mine ? note(r) : null} notifying={!r.mine && saved.isNotifying(r.t.id)}
+            where={r.mine ? null : r.service ? `on ${nameOf(r.service)}` : 'not streaming'} />
+        ))}
+      </ul>
+      {wall.length === 0 && <p className="wl-none">Nothing here with these filters.</p>}
 
       <FilterDrawer open={sheet} onClose={() => setSheet(false)} init={f} services={picked.map(nameOf)}
         noun={['title', 'titles']} sorts={SORTS} firstSort="added" countOf={countOf} apply={(d) => { setF(d); setSheet(false) }} />
@@ -170,117 +149,29 @@ export default function Watchlist() {
   )
 }
 
-/** One saved title. Swipe left to reveal Remove; a tap opens the title. */
-/** How far a swiped row stays open (px): its Remove button's width. */
-const OPEN = -88
-
-function WatchRow({ row, fresh, group, note, where, open, setOpen, onOpen, onRemove, onNotify }: {
-  fresh?: boolean
-  row: Row; group: string; note: string | null; where: string | null; onNotify: () => void
-  open: boolean; setOpen: (open: boolean) => void; onOpen: () => void; onRemove: () => void
-}) {
-  const { t, service } = row
-  const swiped = useRef(false)
-  // a held row closes its swipe first
-  const onHold = useHold(() => setOpen(false))
-  const hold = useLongPress((el) => onHold(t, el.querySelector<HTMLElement>('.wl-poster')!))
-  // year first, then how long it is (runtime or seasons, which also says film or series)
-  // in Not on your services, where it is ("On Viaplay", "Not streaming") ends the line, as a service does elsewhere
-  const meta = metaLine(t, group !== 'off' && service ? nameOf(service) : where)
-
-  // Swipe left, like a row in iOS Mail. The row follows the finger exactly (its position is written straight to
-  // the element, not through React, and starts from where the finger was when the swipe was recognised, so it
-  // never jumps). A short swipe leaves Remove showing; a swipe past the middle stretches Remove across the row and
-  // letting go there removes it: the row slides away and the list closes up. Swiped right it gives a little.
-  const li = useRef<HTMLLIElement>(null)
-  const g = useRef<{ x: number; y: number; from: number; on: boolean; at: number; full: boolean; trail: [number, number][] } | null>(null)
-  const place = (x: number) => { li.current?.style.setProperty('--x', `${x}px`); li.current?.style.setProperty('--r', String(-x)) }
-  useLayoutEffect(() => { place(open ? OPEN : 0) }, [open])
-  const remove = () => {
-    const el = li.current
-    if (!el || el.dataset.leaving) return
-    el.dataset.leaving = 'true'
-    delete el.dataset.drag
-    el.dataset.full = 'true'
-    place(-(el.offsetWidth + 24))
-    setTimeout(() => {
-      el.style.maxHeight = `${el.offsetHeight}px`
-      void el.offsetHeight
-      el.dataset.gone = 'true'
-      setTimeout(onRemove, 230)
-    }, 200)
-  }
-  const down = (e: React.PointerEvent) => { g.current = { x: e.clientX, y: e.clientY, from: 0, on: false, at: open ? OPEN : 0, full: false, trail: [] } }
-  const move = (e: React.PointerEvent<HTMLDivElement>) => {
-    const s = g.current, el = li.current
-    if (!s || !el) return
-    const mx = e.clientX - s.x, my = e.clientY - s.y
-    if (!s.on) {
-      if (Math.abs(mx) < 8) return
-      if (Math.abs(my) > Math.abs(mx)) { g.current = null; return } // scrolling the page
-      s.on = true
-      s.from = e.clientX // from here, so the row doesn't jump the 8px it took to recognise the swipe
-      e.currentTarget.setPointerCapture(e.pointerId)
-      el.dataset.drag = 'true'
-      e.currentTarget.querySelector('[data-pressed]')?.removeAttribute('data-pressed')
-    }
-    let x = (open ? OPEN : 0) + (e.clientX - s.from)
-    if (x > 0) x = 14 * (1 - Math.exp(-x / 60)) // to the right: resists
-    s.at = x
-    s.trail.push([e.timeStamp, e.clientX])
-    if (s.trail.length > 5) s.trail.shift()
-    const full = -x > el.offsetWidth * 0.55
-    if (full !== s.full) { s.full = full; if (full) el.dataset.full = 'true'; else delete el.dataset.full }
-    place(x)
-  }
-  const up = () => {
-    const s = g.current, el = li.current
-    g.current = null
-    if (!s?.on || !el) return
-    swiped.current = true
-    delete el.dataset.drag
-    const [t0, x0] = s.trail[0] ?? [0, 0]
-    const [t1, x1] = s.trail[s.trail.length - 1] ?? [0, 0]
-    const speed = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0 // px per ms; negative is leftward
-    if (s.full || (speed < -1.2 && s.at < -120)) { remove(); return }
-    delete el.dataset.full
-    const stay = speed < -0.3 ? true : speed > 0.3 ? false : s.at < OPEN / 2
-    place(stay ? OPEN : 0)
-    setOpen(stay)
-  }
-
+/** One saved title on the wall: its poster with the service it's on, how soon it leaves, or greyed when it isn't on
+ *  the member's services (a small bell when they'll be told it arrives). Tap opens it; hold gives the poster menu. */
+function WallPoster({ row, fresh, note, notifying, where }: { row: Row; fresh?: boolean; note: string | null; notifying: boolean; where: string | null }) {
+  const { t, service, mine } = row
+  const onHold = useHold()
+  const hold = useLongPress((el) => onHold(t as unknown as Card, el.querySelector<HTMLElement>('.cover')!))
+  const link = usePageLink(paths.title(t.id))
+  const { push } = useNav()
+  // "Leaves in 3 days" says it on a poster as "3 days"
+  const soon = note?.replace(/^Leaves (in )?/, '').replace(/^./, (c) => c.toUpperCase())
+  const label = [t.title, mine && service ? nameOf(service) : where, note, notifying ? 'you will be notified' : null].filter(Boolean).join(', ')
   return (
-    <li ref={li} className="wl-row" data-fresh={fresh || undefined} data-open={open || undefined}>
-      <button type="button" className="wl-remove" aria-label={`Remove ${t.title} from watchlist`} tabIndex={open ? 0 : -1} onClick={remove}>
-        <span><span>Remove</span></span>
-      </button>
-      <div className="wl-slide" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-       <PageLink to={paths.title(t.id)} draggable={false} handlers={hold.handlers} aria-label={[t.title, where ?? (service && nameOf(service)), note].filter(Boolean).join(', ')}
-        onClick={(e) => {
-          e.preventDefault()
-          if (swiped.current) { swiped.current = false; return }
-          if (hold.fired()) return
-          if (open) { setOpen(false); return }
-          onOpen()
-        }}>
-        <span className="wl-poster">{t.poster_path && <img src={tmdbImage(t.poster_path, 'w185')} alt="" loading="lazy" decoding="sync" draggable={false} />}<span className="hair" aria-hidden="true" /></span>
-        <span className="wl-text"><b>{t.title}</b><small>{meta}</small></span>
-        {note && <span className="wl-note">{note}</span>}
-       </PageLink>
-       {group === 'off' && (
-         <button type="button" className="wl-bell" aria-pressed={t.notify} aria-label={`Notify me when ${t.title} is on my services`}
-           onClick={() => { if (swiped.current) { swiped.current = false; return } if (open) { setOpen(false); return } onNotify() }}>
-           <Icon name="notifications" size={20} fill={t.notify} />
-         </button>
-       )}
-      </div>
+    <li className="wl-tile" data-off={!mine || undefined} data-fresh={fresh || undefined}>
+      <a href={paths.title(t.id)} aria-label={label} {...joinHandlers(hold.handlers, link)}
+        onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(t.id)) }}>
+        <Cover path={t.poster_path} service={mine ? service ?? undefined : undefined} sizes="96px" />
+        {soon && <span className="wl-soon" aria-hidden="true">{soon}</span>}
+        {notifying && <span className="wl-bellmark" aria-hidden="true"><Icon name="notifications" size={14} fill /></span>}
+      </a>
     </li>
   )
 }
 
-// ---- Empty: pick from a wall ------------------------------------------------
-
-// 7 × 7 posters: enough to cover the screen, tilted and panned to either edge
 const COLS = 7, ROWS = 7
 const PICKS = COLS * ROWS
 const BX = 150, BY = 140 // how far the wall pans; past it, it pulls back like iOS

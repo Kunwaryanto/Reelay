@@ -289,7 +289,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
           </a>
         ) : (
           <button type="button" role="menuitem" onClick={() => { if (!armed.current) return; saved.toggleNotify(card.id); close() }}>
-            <span>Notify me</span><Icon name="notifications" size={20} />
+            <span>{saved.isNotifying(card.id) ? 'Notifying you' : 'Notify me'}</span><Icon name="notifications" size={20} fill={saved.isNotifying(card.id)} />
           </button>
         )}
       </div>
