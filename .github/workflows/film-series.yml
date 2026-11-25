@@ -4,7 +4,8 @@ name: Film series
 on:
   workflow_dispatch:
 concurrency:
-  group: nightly-sync
+  # its own group: it writes only collection_id, which the sync writes the same way, so it can run beside it
+  group: film-series
   cancel-in-progress: false
 jobs:
   hero:
