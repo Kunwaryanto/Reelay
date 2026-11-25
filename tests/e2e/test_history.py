@@ -6,7 +6,7 @@ import mock_api as m
 def test_home_screen_app_keeps_one_history_entry(app):
     pg = app()
     pg.add_init_script("Object.defineProperty(navigator, 'standalone', { get: () => true })")
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     start = pg.evaluate("history.length")
     pg.evaluate(f"(() => {{ const a = ({TOP}).querySelector('a.card'); a.dispatchEvent(new PointerEvent('pointerdown', {{bubbles: true}})); a.click() }})()")
     pg.wait_for_timeout(1200)
@@ -17,7 +17,7 @@ def test_home_screen_app_keeps_one_history_entry(app):
 
 def test_browser_keeps_history(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     start = pg.evaluate("history.length")
     pg.evaluate(f"(() => {{ const a = ({TOP}).querySelector('a.card'); a.dispatchEvent(new PointerEvent('pointerdown', {{bubbles: true}})); a.click() }})()")
     pg.wait_for_timeout(1200)

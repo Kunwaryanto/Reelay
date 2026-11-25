@@ -5,7 +5,7 @@ def test_back_buttons_line_up(app):
     pg = app()
     seen = {}
     for u in ['/title/3', '/person/1', '/browse/titles', '/settings', '/settings/services', '/privacy']:
-        pg.goto(m.B + u); pg.wait_for_timeout(1800)
+        pg.goto(m.B + u); pg.settle(4000)
         seen[u] = pg.evaluate("""(() => { const b = [...document.querySelectorAll('[aria-label=Back]')].filter(x => x.offsetParent && !x.closest('[inert]')).pop()
           if (!b) return null; const i = b.querySelector('.ms').getBoundingClientRect(); return Math.round(i.top + i.height / 2) })()""")
     assert len(set(seen.values())) == 1 and None not in seen.values(), seen

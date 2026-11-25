@@ -11,7 +11,7 @@ def hide(pg, hidden):
 
 def test_bar_advances_and_restarts_on_return(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     first = pg.evaluate(ON)
     assert first
     pg.wait_for_timeout(1500)
@@ -30,7 +30,7 @@ def test_new_day_covers_then_shows_todays_home(app):
     import datetime
     pg.clock.install(time=datetime.datetime(2026, 11, 24, 23, 50))   # ten minutes before midnight
     pg.clock.resume()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(3500)
+    pg.goto(m.B + '/'); pg.settle(7000)
     assert pg.evaluate(f"!!({TOP}).querySelector('.hero')")
     hide(pg, True)
     pg.clock.fast_forward('15:00')                                   # away a quarter of an hour, past midnight

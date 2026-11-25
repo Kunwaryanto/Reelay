@@ -5,7 +5,7 @@ import mock_api as m
 
 def test_poster_meta_is_year_then_length(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     metas = pg.evaluate(f"[...({TOP}).querySelectorAll('.card .card-meta')].map(e => e.textContent)")
     assert metas
     for t in metas:
@@ -16,7 +16,7 @@ def test_poster_meta_is_year_then_length(app):
 
 def test_hero_meta_is_service_length_genre(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     metas = pg.evaluate(f"[...({TOP}).querySelectorAll('.hero-meta')].map(e => e.textContent)")
     assert metas
     for t in metas:
@@ -26,7 +26,7 @@ def test_hero_meta_is_service_length_genre(app):
 
 def test_poster_corner_shows_the_service_logo(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     marks = pg.evaluate(f"[...({TOP}).querySelectorAll('.cover-mark')].map(e => [e.querySelector('img') ? 'img' : 'text', e.textContent])")
     assert marks
     # every service in the mock has a logo now: no names written out

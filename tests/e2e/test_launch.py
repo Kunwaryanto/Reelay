@@ -11,6 +11,6 @@ def test_wordmark_hands_over_to_home(app):
 
 def test_signed_out_drops_the_wordmark():
     pg = m.ctx(False)
-    pg.goto(m.B + '/'); pg.wait_for_timeout(1500)
+    pg.goto(m.B + '/'); pg.settle(4000)
     assert not pg.evaluate("!!document.getElementById('boot')")
     pg.context.close()

@@ -6,7 +6,7 @@ def test_wall_offers_64_to_pick(app):
     # the middle 36 are what Services shows; picking pans out to the rest, loaded while Services is up
     m.MODE.pop('wall_asked', None)
     pg = app()
-    pg.goto(m.B + '/onboarding'); pg.wait_for_timeout(4500)
+    pg.goto(m.B + '/onboarding'); pg.settle(9000)
     asked = m.MODE.get('wall_asked')
     assert asked and asked['p_rows'] == 8 and asked['p_cols'] == 8 and asked['p_services'], asked
     n = pg.evaluate("document.querySelectorAll('.ob-tile:not([aria-hidden])').length")

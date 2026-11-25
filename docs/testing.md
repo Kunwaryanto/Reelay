@@ -17,5 +17,11 @@ Run them locally:
     pip install -r tests/e2e/requirements.txt && python -m playwright install chromium
     python -m pytest tests/e2e -q
 
+They run four at a time (pytest-xdist, `-n 4` in `tests/e2e/pytest.ini`; about 2.5 minutes instead of 6). Add
+`-n 0` to run one at a time, or `-k name` for one test. After opening a page, wait with `pg.settle(cap)`, which
+returns as soon as the page is quiet (no request open, no short animation running), not with a fixed
+`wait_for_timeout`: a fixed wait makes every run as slow as the slowest and still fails when tests run in parallel.
+Keep fixed waits for things that really take time (a timer, a hold, a spinner's minimum).
+
 A new screen or behaviour gets a test here; new data a screen asks for gets a mock in `mock_api.py` (an unknown
 request is answered 404, which usually shows as a screen that never loads).

@@ -11,7 +11,7 @@ def drop(pg, label):
     pg.wait_for_timeout(900)
 
 def test_row_view_all_opens_its_filters_as_chips(app):
-    pg = app(); pg.goto(m.B + '/browse/g/thriller/top-series'); pg.wait_for_timeout(2500)
+    pg = app(); pg.goto(m.B + '/browse/g/thriller/top-series'); pg.settle(5000)
     assert heading(pg) == 'Thriller series', heading(pg)
     assert chips(pg) == ['Thriller'], chips(pg)
     assert pg.evaluate(f"({TOP}).querySelector('.wl-pill[aria-pressed=true]').textContent").startswith('Series')
@@ -19,13 +19,13 @@ def test_row_view_all_opens_its_filters_as_chips(app):
     assert heading(pg) == 'Series' and chips(pg) == []
 
 def test_decade_list_widens_to_all_titles(app):
-    pg = app(); pg.goto(m.B + '/browse/g/90s/popular'); pg.wait_for_timeout(2500)
+    pg = app(); pg.goto(m.B + '/browse/g/90s/popular'); pg.settle(5000)
     assert heading(pg) == '90s' and chips(pg) == ['90s'], (heading(pg), chips(pg))
     drop(pg, '90s')
     assert heading(pg) == 'All titles'
 
 def test_several_decades_from_the_drawer(app):
-    pg = app(); pg.goto(m.B + '/browse/g/90s/popular'); pg.wait_for_timeout(2500)
+    pg = app(); pg.goto(m.B + '/browse/g/90s/popular'); pg.settle(5000)
     pg.evaluate(f"({TOP}).querySelector('.wl-tune').click()"); pg.wait_for_timeout(600)
     pg.click('dialog[open] [data-row=decade]'); pg.wait_for_timeout(600)
     pg.evaluate("[...document.querySelectorAll('dialog[open] .fd-opt')].find(b => b.textContent.startsWith('2000s')).click()"); pg.wait_for_timeout(300)
@@ -36,7 +36,7 @@ def test_several_decades_from_the_drawer(app):
 def test_all_titles_from_browse_counts_and_loads_on(app):
     m.MODE['pool'] = 200
     try:
-        pg = app(); pg.goto(m.B + '/browse'); pg.wait_for_timeout(2500)
+        pg = app(); pg.goto(m.B + '/browse'); pg.settle(5000)
         link = pg.evaluate("[...document.querySelectorAll('.br-head a')].map(a => a.textContent + '|' + a.getAttribute('href'))")
         assert link == ['All titles|/browse/titles'], link
         pg.evaluate("document.querySelector('.br-head a').click()"); pg.wait_for_timeout(2500)
@@ -53,11 +53,11 @@ def test_all_titles_from_browse_counts_and_loads_on(app):
         m.MODE.pop('pool', None)
 
 def test_a_list_that_is_not_filters_stays_fixed(app):
-    pg = app(); pg.goto(m.B + '/browse/g/trending/list'); pg.wait_for_timeout(2500)
+    pg = app(); pg.goto(m.B + '/browse/g/trending/list'); pg.settle(5000)
     assert heading(pg) == 'Trending' and chips(pg) == []
 
 def test_country_from_the_drawer(app):
-    pg = app(); pg.goto(m.B + '/browse/titles'); pg.wait_for_timeout(2500)
+    pg = app(); pg.goto(m.B + '/browse/titles'); pg.settle(5000)
     pg.evaluate(f"({TOP}).querySelector('.wl-tune').click()"); pg.wait_for_timeout(600)
     pg.click('dialog[open] [data-row=country]'); pg.wait_for_timeout(600)
     pg.evaluate("[...document.querySelectorAll('dialog[open] .fd-opt')].find(b => b.textContent.startsWith('Sweden')).click()"); pg.wait_for_timeout(300)
@@ -70,8 +70,8 @@ def test_country_from_the_drawer(app):
 def test_browse_title_sits_where_the_other_tabs_have_it(app):
     pg = app()
     top = "document.querySelector('.tab-head h1').getBoundingClientRect().top"
-    pg.goto(m.B + '/watchlist'); pg.wait_for_timeout(2000); w = pg.evaluate(top)
-    pg.goto(m.B + '/browse'); pg.wait_for_timeout(2000); b = pg.evaluate(top)
+    pg.goto(m.B + '/watchlist'); pg.settle(4000); w = pg.evaluate(top)
+    pg.goto(m.B + '/browse'); pg.settle(4000); b = pg.evaluate(top)
     assert abs(w - b) < 0.5, (w, b)
     # All titles on the title's baseline: the bottoms of their text lines differ only by the fonts' descents
     gap = pg.evaluate("""(() => { const r = (el) => { const g = document.createRange(); g.selectNodeContents(el); return g.getBoundingClientRect() }

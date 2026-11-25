@@ -5,7 +5,7 @@ from conftest import TOP, tap
 def test_links_preload(app):
     pg = app(); warns = []
     pg.on('console', lambda msg: warns.append(msg.text) if '[pages]' in msg.text else None)
-    pg.goto(m.B + '/'); pg.wait_for_timeout(3500)
+    pg.goto(m.B + '/'); pg.settle(7000)
     back = lambda: (pg.evaluate('history.back()'), pg.wait_for_timeout(900))
     assert tap(pg, '.hero-slide[data-on]'); pg.wait_for_timeout(1300); back()
     assert tap(pg, '.spot'); pg.wait_for_timeout(1300); back()

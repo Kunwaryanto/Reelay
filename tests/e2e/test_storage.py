@@ -4,7 +4,7 @@ import mock_api as m
 
 def test_saved_data_is_pruned(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(500)
+    pg.goto(m.B + '/'); pg.settle(4000)
     now = int(time.time() * 1000)
     pg.evaluate("""([now]) => { for (let i = 0; i < 450; i++) localStorage.setItem('reelay:q:test:' + i, JSON.stringify({ data: 'x'.repeat(100), at: now - i * 60000 }));
       for (let i = 0; i < 20; i++) localStorage.setItem('reelay:q:old:' + i, JSON.stringify({ data: 1, at: now - 40 * 864e5 })) }""", [now])

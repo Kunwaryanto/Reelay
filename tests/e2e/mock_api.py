@@ -115,6 +115,25 @@ def route(r):
     if '/auth/v1/verify' in u: return r.fulfill(json=SESSION)
     if '/auth/v1/' in u: return r.fulfill(json={})
     return r.fulfill(status=404, json={})
+def watch_quiet(pg):
+    """Gives the page `settle(cap)`: wait until it is quiet (no request open for 250 ms, no short animation running),
+    at most `cap` ms. Used instead of a fixed wait after opening a page, so a fast run doesn't sleep and a slow one
+    (tests in parallel) doesn't give up too soon."""
+    import time
+    st = {'open': 0, 'last': time.monotonic()}
+    def up(_): st['open'] += 1; st['last'] = time.monotonic()
+    def down(_): st['open'] = max(0, st['open'] - 1); st['last'] = time.monotonic()
+    pg.on('request', up); pg.on('requestfinished', down); pg.on('requestfailed', down)
+    def settle(cap=4000):
+        end = time.monotonic() + cap / 1000
+        pg.wait_for_timeout(100)
+        while time.monotonic() < end:
+            if st['open'] == 0 and time.monotonic() - st['last'] >= 0.25 and not pg.evaluate(
+                "document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime < 3000)"):
+                return
+            pg.wait_for_timeout(50)
+    pg.settle = settle
+
 p=sync_playwright().start()
 if True:
     # the system Chrome where there is one (this sandbox), Playwright's own Chromium otherwise (CI)
@@ -124,6 +143,7 @@ if True:
         c.route(re.compile(r'https://(mock\.supabase\.co|image\.tmdb\.org)/.*'),route)
         if signed: c.add_init_script(f"localStorage.setItem('sb-mock-auth-token',{json.dumps(json.dumps(SESSION))})")
         pg=c.new_page(); pg.on('pageerror',lambda e: print('pageerror',str(e)[:300]))
+        watch_quiet(pg)
         return pg
 
 

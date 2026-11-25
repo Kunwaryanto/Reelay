@@ -15,6 +15,6 @@ def pull(pg):
 def test_pull(app, path, refreshes):
     pg = app(); asked = []
     pg.context.route(re.compile(r'.*/rest/v1/data_stamp.*'), lambda r: (asked.append(1), r.fulfill(json={'finished_at': 's1'}))[1])
-    pg.goto(m.B + path); pg.wait_for_timeout(2600)
+    pg.goto(m.B + path); pg.settle(5200)
     k = len(asked); pull(pg)
     assert (len(asked) > k) == refreshes

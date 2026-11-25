@@ -6,7 +6,7 @@ def test_filter_list_counts_and_loads_on(app):
     m.MODE['pool'] = 200
     try:
         pg = app()
-        pg.goto(m.B + '/search'); pg.wait_for_timeout(1500)
+        pg.goto(m.B + '/search'); pg.settle(4000)
         pg.fill('input[type=search], input', 'thriller 90s'); pg.wait_for_timeout(2500)
         pg.keyboard.press('Enter'); pg.wait_for_timeout(1500)
         total = len([i for i in range(41, 241) if i % 5])
@@ -26,7 +26,7 @@ def test_leaving_soon_idea_starts_on_my_services(app):
     # Leaving soon is about what you can still watch: the suggestion starts with My services on
     import mock_api as m
     pg = app()
-    pg.goto(m.B + '/search'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/search'); pg.settle(5000)
     ideas = pg.evaluate("[...document.querySelectorAll('.s-idea')].map(b => b.innerText.replace(/\\n/g, '|'))")
     assert 'Leaving soon|On your services' in ideas, ideas
     pg.evaluate("[...document.querySelectorAll('.s-idea')].find(b => b.textContent.startsWith('Leaving soon')).click()"); pg.wait_for_timeout(2000)

@@ -20,7 +20,7 @@ def reopen(pg):
 
 def test_home_follows_the_sync(app):
     pg = app(home=False); n = builds(pg)
-    pg.goto(m.B + '/'); pg.wait_for_timeout(3500)
+    pg.goto(m.B + '/'); pg.settle(7000)
     assert n, 'Home was built on the first open'
     k = len(n); assert reopen(pg) is not None; pg.wait_for_timeout(2500)
     assert len(n) == k, 'same sync, same day: the saved Home is used'
@@ -33,7 +33,7 @@ def test_home_follows_the_sync(app):
 
 def test_saving_rebuilds_quietly(app):
     pg = app(home=False); n = builds(pg)
-    pg.goto(m.B + '/'); pg.wait_for_timeout(3500)
+    pg.goto(m.B + '/'); pg.settle(7000)
     before = pg.evaluate("document.querySelector('.now-in').innerText"); k = len(n)
     pg.evaluate("document.querySelector('.now-in section.row .card').click()"); pg.wait_for_timeout(1500)
     pg.locator('.wl-btn').last.click(); pg.wait_for_timeout(2500)
@@ -44,7 +44,7 @@ def test_every_row_has_at_least_seven(app):
     import mock_api as m
     from conftest import TOP
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     counts = pg.evaluate(f"[...({TOP}).querySelectorAll('section.row')].filter(s => s.querySelector('.card')).map(s => [s.querySelector('h2')?.textContent, s.querySelectorAll('.card').length])")
     assert counts
     for title, n in counts: assert n >= 7, (title, n)
@@ -56,7 +56,7 @@ def test_award_row_shows_the_award(app):
     import mock_api as m
     from conftest import TOP
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     rows = pg.evaluate(f"[...({TOP}).querySelectorAll('section.row')].map(s => [s.querySelector('h2')?.textContent, [...s.querySelectorAll('.card-meta')].map(e => e.textContent)])")
     award = [r for r in rows if re.search(r'Oscar|Emmy|Golden Globe|Best Picture', r[0] or '')]
     assert award, [r[0] for r in rows]
@@ -69,7 +69,7 @@ def test_watchlist_news_under_the_hero(app):
     # what arrived on the watchlist in the last two weeks is one line under the hero, not a row of the whole list
     from conftest import TOP
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     news = pg.evaluate(f"""(() => {{ const n = ({TOP}).querySelector('.news'); if (!n) return null
       return {{ head: n.querySelector('b').textContent, sub: n.querySelector('small').textContent, posters: n.querySelectorAll('.cover').length,
         afterHero: n.previousElementSibling?.classList.contains('hero'), rows: [...({TOP}).querySelectorAll('section.row h2')].map(h => h.textContent) }} }})()""")
@@ -86,7 +86,7 @@ def test_no_news_no_line(app):
     m.MODE['news'] = False
     try:
         pg = app()
-        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        pg.goto(m.B + '/'); pg.settle(5000)
         assert pg.evaluate(f"!({TOP}).querySelector('.news')")
     finally:
         m.MODE.pop('news', None)
@@ -99,12 +99,12 @@ def test_news_forgets_what_was_seen(app):
     try:
         pg = app()
         line = lambda: pg.evaluate(f"(() => {{ const n = ({TOP}).querySelector('.news'); return n && [n.querySelector('b').textContent, n.querySelector('small').textContent] }})()")
-        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        pg.goto(m.B + '/'); pg.settle(5000)
         head, sub = line()
         assert head == '2 just arrived' and 'leaves' in sub, (head, sub)
         for t in (500, 501, 505):
-            pg.goto(m.B + f'/title/{t}'); pg.wait_for_timeout(1200)
-        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+            pg.goto(m.B + f'/title/{t}'); pg.settle(4000)
+        pg.goto(m.B + '/'); pg.settle(5000)
         head, sub = line()
         assert head == 'Leaving soon' and 'leaves' in sub, (head, sub)
     finally:
@@ -118,7 +118,7 @@ def test_days_are_the_phones(app):
     try:
         pg = app()
         pg.clock.set_fixed_time('2026-11-25T23:30:00Z')   # 26 Nov, 00:30 in Stockholm
-        pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+        pg.goto(m.B + '/'); pg.settle(5000)
         sub = pg.evaluate(f"({TOP}).querySelector('.news small')?.textContent")
         assert sub and 'leaves' in sub and sub.endswith('tomorrow'), sub
     finally:
