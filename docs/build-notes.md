@@ -796,3 +796,5 @@ Measured on the database before and after:
   Hamnet, No Other Land, Sing Sing), the canon (4.0+), and new series that critics rate 85%+ on Rotten Tomatoes as
   well as IMDb 7.8+ (Severance, Slow Horses, The Pitt, Arcane): IMDb alone let in fan-voted shows. Blockbusters picked
   by fame, the crowd's old favourites, concert films and half-hour TV specials are gone.
+- The walls' films in even thirds: new, the modern canon (1980 to 20 years ago) and the old canon (before 1980:
+  Seven Samurai, Metropolis, Some Like It Hot, On the Waterfront), so the older masters always get their places.
