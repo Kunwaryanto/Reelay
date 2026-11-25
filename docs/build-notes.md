@@ -792,3 +792,7 @@ Measured on the database before and after:
   1 of 8 is another well-known classic (Home Alone, Titanic). IMDb's ratings were tried first and gave the crowd's
   favourites instead (Shawshank, Fight Club). 270 canon films stream now; 2001: A Space Odyssey isn't one of them.
 - Fixed: an outer poster on onboarding's wall that the phone already had could stay blank.
+- Then every title on the walls became an enthusiast's pick: new films by Letterboxd rating (3.7+: Past Lives,
+  Hamnet, No Other Land, Sing Sing), the canon (4.0+), and new series that critics rate 85%+ on Rotten Tomatoes as
+  well as IMDb 7.8+ (Severance, Slow Horses, The Pitt, Arcane): IMDb alone let in fan-voted shows. Blockbusters picked
+  by fame, the crowd's old favourites, concert films and half-hour TV specials are gone.
