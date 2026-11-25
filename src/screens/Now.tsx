@@ -11,12 +11,12 @@ import { useLetterboxd, useWatched, watchedKey } from '../lib/letterboxd'
 import { markNewsSeen, useNewsSeen } from '../lib/newsSeen'
 import { hiddenKey, useHiddenTags } from '../lib/hidden'
 import { useAuth } from '../lib/auth'
-import { useFacts } from '../lib/facts'
+import { useFacts, warmFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
-import { Cover, NearImage, NearRow, PageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { Cover, NearImage, NearRow, PageLink, joinHandlers, useHold, useLongPress, usePageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
@@ -148,6 +148,9 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
 }
 
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
+/** "Tonight's picks" from 17:00 (and through the night), "Today's picks" before. */
+const picksTitle = () => { const h = new Date().getHours(); return h >= 17 || h < 4 ? 'Tonight’s picks' : 'Today’s picks' }
+
 /** How long Home waits behind the wordmark before showing placeholders. */
 const LATE_MS = 8000
 
@@ -300,26 +303,48 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   )
 }
 
-/** Titles given room between the rows, side by side: each card has its wide picture, why it is here, and where it plays. */
+/** Tonight's picks: tall cards side by side, each with its picture, why it is here as a small line over the title,
+ *  and at the bottom a small poster with who made it and where it plays (as under a title page's name). */
 function Spotlight({ cards }: { cards: HomeCard[] }) {
   return (
     <NearRow className="spot-row noscroll" role="list">
-      {cards.map((card) => {
-        const art = card.backdrop_path ? { src: tmdbImage(card.backdrop_path, 'w780'), srcSet: `${tmdbImage(card.backdrop_path, 'w780')} 780w, ${tmdbImage(card.backdrop_path, 'w1280')} 1280w`, sizes: '90vw' } : null
-        const service = card.availability[0]?.service_id
-        return (
-          <div key={card.id} role="listitem" className="spot-item"><PageLink to={paths.title(card.id)} className="spot press">
-            {art && <NearImage {...art} />}
-            <span className="spot-text">
-              {card.reason && <small>{card.reason}</small>}
-              <b>{card.title}</b>
-              {/* the service, unless the reason already names one ("New on Netflix") */}
-              <span>{metaLine(card, service && !/^(New|Now) on/.test(card.reason ?? '') ? SERVICE_NAME[service] ?? service : null)}</span>
-            </span>
-          </PageLink></div>
-        )
-      })}
+      {cards.map((card) => <SpotCard key={card.id} card={card} />)}
     </NearRow>
+  )
+}
+
+function SpotCard({ card }: { card: HomeCard }) {
+  const { push } = useNavActions()
+  const onHold = useHold()
+  // held: the small poster lifts out into the poster menu, as a poster does
+  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.spot-thumb .cover')!))
+  const link = usePageLink(paths.title(card.id))
+  // the title page's picture (a textless poster fills the tall card best), else the wide one, cropped
+  const wide = card.hero_path && !card.hero_poster ? card.hero_path : card.backdrop_path
+  const art = card.hero_path && card.hero_poster ? { src: tmdbImage(card.hero_path, 'w780'), sizes: '90vw' }
+    : wide ? { src: tmdbImage(wide, 'w780'), srcSet: `${tmdbImage(wide, 'w780')} 780w, ${tmdbImage(wide, 'w1280')} 1280w`, sizes: '90vw' } : null
+  const service = card.availability[0]?.service_id
+  // where it plays, unless the reason already names the service ("New on Netflix", "Leaves Viaplay on Friday")
+  const svc = service && !(card.reason ?? '').includes(SERVICE_NAME[service] ?? service) ? SERVICE_NAME[service] ?? service : null
+  return (
+    <div role="listitem" className="spot-item">
+      <a className="spot" href={paths.title(card.id)} data-poster={card.hero_poster || undefined}
+        {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
+        onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(card.id)) }}>
+        {art && <NearImage {...art} />}
+        <span className="spot-top">
+          {card.reason && <small>{card.reason}</small>}
+          <b>{card.title}</b>
+        </span>
+        <span className="spot-bot">
+          <span className="spot-thumb"><Cover path={card.poster_path} sizes="40px" /></span>
+          <span className="spot-meta">
+            {card.by && <span className="spot-by">{card.by}</span>}
+            <span>{metaLine(card, svc)}</span>
+          </span>
+        </span>
+      </a>
+    </div>
   )
 }
 
@@ -482,7 +507,7 @@ export default function Now() {
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
           {q.data.news?.length ? <News news={q.data.news} /> : null}
           {q.data.rows.map((row, r) => (
-            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
+            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={picksTitle()} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
               <SectionHeader title={row.title} viewAll={row.more === 'tab:watchlist' ? () => setTab('watchlist') : row.more} />
               <PosterRow>

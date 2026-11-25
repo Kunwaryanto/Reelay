@@ -15,6 +15,13 @@ export type HomeCard = Card & {
   reason?: string
   /** replaces the line under the poster: "Anna 4.5" */
   note?: string
+  /** the title page's picture (the spotlight's tall cards show it) */
+  hero_path?: string | null
+  hero_poster?: boolean | null
+  imdb_rating?: number | null
+  imdb_votes?: number | null
+  /** the spotlight: who made it ("Directed by Celine Song", "Created by Vince Gilligan") */
+  by?: string
 }
 export type HomeRow = {
   id: string
@@ -68,10 +75,50 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 15
+export const HOME_VERSION = 16
 
-const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
+const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
+
+/** "Anna rated it 4.5", "Anna and Erik liked it", "Anna and 2 friends liked it" */
+function friendsLine(rows: { name: string; rating: number }[]): string {
+  const first = (n: string) => n.trim().split(/\s+/)[0] || n
+  const names = [...new Set(rows.map((r) => first(r.name)))]
+  if (names.length <= 1) return `${names[0] ?? 'A friend'} rated it ${Number(rows[0]?.rating ?? 0).toFixed(1)}`
+  return names.length === 2 ? `${names[0]} and ${names[1]} liked it` : `${names[0]} and ${names.length - 1} friends liked it`
+}
+/** "Leaves Netflix today", "… tomorrow", "… on Friday" (within the week), "… on 12 Dec" */
+function leavingLine(t: Card, day: string | undefined): string {
+  const svc = SERVICE_NAME[t.availability.find((a) => a.leaves_on === day)?.service_id ?? t.availability[0]?.service_id] ?? 'soon'
+  if (!day) return `Leaving ${svc}`
+  const n = daysUntil(day)
+  const d = new Date(`${day}T12:00:00`)
+  const when = n <= 0 ? 'today' : n === 1 ? 'tomorrow' : n <= 6 ? `on ${d.toLocaleDateString('en-GB', { weekday: 'long' })}` : `on ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+  return `Leaves ${svc} ${when}`
+}
+/** "March", or "March 2025" for an earlier year */
+function monthOf(at: string): string {
+  const d = new Date(at)
+  return d.toLocaleDateString('en-GB', d.getFullYear() === new Date().getFullYear() ? { month: 'long' } : { month: 'long', year: 'numeric' })
+}
+// The picks of earlier days, kept on the phone for a week: they step aside so the picks change from day to day.
+const SPOT_KEY = 'reelay.spot-shown'
+function spotHistory(): Set<number> {
+  try {
+    const all = JSON.parse(localStorage.getItem(SPOT_KEY) ?? '{}') as Record<string, string>
+    const today = localDay(), weekAgo = localDay(-7)
+    return new Set(Object.entries(all).filter(([, day]) => day !== today && day >= weekAgo).map(([id]) => Number(id)))
+  } catch { return new Set() }
+}
+function noteSpots(ids: number[]) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SPOT_KEY) ?? '{}') as Record<string, string>
+    const today = localDay(), weekAgo = localDay(-7)
+    for (const id of ids) if (!all[id] || all[id] < weekAgo) all[id] = today
+    for (const [id, day] of Object.entries(all)) if (day < weekAgo) delete all[id]
+    localStorage.setItem(SPOT_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
 type Res<T> = PromiseLike<{ data: T | null; error: { message: string } | null }>
 
 const today = () => localDay()
@@ -170,7 +217,7 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
     titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     soft<Arrival>(ok(on(arrivalsQ, 'title.availability.service_id'), 'title') as never),
     soft<Leaving>(ok(on(leavingQ, 'title.availability.service_id'), 'title') as never),
-    soft<{ title: Card }>(on(supabase.from('watchlist').select(`added_at,title:titles!inner(${H})`).order('added_at', { ascending: false }).limit(60), 'title.availability.service_id') as never),
+    soft<{ title: Card; added_at?: string }>(on(supabase.from('watchlist').select(`added_at,title:titles!inner(${H})`).order('added_at', { ascending: false }).limit(60), 'title.availability.service_id') as never),
     soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day, ...rpcArgs }) as never),
     // a second liked film (tomorrow's), for the spotlight: it never repeats the row's reason
     soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day + 1, ...rpcArgs }) as never),
@@ -301,12 +348,12 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   const rowTheme = take(theme, 20, true)
   // each title once, under it its top category in this award and how many more it won there: "Best Picture +3"
   const awardCards: HomeCard[] = []
-  const wins = new Map<number, { top: string; n: number }>()
+  const wins = new Map<number, { top: string; n: number; line: string }>()
   for (const w of awardWins) {
     if (!w.title) continue
     const got = wins.get(w.title.id)
     if (got) got.n++
-    else { wins.set(w.title.id, { top: w.short_category, n: 1 }); awardCards.push(w.title) }
+    else { wins.set(w.title.id, { top: w.short_category, n: 1, line: `${w.short_category} · ${w.award} ${w.year}` }); awardCards.push(w.title) }
   }
   const rowAwards = take(awardCards.map((t) => ({ ...t, note: `${wins.get(t.id)!.top}${wins.get(t.id)!.n > 1 ? ` +${wins.get(t.id)!.n - 1}` : ''}` })), 20, true)
   const rowGenres = picks.map((c, i) => ({ c, items: take(mix(genreLists[i] as Card[][]), 20, true) }))
@@ -314,6 +361,14 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
 
   // ---- The hero: one from each kind of reason, as far as they have a wide picture ----
   const wide = (t: HomeCard | undefined) => !!t && !!t.backdrop_path
+  // the spotlight's tall cards: the title page's picture, or a wide one to crop
+  const tall = (t: HomeCard | undefined) => !!t && (!!t.hero_path || !!t.backdrop_path)
+  const watchedAll = new Set(ask.watched)
+  const newLine = (t: HomeCard) => {
+    const svcId = arrivedOn.get(t.id) ?? t.availability[0]?.service_id
+    const on = arrived.find((a) => a.title.id === t.id)?.happened_on
+    return `New on ${svcName(svcId)}${on && daysUntil(on) >= -6 ? ' this week' : ''}`
+  }
   const hero: HomeCard[] = []
   const lead = (t: HomeCard | undefined, reason: string) => { if (wide(t) && !hero.some((h) => h.id === t!.id) && hero.length < 7) hero.push({ ...t!, reason }) }
   const newest = rowNew.find(wide)
@@ -333,28 +388,54 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   // a thin day: fill up from trending so the hero is never one slide
   for (const t of mix([rowTrendF, rowTrendS])) if (hero.length < 5) lead(t, t.kind === 'film' ? 'Trending film this week' : 'Trending series this week')
 
-  // ---- The spotlight: up to six titles given room, each with its reason. Personal first (the watchlist's own
-  // finds among them, whether or not their small rows are shown); never a hero title; each from a different reason. ----
+  // ---- Tonight's picks (the spotlight): up to six titles given room, each from a different reason and each worth
+  // an evening. Personal first (films like one they loved, their watchlist's news, friends), then what is timely
+  // (leaving, just arrived), then discovery (awards, hidden gems, trending). Never a hero title, never one they have
+  // logged; a discovery pick needs a decent rating; and what was picked on an earlier day steps aside for a week
+  // (unless it is leaving), so the picks change from day to day. ----
   const inHero = new Set(hero.map((h) => h.id))
+  const shownBefore = spotHistory()
   const spots: HomeCard[] = []
-  const spot = (list: HomeCard[], reason: (t: HomeCard) => string, n = 1) => {
+  const decent = (t: HomeCard) => t.imdb_rating == null || t.imdb_rating >= 6.5
+  const spot = (list: HomeCard[], reason: (t: HomeCard) => string, opts: { n?: number; bar?: boolean; again?: boolean } = {}) => {
+    let n = opts.n ?? 1
     for (const t of list) {
       if (spots.length >= 6 || n <= 0) return
-      if (!wide(t) || inHero.has(t.id) || spots.some((x) => x.id === t.id)) continue
+      if (!tall(t) || inHero.has(t.id) || spots.some((x) => x.id === t.id) || watchedAll.has(t.id)) continue
+      if (opts.bar && !decent(t)) continue
+      if (!opts.again && shownBefore.has(t.id)) continue
       spots.push({ ...t, reason: reason(t) }); n--
     }
   }
   if (alt.length) spot(altList, () => altReason)
-  // the card says it's yours by what it is (you saved it); the reason only says what's new
-  spot(playable.filter((t) => arrivedSaved.has(t.id)), (t) => `Now on ${svcName(arrivedSaved.get(t.id)!)}`)
-  spot(rowFriends, (t) => `${first(friendOf.get(t.id)!.name)} rated it ${Number(friendOf.get(t.id)!.rating).toFixed(1)}`)
+  spot(playable.filter((t) => arrivedSaved.has(t.id)), (t) => `Just arrived on ${svcName(arrivedSaved.get(t.id)!)}`, { again: true })
+  spot(rowFriends, (t) => friendsLine(friends.filter((f) => f.title_id === t.id)))
+  const since = new Map(saved.filter((x) => x.title && x.added_at).map((x) => [x.title.id, x.added_at!]))
+  const longSaved = playable.filter((t) => since.has(t.id) && daysUntil(since.get(t.id)!.slice(0, 10)) <= -45)
+  spot(longSaved, (t) => `On your watchlist since ${monthOf(since.get(t.id)!)}`)
   spot(playable.filter(isShort), (t) => `Only ${shortRuntime(t.runtime_min)}`)
-  spot(rowNew, (t) => `New on ${svcName(arrivedOn.get(t.id) ?? t.availability[0]?.service_id)}`)
-  spot(rowAwards, () => `${awardRow.award === 'Oscars' ? 'Oscar' : awardRow.award === 'Emmys' ? 'Emmy' : 'Golden Globe'} winner`)
-  spot(rowTheme, () => 'Hidden gem')
-  spot(rowLeaving, (t) => leavesIn(leavesOn.get(t.id)) ?? 'Leaving soon')
-  spot(rowTrendS, () => 'Trending this week')
-  spot(rowTrendF, () => 'Trending this week', 2)
+  spot(rowLeaving, (t) => leavingLine(t, leavesOn.get(t.id)), { bar: true, again: true })
+  spot(rowNew, (t) => newLine(t), { bar: true })
+  spot(rowAwards, (t) => wins.get(t.id)!.line, { bar: true })
+  spot(rowTheme, (t) => (t.imdb_rating ? `Few have seen it · IMDb ${Number(t.imdb_rating).toFixed(1)}` : 'A hidden gem'))
+  spot(rowTrendS, () => 'Everyone’s watching it this week', { bar: true })
+  spot(rowTrendF, () => 'Everyone’s watching it this week', { bar: true, n: 2 })
+  // a thin day: the same reasons again, with titles picked before
+  if (spots.length < 3) {
+    spot(rowNew, (t) => newLine(t), { bar: true, again: true })
+    spot(rowTrendF, () => 'Everyone’s watching it this week', { bar: true, again: true, n: 2 })
+  }
+  noteSpots(spots.map((t) => t.id))
+  // who made each: "Directed by", "Created by" (one small request, for the picks only)
+  if (spots.length) {
+    type By = { title_id: number; role: string; person: { name: string } | null }
+    const by = await soft<By>(supabase.from('credits').select('title_id,role,person:people(name)').in('title_id', spots.map((t) => t.id))
+      .in('role', ['director', 'creator']).order('sort_order') as never)
+    for (const t of spots) {
+      const names = by.filter((b) => b.title_id === t.id && b.role === (t.kind === 'film' ? 'director' : 'creator') && b.person).slice(0, 2).map((b) => b.person!.name)
+      if (names.length) t.by = `${t.kind === 'film' ? 'Directed by' : 'Created by'} ${names.join(', ')}`
+    }
+  }
 
   // A featured title (in the hero or the spotlight) can be in a row too, but not in its first four places: it is
   // moved back to just after them, so each row starts with something the page hasn't shown yet.

@@ -36,7 +36,7 @@ def test_home_and_browse_leave_hidden_out(app):
         pg.goto(m.B + '/'); pg.settle(6000)
         # Home's own lookups (its fields: id,kind,title,year,poster_path,backdrop_path,logo_path,...), not the
         # watchlist and what arrived from it, which are the member's own
-        H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min'
+        H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min'
         titles = [u for u in asked if H in u and '/rest/v1/watchlist' not in u and 'title_id=in.' not in u]
         assert titles and all('tags=not.ov.{horror,kids}' in u for u in titles), [u for u in titles if 'not.ov' not in u][:3]
         assert not any('not.ov' in u for u in asked if '/rest/v1/watchlist' in u), 'the watchlist is the member\'s own'
