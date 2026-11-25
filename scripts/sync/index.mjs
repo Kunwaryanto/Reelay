@@ -1207,6 +1207,14 @@ async function syncSimilar() {
 // The app keeps what it has loaded until this moves (see data_stamp): set at the end of every run that changes data.
 async function stamp() {
   await db.query('update public.data_stamp set finished_at = now() where id = 1').catch((e) => log('stamp failed:', e.message));
+  // the generic part of Home, ready for every member's set of services (home_base: a phone with none saved shows
+  // Home from it in one request)
+  await db.query("set statement_timeout = '2min'");
+  try {
+    const n = (await db.query('select public.refresh_home_bases() as n')).rows[0].n;
+    log(`home base: ready for ${n} sets of services`);
+  } catch (e) { log('home base failed:', e.message) }
+  finally { await db.query('set statement_timeout = 0') }
 }
 
 async function main() {
