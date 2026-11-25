@@ -78,9 +78,11 @@ button { font: inherit; color: inherit; }
 .page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: calc(110px + var(--edge-b)); -webkit-overflow-scrolling: touch; }
 .page-plain { padding: calc(var(--safe-top) + 50px) var(--margin) 110px; }
 .page-bar { margin-left: -14px; height: var(--hit); display: flex; align-items: center; }
+/* every back button sits 15px under the safe area, as on Title, Person, Browse and Home's cog; the title below stays put */
+.page-plain > .page-bar:first-child { margin-top: -35px; margin-bottom: 35px; }
 .page-title { margin: 16px 0 0; font: var(--type-title); letter-spacing: var(--track-title); }
 .page-title-tab { margin-top: 44px; }
-.page-back { position: absolute; z-index: 2; top: calc(var(--safe-top) + 19px); left: 12px; }
+.page-back { position: absolute; z-index: 2; top: calc(var(--safe-top) + 15px); left: 12px; }
 .page-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
 .empty { margin: 8px 0 0; font: var(--type-body); color: var(--text-muted); }
 .row + .empty, .rise > .empty { padding: 0 var(--margin); }
