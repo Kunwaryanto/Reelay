@@ -19,7 +19,8 @@ export async function sendNotifications(db, log) {
 
   // Everything due, one row per person, title and kind. "Your services" means any service when none are picked.
   const due = (await db.query(`
-    with mine as (
+    with today as (select (now() at time zone 'Europe/Stockholm')::date as d),   -- Sweden's date, not UTC's
+    mine as (
       select w.user_id, w.title_id, w.notify, a.service_id, a.leaves_on
       from public.watchlist w
       join public.availability a on a.title_id = w.title_id
@@ -28,17 +29,17 @@ export async function sendNotifications(db, log) {
     )
     select 'leaving' as kind, m.user_id, m.title_id, m.service_id, m.leaves_on as ref_date
       from mine m join public.profiles p on p.user_id = m.user_id and p.notify_leaving
-      where m.leaves_on = current_date + 1
+      where m.leaves_on = (select d from today) + 1
     union all
     select 'arrived', m.user_id, m.title_id, m.service_id, e.happened_on
       from mine m join public.profiles p on p.user_id = m.user_id and p.notify_arrivals
       join public.availability_events e on e.title_id = m.title_id and e.service_id = m.service_id and e.event = 'added'
-      where m.notify and e.happened_on >= current_date - 1
+      where m.notify and e.happened_on >= (select d from today) - 1
     union all
     select 'new_season', m.user_id, m.title_id, m.service_id, t.last_season_on
       from mine m join public.profiles p on p.user_id = m.user_id and p.notify_new_seasons
       join public.titles t on t.id = m.title_id and t.kind = 'series'
-      where t.last_season_on >= current_date - 2 and t.last_season_on <= current_date and coalesce(t.seasons, 1) > 1
+      where t.last_season_on >= (select d from today) - 2 and t.last_season_on <= (select d from today) and coalesce(t.seasons, 1) > 1
   `)).rows;
   if (!due.length) return log('notifications: nothing due');
 

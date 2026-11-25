@@ -22,6 +22,9 @@ import { createGunzip } from 'node:zlib';
 import { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
 
+/** A moment as a plain date in Sweden ("2026-11-30"): dates the app shows are Swedish days, not UTC's. */
+const sweDay = (ms) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm' }).format(new Date(ms));
+
 const env = (k, required = true) => {
   const v = process.env[k];
   if (required && !v) throw new Error(`${k} is not set`);
@@ -557,7 +560,8 @@ async function syncLeavingDates() {
       const kind = k === 'movie' ? 'film' : 'series';
       const t = await db.query('select id from public.titles where tmdb_id = $1 and kind = $2', [Number(id), kind]);
       if (!t.rows[0]) continue;
-      const day = new Date(c.timestamp * 1000).toISOString().slice(0, 10);
+      // the day it leaves in Sweden: a title gone at midnight here is 23:00 UTC the day before
+      const day = sweDay(c.timestamp * 1000);
       found.set(`${t.rows[0].id}|${ours}`, day);
     }
     more = !!r.hasMore;
@@ -570,7 +574,7 @@ async function syncLeavingDates() {
     matched += u.rowCount;
   }
   // Dates that have passed are no longer "leaving".
-  await db.query('update public.availability set leaves_on = null where leaves_on < current_date');
+  await db.query(`update public.availability set leaves_on = null where leaves_on < (now() at time zone 'Europe/Stockholm')::date`);
   log(`leaving dates: ${seen} changes read in ${pages} pages${more ? ' (more remained: raise SA_PAGES)' : ''}, ${matched} matched to our titles`);
   return pages;
 }
