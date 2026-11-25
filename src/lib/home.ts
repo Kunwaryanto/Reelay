@@ -4,7 +4,7 @@
 // A title is shown once: a row skips what a row above it already has. A row needs three titles to be shown.
 import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
-import { MIN_ROW, SERVICE_NAME, shortRuntime, type Card } from './catalogue'
+import { MIN_ROW, SERVICE_NAME, namesLine, shortRuntime, type Card } from './catalogue'
 import { supabase } from './supabase'
 import { suggestable } from './hidden'
 import { dayNumber, daysUntil, localDay } from './days'
@@ -432,8 +432,8 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
     const by = await soft<By>(supabase.from('credits').select('title_id,role,person:people(name)').in('title_id', spots.map((t) => t.id))
       .in('role', ['director', 'creator']).order('sort_order') as never)
     for (const t of spots) {
-      const names = by.filter((b) => b.title_id === t.id && b.role === (t.kind === 'film' ? 'director' : 'creator') && b.person).slice(0, 2).map((b) => b.person!.name)
-      if (names.length) t.by = `${t.kind === 'film' ? 'Directed by' : 'Created by'} ${names.join(', ')}`
+      const names = by.filter((b) => b.title_id === t.id && b.role === (t.kind === 'film' ? 'director' : 'creator') && b.person).map((b) => b.person!.name)
+      if (names.length) t.by = `${t.kind === 'film' ? 'Directed by' : 'Created by'} ${namesLine([...new Set(names)])}`
     }
   }
 

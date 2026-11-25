@@ -169,6 +169,12 @@ export async function restoreInvite(inv: Invite) {
 }
 
 /** "18 Nov" */
+/** who made it, never cut short: "Celine Song", "Daniel Kwan and Daniel Scheinert", "Matt Duffer and 2 others" */
+export function namesLine(names: string[]): string {
+  if (names.length <= 2) return names.join(' and ')
+  return `${names[0]} and ${names.length - 1} others`
+}
+
 export function shortDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`

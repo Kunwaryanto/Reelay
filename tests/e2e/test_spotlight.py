@@ -53,3 +53,12 @@ def test_card_text_is_never_cut(app):
         return { t: e.className || e.tagName, text: e.textContent, overflow: c.overflow, ellipsis: c.textOverflow, clamp: c.webkitLineClamp } }) })()""")
     bad = [o for o in out if o["overflow"] != "visible" or o["ellipsis"] == "ellipsis" or o["clamp"] not in ("none", "", None)]
     assert not bad, bad
+
+def test_credit_line_names_everyone_without_cutting(app):
+    # who made it is never cut short: one name, two joined with "and", three or more as the first "and N others". 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    by = [c['by'] for c in pg.evaluate(CARDS) if c['by']]
+    assert by and not any(', ' in b for b in by), by
+    assert any(' and 2 others' in b for b in by) and any('Kwan and' in b for b in by), by
+    import re
+    assert all(re.fullmatch(r'(Directed|Created) by (Celine Song|Vince Gilligan|Daniel Kwan and Daniel Scheinert|Matt Duffer and 2 others)', b) for b in by), by

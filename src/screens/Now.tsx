@@ -3,7 +3,7 @@ import { useServicesQuery } from '../lib/profile'
 import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
-import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
+import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, namesLine, openLink, runtime, type Card } from '../lib/catalogue'
 import { HOME_VERSION, loadHome, type HomeCard, type HomeData, type NewsItem, newsLine } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
@@ -240,7 +240,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   const years = film || !card.year ? card.year : d?.end_year && d.end_year !== card.year ? `${card.year}–${d.end_year}` : card.year
   const facts = [kindWord(card.kind), years, d && (film ? runtime(d.runtime_min) : d.seasons ? (d.seasons === 1 ? '1 season' : `${d.seasons} seasons`) : null),
     d?.genres.slice(0, 2).join(', ')].filter(Boolean).join(' · ')
-  const by = d?.by.slice(0, 2).join(', ')
+  const by = d?.by.length ? namesLine(d.by) : undefined
   const scores: [string, string][] = []
   if (d?.imdb != null) scores.push(['IMDb', Number(d.imdb).toFixed(1)])
   if (d?.rt != null) scores.push(['RT', `${d.rt}%`])
@@ -264,8 +264,9 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
       <div className="hold-back" onClick={close} />
       <div ref={lift} className="hold-poster" aria-hidden="true" onClick={openTitle} style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
-        // 16px once lifted, whatever the starting size; back to the poster's own corners (and no shadow) on the way down
-        borderRadius: closing ? `calc(${closing.radius} / ${closing.k})` : 20 / scale,
+        // once lifted, a poster's own 12px corners on screen, whatever the starting size (a small poster lifted 3x
+        // with 20px looked like a blob); back to the poster's own corners (and no shadow) on the way down
+        borderRadius: closing ? `calc(${closing.radius} / ${closing.k})` : 12 / scale,
         boxShadow: closing ? '0 18px 50px rgba(0, 0, 0, 0)' : undefined,
         transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
           : closing ? `translate(${closing.x}px, ${closing.y}px) scale(${closing.k})`

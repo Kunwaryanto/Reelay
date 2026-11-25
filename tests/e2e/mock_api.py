@@ -208,7 +208,9 @@ def hroute2(r):
     if 'availability_events' in u: return r.fulfill(json=[{"happened_on":"2026-11-%02d"%(22-i//3),"service_id":['netflix','hbo-max','viaplay'][i%3],"title":dict(card(200+i),popularity=100-i)} for i in range(12)])
     if '/rest/v1/credits' in u and 'title_id=in.' in u:
         ids=[int(x) for x in re.search(r'title_id=in\.\(([^)]*)\)',u).group(1).split(',') if x]
-        return r.fulfill(json=[{"title_id":i,"role":"director" if card(i)['kind']=='film' else "creator","person":{"name":"Celine Song" if i%2 else "Vince Gilligan"}} for i in ids])
+        # by its place in the request: one person, two (joined with "and") or three (the first "and 2 others"), for the spotlight's credit line
+        def who(i): return [["Celine Song"],["Vince Gilligan"],["Daniel Kwan","Daniel Scheinert"],["Matt Duffer","Ross Duffer","Shawn Levy"]][i%4]
+        return r.fulfill(json=[{"title_id":i,"role":"director" if card(i)['kind']=='film' else "creator","person":{"name":n}} for k,i in enumerate(ids) for n in who(k)])
     if 'rpc/home_base' in u:
         # the ready-made generic part of Home (only when a test asks for it: otherwise Home is built whole)
         if not MODE.get('base'): return r.fulfill(status=404, json={})
