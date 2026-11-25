@@ -186,8 +186,14 @@ export async function loadPicks(): Promise<Card[]> {
 export async function loadWall(serviceIds: string[], rows = 6, cols = 6): Promise<Card[]> {
   const n = serviceIds.length
   if (!n) return []
-  const lists = await Promise.all(serviceIds.map(async (s) => unwrap((await supabase.from('titles').select(CARD)
-    .eq('availability.service_id', s).not('poster_path', 'is', null).order('popularity', { ascending: false }).limit(24)) as never) as Card[]))
+  // each service's best-known titles (fame: popularity and IMDb votes), those with 10,000+ votes first, never kids'
+  // titles (no one has set Suggestions yet). A small service without many known titles still fills its slots.
+  const lists = await Promise.all(serviceIds.map(async (s) => {
+    const l = unwrap((await supabase.from('titles').select(`${CARD},imdb_votes`).eq('availability.service_id', s)
+      .not('poster_path', 'is', null).not('tags', 'cs', '{kids}').order('fame', { ascending: false }).limit(40)) as never) as (Card & { imdb_votes: number | null })[]
+    const known = (c: { imdb_votes: number | null }) => (c.imdb_votes ?? 0) >= 10000
+    return [...l.filter(known), ...l.filter((c) => !known(c))].slice(0, 24) as Card[]
+  }))
   const seen = new Set<number>()
   const next = (i: number): Card | undefined => {
     const l = lists[i]

@@ -767,3 +767,10 @@ Measured on the database before and after:
   (under 50,000 IMDb votes, or under 10,000 rated 7.0+). Toy Story, Frozen II, Moana 2, Home Alone 2 and SpongeBob still
   show; Paw Patrol, Barbie, Peppa Pig and Bluey don't. Anime is animation from Japan. Stand-up comes from TMDB's
   "stand-up comedy" keyword (324 titles).
+
+## Well-known titles on the Start and onboarding walls (25 Nov)
+
+- Both walls used TMDB's popularity alone (this week's clicks), which can put an obscure new release first. They now
+  order by fame (popularity plus IMDb votes, as search does): the Start wall takes only titles with 10,000+ votes
+  rated 6.5+, and onboarding's wall (where the first Watchlist picks come from) puts each service's titles with
+  10,000+ votes first. Neither shows kids' titles.
