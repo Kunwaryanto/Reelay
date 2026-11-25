@@ -917,8 +917,13 @@ async function syncLetterboxd() {
   }
   log(`Letterboxd: ${ok} of ${members.length} members read, ${entries} entries in their feeds`);
   // imported history is kept by film name: match what has arrived in the catalogue, and drop what the feeds now cover
-  const matched = (await db.query('select public.letterboxd_resolve(null) as n')).rows[0].n;
-  if (matched) log(`Letterboxd: ${matched} imported entries matched to the catalogue`);
+  // (with a time limit: on 25 Nov a slow match held the whole sync for five hours)
+  await db.query("set statement_timeout = '3min'");
+  try {
+    const matched = (await db.query('select public.letterboxd_resolve(null) as n')).rows[0].n;
+    if (matched) log(`Letterboxd: ${matched} imported entries matched to the catalogue`);
+  } catch (e) { log('Letterboxd: matching imported entries failed:', e.message) }
+  finally { await db.query('set statement_timeout = 0') }
 }
 
 // Home: this week's trending films and series (TMDB's lists, worldwide; Home shows the ones on a member's
