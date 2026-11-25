@@ -1,15 +1,13 @@
 # Fills the catalogue: titles streaming in Sweden, where they stream, leaving dates and scores.
 # Runs every night: what streams where is updated in full, new titles are added, and the oldest 2,500 titles get
-# their details refreshed. GitHub starts scheduled runs late, sometimes 8 hours, so there are four tries between
-# 01:41 and 06:09 Swedish winter time (an hour later in summer); the first that starts does the sync and the later
-# ones stop at once (`due`). A run started by hand always syncs.
+# their details refreshed. GitHub starts scheduled runs late, sometimes 8 hours, so there are two tries, 01:41 and
+# 04:37 Swedish winter time (an hour later in summer); the first that starts does the sync and the later one stops at
+# once (`due`; each try costs an Actions minute, so two, not four). A run started by hand always syncs.
 name: Nightly sync
 on:
   schedule:
     - cron: '41 0 * * *'
-    - cron: '13 2 * * *'
     - cron: '37 3 * * *'
-    - cron: '9 5 * * *'
   workflow_dispatch:
     inputs:
       limit:
@@ -46,7 +44,9 @@ jobs:
     needs: due
     if: needs.due.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    # a night's sync takes about half an hour; one that hangs stops at 90 minutes instead of holding the lock (and
+    # Actions minutes) for 5 hours. A refetch of every title, started by hand, keeps the long limit.
+    timeout-minutes: ${{ inputs.refresh == 'all' && 300 || 90 }}
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
