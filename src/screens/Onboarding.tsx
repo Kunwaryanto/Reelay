@@ -22,10 +22,14 @@ const CAM: Record<Cam, string> = {
   notify: 'translate3d(0, -90px, 0) rotate(-8deg) scale(0.9)',
   exit: 'translate3d(0, -60px, 0) rotate(-6.5deg) scale(1.2)',
 }
-const COLS = 6, PER = 6, CELL = 126.24
+// 8 columns of 8: Services and Notifications frame the middle 6 columns (as when the wall had 6), Pick pans out to
+// all 64. The middle 36 are what the wall waits for; the rest load while Services is up (`inner`).
+const COLS = 8, PER = 8, CELL = 126.24
+const inner = (c: number, r: number) => c >= 1 && c <= COLS - 2 && r < 6
 // each column drifts into place when the wall first shows: a different distance and pace, alternating direction
-const DRIFT_MS = [2500, 2650, 2600, 2800, 2700, 2900]
-const BX = 150, BY = 160 // how far the wall pans while picking; past it, it pulls back like iOS
+// (the middle six keep the look they had: the outer columns sit either side of them)
+const DRIFT_MS = [2750, 2500, 2650, 2600, 2800, 2700, 2900, 2550]
+const BX = 285, BY = 360 // how far the wall pans while picking; past it, it pulls back like iOS
 const band = (v: number, lim: number) => (v > lim ? lim + (v - lim) * 0.35 : v < -lim ? -lim + (v + lim) * 0.35 : v)
 const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v))
 
@@ -77,7 +81,7 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const popular = all.filter((s) => s.popular).slice(0, 9)
   const rest = all.filter((s) => !popular.includes(s))
   const wallKey = popular.length ? `wall:${popular.map((s) => s.id).join()}` : null
-  const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id)), FRESH.catalogue)
+  const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id), PER, COLS), FRESH.catalogue)
   // What's switched on here: your own services, or three common ones when you have none yet (and always when this
   // is shown again from Settings, to see it as a new person does; that run saves nothing at all).
   // Saved when you continue; Skip saves nothing.
@@ -109,7 +113,7 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)) }
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
-  // The wall: the first 36 picks in six columns. It waits for its posters (1.5 s at most), then fades up from
+  // The wall: the first 64 picks in eight columns. It waits for the middle 36 posters (1.5 s at most), then fades up from
   // black while the columns drift into place and the camera turns and settles; the step's UI rises after.
   const wall = useMemo(() => (picks.data ?? []).slice(0, COLS * PER), [picks.data])
   const [started, setStarted] = useState(false)
@@ -118,7 +122,7 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
     let live = true
     const go = () => { if (live) { live = false; setStarted(true) } }
     // the tiles' logos are waited for too, so the tiles arrive whole with the heading and the button
-    const srcs = [...wall.map((c) => tmdbImage(c.poster_path, 'w342')), ...Object.values(LOGOS).map(([file]) => `/icons/services/logos/${file}`)]
+    const srcs = [...wall.filter((_, i) => inner(i % COLS, Math.floor(i / COLS))).map((c) => tmdbImage(c.poster_path, 'w342')), ...Object.values(LOGOS).map(([file]) => `/icons/services/logos/${file}`)]
     void Promise.all(srcs.map((src) => {
       if (!src) return null
       const img = new Image()
@@ -252,10 +256,11 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
                 {Array.from({ length: COLS }, (_, c) => {
                   const col = wall.filter((_, i) => i % COLS === c)
                   // each column holds its posters three times, so the wall has no edge wherever the camera is
-                  const top = -(col.length * CELL) + (c % 2 ? CELL * 0.48 : 0)
+                  const odd = (c + 1) % 2 === 1 // column 1 is the old first column
+                  const top = -(col.length * CELL) + (odd ? CELL * 0.48 : 0)
                   return (
                     <div key={c} className="ob-col" data-drift={started || undefined}
-                      style={{ marginTop: top, '--S': `${(c % 2 ? -1 : 1) * col.length * CELL * 0.45}px`, animationDuration: `${DRIFT_MS[c]}ms`, animationDelay: `${c * 50}ms` } as CSSProperties}>
+                      style={{ marginTop: top, '--S': `${(odd ? -1 : 1) * col.length * CELL * 0.45}px`, animationDuration: `${DRIFT_MS[c]}ms`, animationDelay: `${Math.max(0, c - 1) * 50}ms` } as CSSProperties}>
                       {[0, 1, 2].flatMap((copy) => col.map((card, r) => {
                         const chosen = sel.includes(card.id)
                         const lit = !(step === 'svc' && grey) || (revealed && card.availability.some((a) => on.includes(a.service_id)))
@@ -266,7 +271,9 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
                             aria-pressed={step === 'pick' ? chosen : undefined} aria-label={card.title} aria-hidden={copy !== 1 || undefined}
                             tabIndex={picking && copy === 1 ? 0 : -1} style={dd > 0 ? { '--dd': `${dd}ms` } as CSSProperties : undefined}
                             onClick={() => { if (picking && !dragged.current) setSel((s) => (chosen ? s.filter((x) => x !== card.id) : [...s, card.id])) }}>
-                            {card.poster_path && <img src={tmdbImage(card.poster_path, 'w342')} alt="" draggable={false} decoding="async" />}
+                            {/* the outer posters load once Services is up, and fade in when they arrive */}
+                            {card.poster_path && (inner(c, r) || started) && <img src={tmdbImage(card.poster_path, 'w342')} alt="" draggable={false} decoding="async"
+                              data-late={inner(c, r) ? undefined : ''} onLoad={(e) => { e.currentTarget.dataset.in = '' }} />}
                             <i aria-hidden="true" /><b aria-hidden="true" />
                           </button>
                         )

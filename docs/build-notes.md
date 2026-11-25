@@ -774,3 +774,9 @@ Measured on the database before and after:
   order by fame (popularity plus IMDb votes, as search does): the Start wall takes only titles with 10,000+ votes
   rated 6.5+, and onboarding's wall (where the first Watchlist picks come from) puts each service's titles with
   10,000+ votes first. Neither shows kids' titles.
+
+## Onboarding: 64 titles to pick from (25 Nov)
+
+- The wall is 8 columns of 8 instead of 6 × 6. Services frames the same middle as before; Pick pans further, out to all
+  64. The wall still waits only for the middle 36 posters; the outer ones load while Services is on screen and fade
+  in when they arrive, so the start is no slower.
