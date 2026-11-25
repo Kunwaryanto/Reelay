@@ -182,7 +182,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     if (codeErr) next = digits.length > code.length ? digits.slice(code.length).slice(-6) : '' // after an error, start fresh
     else next = digits.length > 6 ? digits.slice(-6) : digits
     setCode(next)
-    setCodeErr('')
+    setCodeErr(''); setPasteMiss(false)
     if (next.length === 6) verify(next)
   }
 
@@ -199,6 +199,18 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     if (six.length === 6) verify(six)
     return true
   }
+
+  // Paste: one tap on a button big enough to hit (iOS then asks to allow it with its own small Paste bubble), instead
+  // of finding the Paste menu on the code boxes
+  const [pasteMiss, setPasteMiss] = useState(false)
+  async function pasteFromClipboard() {
+    setPasteMiss(false)
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!takeCode(text)) setPasteMiss(true)
+    } catch { /* declined: nothing to do */ }
+  }
+  const canPaste = typeof navigator.clipboard?.readText === 'function'
 
   const mm = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
   const shakeClass = shake ? (shake % 2 ? 'a' : 'b') : ''
@@ -282,10 +294,14 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
               {checking && <><Spinner light /><span>Checking…</span></>}
               {resent && !checking && !codeErr && <><span className="resent">New code sent</span><span aria-hidden="true">·</span></>}
               {!ok && codeErr && <span className="err">{CODE_ERR[codeErr]}</span>}
+              {!ok && !codeErr && pasteMiss && <span className="err">No code to paste</span>}
               {!ok && !checking && (
                 <button type="button" aria-disabled={secs > 0} data-ready={secs === 0} onClick={() => { if (secs === 0 && !sending) send(true) }}>
                   {secs > 0 ? `Send again in ${mm}` : 'Send again'}
                 </button>
+              )}
+              {canPaste && !ok && !checking && code.length === 0 && codeErr !== 'locked' && (
+                <button type="button" className="code-paste" onClick={pasteFromClipboard}>Paste code</button>
               )}
             </p>
             {sendErr && <p className="field-error" role="alert">{SEND_ERR[sendErr]}</p>}

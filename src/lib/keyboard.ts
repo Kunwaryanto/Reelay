@@ -47,3 +47,16 @@ export function guardFieldTaps() {
     field.focus({ preventScroll: true })
   }, { passive: false, capture: true })
 }
+
+// ---- The app never scrolls as a whole ----
+// Every page scrolls inside itself; the document always stands at the top. With the keyboard up, iOS still pans
+// the visible area now and then (a field it wants to reveal, a drag on something that doesn't scroll): the sheet
+// and Search jumped up and back. In the Home Screen app, while a field in a sheet or Search has the focus (both are
+// laid out above the keyboard themselves), any such pan is put straight back. Elsewhere iOS may still reveal a field.
+export function holdDocument() {
+  const vv = window.visualViewport
+  const placed = () => !!(document.activeElement as HTMLElement | null)?.closest?.('dialog.sheet, .search')
+  const back = () => { if (placed() && ((vv && vv.offsetTop > 0) || window.scrollY > 0)) window.scrollTo(0, 0) }
+  vv?.addEventListener('scroll', back)
+  window.addEventListener('scroll', back)
+}
