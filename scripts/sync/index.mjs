@@ -1137,6 +1137,31 @@ async function syncNotable() {
   log(`notable: ${want.length} titles with ${NOTABLE_VOTES}+ votes; ${marked.rowCount} known ones marked, ${saved} added${failed ? `, ${failed} failed` : ''}`);
 }
 
+// Stand-up (titles.standup, one of the tags members can hide in Settings › Suggestions): every film and series TMDB
+// tags with its "stand-up comedy" keyword, found by name, then listed through discover. Only changes are written.
+// Weekly in the nightly sync (Sundays), or the Stand-up workflow.
+async function syncStandup() {
+  const found = await tmdb('/search/keyword', { query: 'stand-up comedy' });
+  const kw = (found?.results ?? []).find((k) => k.name?.toLowerCase() === 'stand-up comedy');
+  if (!kw) return log('stand-up: keyword not found, skipped');
+  const keys = new Set();
+  for (const kind of ['movie', 'tv']) {
+    for (let page = 1; page <= 100; page++) {
+      const r = await tmdb(`/discover/${kind}`, { with_keywords: String(kw.id), sort_by: 'popularity.desc', page });
+      for (const x of r?.results ?? []) keys.add(`${kind === 'movie' ? 'film' : 'series'}:${x.id}`);
+      if (!r || page >= (r.total_pages ?? 0)) break;
+    }
+  }
+  if (keys.size < 50) return log(`stand-up: only ${keys.size} found, nothing changed`); // a failed read shouldn't unmark them all
+  const kinds = [...keys].map((k) => k.split(':')[0]), ids = [...keys].map((k) => Number(k.split(':')[1]));
+  const on = await db.query(`update public.titles t set standup = true from unnest($1::text[], $2::int[]) k(kind, tmdb_id)
+    where t.kind = k.kind and t.tmdb_id = k.tmdb_id and not t.standup`, [kinds, ids]);
+  const off = await db.query(`update public.titles t set standup = false where t.standup
+    and not exists (select 1 from unnest($1::text[], $2::int[]) k(kind, tmdb_id) where k.kind = t.kind and k.tmdb_id = t.tmdb_id)`, [kinds, ids]);
+  const total = (await db.query('select count(*)::int n from public.titles where standup')).rows[0].n;
+  log(`stand-up: ${keys.size} on TMDB (keyword ${kw.id}), ${total} of ours; ${on.rowCount} marked, ${off.rowCount} unmarked`);
+}
+
 async function syncSimilar() {
   const idOf = new Map((await db.query(
     'select t.id, t.kind, t.tmdb_id from public.titles t where exists (select 1 from public.availability a where a.title_id = t.id)',
@@ -1241,6 +1266,14 @@ async function main() {
     await db.end();
     return;
   }
+  // SYNC_ONLY=standup: which titles are stand-up (the Stand-up workflow); the nightly sync does it on Sundays
+  if (ONLY === 'standup') {
+    log('stand-up only');
+    await syncStandup();
+    await stamp();
+    await db.end();
+    return;
+  }
   if (ONLY === 'awards') {
     log('awards only');
     await syncAwards();
@@ -1326,6 +1359,7 @@ async function main() {
   if (FULL) await syncSimilar().catch((e) => log('similar failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncNotable().catch((e) => log('notable failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncAwards().catch((e) => log('awards failed:', e.message));
+  if (FULL && new Date().getUTCDay() === 0) await syncStandup().catch((e) => log('stand-up failed:', e.message));
   if (FULL) await reconcile(runStart);
   // the Start screen's poster wall, made once a night (public.start_wall reads it)
   if (FULL) await db.query('select public.refresh_start_wall()').catch((e) => log('start wall failed:', e.message));
