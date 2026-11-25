@@ -28,7 +28,9 @@ def route(r):
         logo='/l' in u.split('/t/p/')[1]
         return r.fulfill(content_type='image/svg+xml', body=svg(u.split('/')[-1],500,180,'LOGO') if logo else svg(u.split('/')[-1],400,600))
     if '/rest/v1/rpc/start_wall' in u: return r.fulfill(json=[f'/w{i}.jpg' for i in range(40)])
-    if '/rest/v1/profiles' in u: return r.fulfill(json={"user_id":"u1","is_admin":True,"notify_leaving":True,"notify_arrivals":True,"notify_new_seasons":False,"onboarded_at":"2026-11-20T10:00:00Z"} if r.request.method=='GET' else None, status=200 if r.request.method=='GET' else 204)
+    if '/rest/v1/profiles' in u:
+        if r.request.method!='GET': MODE.setdefault('patched',[]).append(r.request.post_data_json)
+        return r.fulfill(json={"user_id":"u1","is_admin":True,"notify_leaving":True,"notify_arrivals":True,"notify_new_seasons":False,"onboarded_at":"2026-11-20T10:00:00Z","hidden_tags":MODE.get('hidden',[])} if r.request.method=='GET' else None, status=200 if r.request.method=='GET' else 204)
     if '/rest/v1/watchlist' in u:
         if r.request.method=='POST':
             d=json.loads(r.request.post_data); d=d if isinstance(d,list) else [d]

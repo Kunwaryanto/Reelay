@@ -18,6 +18,7 @@ import {
 } from '../lib/search'
 import { FilterDrawer, SOURCES, SERVER_ROWS, DECADES, countryName, decadeYears, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
 import { Icon, LoadOn, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
+import { hiddenKey, useHiddenTags } from '../lib/hidden'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 
@@ -211,8 +212,9 @@ export default function Search() {
 
   const mineQ = useServicesQuery()
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
-  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}`, () => loadIdeas(picked), FRESH.catalogue)
-  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
+  const hidden = useHiddenTags()
+  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}${hiddenKey(hidden)}`, () => loadIdeas(picked, hidden), FRESH.catalogue)
+  const popular = useQuery<Hit[]>(`search-popular${hiddenKey(hidden)}`, () => loadPopular(hidden), FRESH.catalogue)
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
   // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)

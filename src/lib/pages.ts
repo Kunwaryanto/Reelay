@@ -2,7 +2,7 @@
 // waits for before it arrives. The page reads its content through its entry, and every link to it preloads through
 // the same entry (`warmPage`, from `usePageLink` and from `push`), so a page and its preload can't drift apart.
 // A new page that loads content gets an entry in `pageFor`.
-import { CATEGORIES, categoryOf, loadCategory, loadCovers, rowsOf, titlesIn, type Category, type CategoryPage, type Kind, type RowDef, type SectionId, type Sort } from './browse'
+import { CATEGORIES, categoryOf, offered, loadCategory, loadCovers, rowsOf, titlesIn, type Category, type CategoryPage, type Kind, type RowDef, type SectionId, type Sort } from './browse'
 import { loadTitle, type Card, type TitleDetail } from './catalogue'
 import { tmdbImage } from './images'
 import { posterPicture, titleArt, titleHero, warmPictures, type Picture } from './pictures'
@@ -11,6 +11,7 @@ import { supabase } from './supabase'
 import { routeOf, type Route } from './routes'
 import { ALL_TITLES, exploreKey, exploreOf, loadExplore, type ExplorePage, type ExploreStart, type Pick } from './explore'
 import type { Draft } from '../screens/SearchFilters'
+import { hiddenKey } from './hidden'
 
 export type Page<T> = Freshness & {
   key: string
@@ -69,7 +70,8 @@ export const coversPage: Page<Record<string, string | null>> = {
   key: `browse-covers:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`, load: loadCovers, catalogue: true, fold: () => [],
 }
 /** A category's cards in a section (View all on a Browse section): the first eight cards' pictures. */
-export const fits = (c: Category, k: 'all' | Kind) => k === 'all' || !c.only || c.only === k
+/** A category Browse shows for a type pill: one that has that type, and not one about a tag the member hides. */
+export const fits = (c: Category, k: 'all' | Kind) => (k === 'all' || !c.only || c.only === k) && offered(c)
 export const sectionCats = (section: SectionId, kind: 'all' | Kind) => CATEGORIES.filter((c) => c.section === section && fits(c, kind))
 export const sectionPage = (section: SectionId, kind: 'all' | Kind): Page<Record<string, string | null>> => ({
   ...coversPage, fold: (covers) => coverPictures(covers, sectionCats(section, kind).slice(0, 8)),
@@ -77,7 +79,7 @@ export const sectionPage = (section: SectionId, kind: 'all' | Kind): Page<Record
 
 /** A category's page: its first top picture, its title logo and the first row's first posters. */
 export const categoryPage = (cat: Category, kind?: Kind): Page<CategoryPage> => ({
-  key: `browse-cat:${cat.id}:${kind ?? 'all'}`, load: () => loadCategory(cat, kind), catalogue: true,
+  key: `browse-cat:${cat.id}:${kind ?? 'all'}${hiddenKey()}`, load: () => loadCategory(cat, kind), catalogue: true,
   fold: (d) => [...titleArt(d?.hero[0]), { src: tmdbImage(d?.hero[0]?.logo_path, 'w500') },
     ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))],
 })
@@ -88,7 +90,7 @@ export const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undef
     : rowsOf(cat, kind).find((r) => r.id === row)
 /** A grid (View all): four rows of posters, as a tall iPhone shows three and the top of a fourth. */
 export const gridPage = (cat: Category, def: RowDef, row: string, kind: Kind | undefined, sort: Sort): Page<Card[]> => ({
-  key: `browse-grid:${cat.id}:${row}:${kind ?? 'all'}:${sort}`,
+  key: `browse-grid:${cat.id}:${row}:${kind ?? 'all'}:${sort}${hiddenKey()}`,
   load: () => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true }),
   catalogue: true, persist: false,
   fold: (cards) => (cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path)),

@@ -754,3 +754,16 @@ Measured on the database before and after:
 
 - "Leaves today", "Leaves in 3 days", what counts as new or leaving, and Home's daily rows follow the phone's own
   date. Before, they followed UTC, so just after midnight in Sweden they were a day behind.
+
+## Suggestions (25 Nov)
+
+- Settings › Suggestions (under Your services, "3 hidden"): "Reelay won't suggest these. Search still finds them."
+  Pills, white when hidden: Kids, Anime, Horror, Reality, Documentaries, Stand-up; More genres opens a sheet with every
+  other genre A–Z, and one picked there joins the pills on the page. No ×: a pill flips, it isn't removed.
+- Hidden titles leave Home (hero, rows, Picked for you), Browse (rows, lists, and a category card all about a hidden
+  genre), Explore and the posters on Search's ideas, and More like this. Searching by name, the watchlist and the
+  watchlist news under Home's hero still show everything. "Hide watched films" stays on the Letterboxd page.
+- Kids is what's made for young children: TMDB's Kids genre, and animated family films and series few grown-ups watch
+  (under 50,000 IMDb votes, or under 10,000 rated 7.0+). Toy Story, Frozen II, Moana 2, Home Alone 2 and SpongeBob still
+  show; Paw Patrol, Barbie, Peppa Pig and Bluey don't. Anime is animation from Japan. Stand-up comes from TMDB's
+  "stand-up comedy" keyword (324 titles).

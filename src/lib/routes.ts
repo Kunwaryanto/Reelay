@@ -4,8 +4,8 @@
 import type { Kind, SectionId } from './browse'
 
 export type Tab = 'now' | 'browse' | 'watchlist' | 'search'
-export type SettingsPage = 'services' | 'letterboxd' | 'region' | 'version' | 'credits' | 'privacy' | 'delete' | 'invites'
-const SETTINGS: SettingsPage[] = ['services', 'letterboxd', 'region', 'version', 'credits', 'privacy', 'delete', 'invites']
+export type SettingsPage = 'services' | 'suggestions' | 'letterboxd' | 'region' | 'version' | 'credits' | 'privacy' | 'delete' | 'invites'
+const SETTINGS: SettingsPage[] = ['services', 'suggestions', 'letterboxd', 'region', 'version', 'credits', 'privacy', 'delete', 'invites']
 
 export type Route =
   | { name: 'tab'; tab: Tab }

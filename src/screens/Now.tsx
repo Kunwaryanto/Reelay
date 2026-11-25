@@ -9,6 +9,7 @@ import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
 import { useLetterboxd, useWatched, watchedKey } from '../lib/letterboxd'
 import { markNewsSeen, useNewsSeen } from '../lib/newsSeen'
+import { hiddenKey, useHiddenTags } from '../lib/hidden'
 import { useAuth } from '../lib/auth'
 import { useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
@@ -373,8 +374,9 @@ export default function Now() {
   const changes = useChanges(['watchlist', 'letterboxd'])
   const savedLoaded = useSaved().loaded
   const settled = svc !== undefined && lb.account !== undefined && savedLoaded
-  const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [] }), changes, tab === 'now' && path === '/', decodeFold)
+  const hidden = useHiddenTags()
+  const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}${hiddenKey(hidden)}` : null,
+    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [], hidden }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its

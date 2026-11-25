@@ -6,6 +6,7 @@ import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
 import { MIN_ROW, SERVICE_NAME, shortRuntime, type Card } from './catalogue'
 import { supabase } from './supabase'
+import { suggestable } from './hidden'
 import { dayNumber, daysUntil, localDay } from './days'
 
 export type HomeCard = Card & {
@@ -58,13 +59,15 @@ export type HomeAsk = {
   hide: boolean
   /** the catalogue titles they have logged (used when `hide`) */
   watched: number[]
+  /** tags they don't want suggested (Settings › Suggestions): left out of everything but their watchlist */
+  hidden: string[]
 }
 
 /**
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 14
+export const HOME_VERSION = 15
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -109,7 +112,10 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   // titles (and what is embedded under them) narrowed to the member's services
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const on = (q: any, path = 'availability.service_id') => (mine ? q.in(path, svc) : q)
-  const titles = (kind: Kind) => on(supabase.from('titles').select(H).eq('kind', kind))
+  // titles with a tag the member hides are not suggested: `title` for a query that has the title embedded
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ok = (q: any, path?: string) => suggestable(q, ask.hidden, path)
+  const titles = (kind: Kind) => ok(on(supabase.from('titles').select(H).eq('kind', kind)))
   const day = dayNumber()
   const rpcArgs = { p_services: mine ? svc : null, p_hide: ask.hide }
 
@@ -137,8 +143,8 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people] = await Promise.all([
     titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
     titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
-    soft<Arrival>(on(arrivalsQ, 'title.availability.service_id') as never),
-    soft<Leaving>(on(leavingQ, 'title.availability.service_id') as never),
+    soft<Arrival>(ok(on(arrivalsQ, 'title.availability.service_id'), 'title') as never),
+    soft<Leaving>(ok(on(leavingQ, 'title.availability.service_id'), 'title') as never),
     soft<{ title: Card }>(on(supabase.from('watchlist').select(`added_at,title:titles!inner(${H})`).order('added_at', { ascending: false }).limit(60), 'title.availability.service_id') as never),
     soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day, ...rpcArgs }) as never),
     // a second liked film (tomorrow's), for the spotlight: it never repeats the row's reason
@@ -148,9 +154,9 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
     soft<Card>(titles('film').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
     soft<Card>(titles('series').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
     // best category first, newest first within it
-    soft<{ award: string; short_category: string; rank: number; year: number; title: Card }>(on(awardsQ.order('rank').order('year', { ascending: false }).limit(300), 'title.availability.service_id') as never),
+    soft<{ award: string; short_category: string; rank: number; year: number; title: Card }>(ok(on(awardsQ.order('rank').order('year', { ascending: false }).limit(300), 'title.availability.service_id'), 'title') as never),
     // the IMDb rating and votes are on the title (kept in step with scores), so this reads in rating order
-    gemsDay ? soft<Card>(on(supabase.from('titles').select(H)).gte('imdb_rating', 7.5).gte('imdb_votes', 2000).lte('imdb_votes', 30000)
+    gemsDay ? soft<Card>(ok(on(supabase.from('titles').select(H))).gte('imdb_rating', 7.5).gte('imdb_votes', 2000).lte('imdb_votes', 30000)
         .order('imdb_rating', { ascending: false }).limit(40) as never) : Promise.resolve([] as Card[]),
     soft<{ source: string; source_id: number; title_id: number; rank: number }>(supabase.rpc('home_saved', { p_day: day, ...rpcArgs }) as never),
     soft<{ person_id: number; name: string; title_id: number }>(supabase.rpc('home_people', { p_day: day, ...rpcArgs }) as never),
@@ -166,7 +172,7 @@ export async function loadHome(ask: HomeAsk): Promise<HomeData> {
   const genres = genreOrder(taste.length >= 3 ? taste : [...taste, ...savedTaste.filter((g) => !taste.some((t) => t.genre === g.genre))])
   const picks = [genres[day % genres.length], genres[(day + 1) % genres.length]].filter((c, i, a) => a.indexOf(c) === i)
   const decade = DECADES[day % DECADES.length]
-  const byIds = (ids: number[]) => (ids.length ? soft<Card>(on(supabase.from('titles').select(H)).in('id', ids) as never) : Promise.resolve([] as Card[]))
+  const byIds = (ids: number[]) => (ids.length ? soft<Card>(ok(on(supabase.from('titles').select(H))).in('id', ids) as never) : Promise.resolve([] as Card[]))
   const genreRow = (c: Category) => Promise.all((['film', 'series'] as Kind[]).map((k) =>
     soft<Card>(titles(k).overlaps('genres', c.rule.genres ?? []).order('popularity', { ascending: false }).limit(25) as never)))
   // the second liked film only counts when it is a different film from the row's

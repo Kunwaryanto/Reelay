@@ -16,6 +16,8 @@ export type Card = {
   seasons?: number | null
   runtime_min?: number | null
   availability: Avail[]
+  /** what Settings › Suggestions can hide by (only where a list is narrowed on the phone) */
+  tags?: string[]
 }
 export type Row = { id: string; title: string; items: Card[]; notes?: 'leaving' }
 
@@ -113,7 +115,7 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
   const order = (sim.data as { id: number; pos: number }[] | null) ?? []
   if (order.length) {
     const pos = new Map(order.map((r) => [Number(r.id), r.pos]))
-    const cards = unwrap(await supabase.from('titles').select(CARD).in('id', [...pos.keys()])) as unknown as Card[]
+    const cards = unwrap(await supabase.from('titles').select(`${CARD},tags`).in('id', [...pos.keys()])) as unknown as Card[]
     more = cards.sort((a, b) => (pos.get(a.id) ?? 99) - (pos.get(b.id) ?? 99))
   } else if (sim.error && title.genres.length) {
     // the list can't be read (an older database): the most popular titles in the same first genre, as before

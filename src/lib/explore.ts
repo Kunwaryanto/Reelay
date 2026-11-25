@@ -7,6 +7,7 @@ import type { Card } from './catalogue'
 import { genreNames, narrow, type Filters } from './search'
 import { supabase } from './supabase'
 import { localDay } from './days'
+import { hiddenKey, suggestable } from './hidden'
 
 export type Pick = 'all' | Kind
 /** Where a list starts: its filters as chips, the type pill and the sort. */
@@ -106,7 +107,7 @@ const today = () => localDay()
 function query(d: Draft, ctx: Ctx, kind: Kind | undefined, fields: string, head = false): any {
   const sel = `${fields},availability!inner(service_id,leaves_on)${scored(d) ? ',scores!inner(imdb_rating,rt_critics,letterboxd)' : ''}`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q: any = narrow(supabase.from('titles').select(sel, head ? { count: 'exact', head: true } : undefined), filtersOf(d, ctx, kind))
+  let q: any = suggestable(narrow(supabase.from('titles').select(sel, head ? { count: 'exact', head: true } : undefined), filtersOf(d, ctx, kind)))
   if (d.leaving) q = q.gte('availability.leaves_on', today())
   if (d.sort === 'rated') q = q.gte('imdb_votes', RATED_VOTES)
   return q
@@ -147,6 +148,6 @@ export async function loadExplore(d: Draft, pick: Pick, ctx: Ctx): Promise<Explo
 
 /** What a list's saved copy is known by: its filters, type and order (and the services or watched films they use). */
 export const exploreKey = (d: Draft, pick: Pick, ctx: Ctx) =>
-  `explore:${JSON.stringify({ ...d, mine: d.mine ? ctx.picked : false, hide: d.hide ? ctx.seen.length : false })}:${pick}`
+  `explore:${JSON.stringify({ ...d, mine: d.mine ? ctx.picked : false, hide: d.hide ? ctx.seen.length : false })}:${pick}${hiddenKey()}`
 
 export type { Sort }
