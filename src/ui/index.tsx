@@ -716,13 +716,27 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
     }
     // A tap on one of the sheet's buttons while a field has the focus: keep the focus (and so the keyboard) where
     // it is. iOS otherwise blurs the field on the tap, and the keyboard dropped at Send code.
-    const keep = (e: MouseEvent) => {
-      const a = document.activeElement
-      if ((a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) && d.contains(a) && (e.target as HTMLElement).closest('button')) e.preventDefault()
+    // On a touch screen the tap is taken at touchend (its default, which moves the focus, is cancelled) and the
+    // button is pressed by hand; a touch that moved (a drag of the sheet) is left alone.
+    const fieldFocused = () => { const a = document.activeElement; return (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) && d.contains(a) }
+    const keep = (e: MouseEvent) => { if (fieldFocused() && (e.target as HTMLElement).closest('button')) e.preventDefault() }
+    let at: { x: number; y: number } | null = null
+    const down = (e: TouchEvent) => { at = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }
+    const up = (e: TouchEvent) => {
+      const b = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null
+      const p = e.changedTouches[0]
+      if (!b || !at || !p || b.disabled || !fieldFocused() || Math.hypot(p.clientX - at.x, p.clientY - at.y) > 10) return
+      e.preventDefault()
+      b.click()
     }
     d.addEventListener('touchstart', onTouch, { passive: false })
+    d.addEventListener('touchstart', down, { passive: true })
+    d.addEventListener('touchend', up, { passive: false })
     d.addEventListener('mousedown', keep)
-    return () => { d.removeEventListener('touchstart', onTouch); d.removeEventListener('mousedown', keep) }
+    return () => {
+      d.removeEventListener('touchstart', onTouch); d.removeEventListener('touchstart', down)
+      d.removeEventListener('touchend', up); d.removeEventListener('mousedown', keep)
+    }
   }, [open])
 
   // Drag the sheet down to close it, from anywhere on it: rows and buttons included (a touch that moves is a drag,

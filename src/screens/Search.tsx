@@ -3,7 +3,7 @@
 import { useServicesQuery } from '../lib/profile'
 import { paths } from '../lib/routes'
 import { warmFacts } from '../lib/facts'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
@@ -353,19 +353,30 @@ export default function Search() {
   // With the keyboard up, iOS lets a drag on anything that doesn't scroll move the whole page up under it (the
   // prompt and the field slide away, then snap back). Only a list that can really scroll may move: every other
   // drag on Search is held still.
-  const page = useCallback((el: HTMLElement | null) => {
-    if (!el) return
+  useEffect(() => {
+    // only while the keyboard is up (Search stays mounted behind the other tabs, which scroll as usual)
+    if (!typing) return
     const hold = (e: TouchEvent) => {
-      for (let n = e.target as HTMLElement | null; n && n !== el; n = n.parentElement) {
+      for (let n = e.target as HTMLElement | null; n && n !== document.body; n = n.parentElement) {
         const cs = getComputedStyle(n)
         if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return
         if (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1) return
       }
       if (e.cancelable) e.preventDefault()
     }
-    el.addEventListener('touchmove', hold, { passive: false })
-    return () => el.removeEventListener('touchmove', hold)
-  }, [])
+    // on the whole document, first (a touch that starts beside the page moves it too), not just on Search's own
+    document.addEventListener('touchmove', hold, { passive: false, capture: true })
+    // and if iOS pans anyway, put it straight back: Search is laid out for the page standing at the top
+    const vv = window.visualViewport
+    const back = () => { if ((vv && vv.offsetTop > 0) || window.scrollY > 0) window.scrollTo(0, 0) }
+    vv?.addEventListener('scroll', back)
+    window.addEventListener('scroll', back)
+    return () => {
+      document.removeEventListener('touchmove', hold, { capture: true })
+      vv?.removeEventListener('scroll', back)
+      window.removeEventListener('scroll', back)
+    }
+  }, [typing])
   const focusedAt = useRef(0)
   useEffect(() => {
     const el = box.current
@@ -431,7 +442,7 @@ export default function Search() {
   const up = typing && room > 0
 
   return (
-    <main ref={page} className="search" data-drawer={drawer} data-arriving={arriving} data-kb={typing ? 'up' : 'down'} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
+    <main className="search" data-drawer={drawer} data-arriving={arriving} data-kb={typing ? 'up' : 'down'} style={{ '--lift': lift, '--kb': `${kb}px` } as React.CSSProperties}
       onTouchStart={(e) => { swipe.current = drawer ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
       onTouchMove={(e) => {
         const s = swipe.current

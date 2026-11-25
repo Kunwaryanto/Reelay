@@ -148,6 +148,9 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
 }
 
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
+/** How long Home waits behind the wordmark before showing placeholders. */
+const LATE_MS = 8000
+
 export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
   const saved = useSaved()
   const { push } = useNavActions()
@@ -382,7 +385,8 @@ export default function Now() {
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its
   // title logo, and the first posters of the first row. Ready within 300 ms: Now just rises.
   // Later than that: the wordmark rises on black and always finishes (900 ms) before fading into the page; still
-  // waiting at 3.3 s, grey placeholders stand in and the content rises over them.
+  // waiting at 8 s (something is wrong: a slow network), grey placeholders stand in and the content rises over
+  // them. Before that the wordmark simply stays: Home arrives whole, never as a skeleton first.
   const first = q.data?.hero[0]
   const firstArt = first ? tmdbImage(first.backdrop_path, 'w1280') ?? tmdbImage(first.poster_path, 'w780') : undefined
   const foldKey = q.data ? `${firstArt ?? ''}|${q.data.rows[0]?.id ?? ''}` : null
@@ -412,7 +416,7 @@ export default function Now() {
     const since = booted ? performance.now() : 0
     const a = booted ? undefined : setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
     const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), Math.max(0, (booted ? BOOT_RISE_MS : 1200) - since))
-    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), Math.max(0, 3300 - since))
+    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), Math.max(0, LATE_MS - since))
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
   }, [booted])
   const show = ready && phase !== 'mark'

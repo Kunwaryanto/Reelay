@@ -14,13 +14,13 @@ export function markLaunched() {
   launched = true
   watchers.forEach((w) => w())
 }
-// Whatever happens to Now, the app is never left without its tab bar: 6 s after the signed-in app starts (its first
+// Whatever happens to Now, the app is never left without its tab bar: 9 s after (Home's placeholders come at 8) the signed-in app starts (its first
 // listener). Not from the page load: after a sign-in that took longer than that, the tab bar showed on black
 // before Home and its wordmark.
 let fallback = 0
 export const useLaunched = () => useSyncExternalStore((w) => {
   watchers.add(w)
-  if (!fallback && !launched) fallback = window.setTimeout(markLaunched, 6000)
+  if (!fallback && !launched) fallback = window.setTimeout(markLaunched, 9000)
   return () => watchers.delete(w)
 }, () => launched)
 
