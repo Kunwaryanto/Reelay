@@ -25,6 +25,7 @@ const CAM: Record<Cam, string> = {
 // 8 columns of 8: Services and Notifications frame the middle 6 columns (as when the wall had 6), Pick pans out to
 // all 64. The middle 36 are what the wall waits for; the rest load while Services is up (`inner`).
 const COLS = 8, PER = 8, CELL = 126.24
+const WALL_VERSION = 2 // 2: three films for every series (onboarding_wall)
 const inner = (c: number, r: number) => c >= 1 && c <= COLS - 2 && r < 6
 // each column drifts into place when the wall first shows: a different distance and pace, alternating direction
 // (the middle six keep the look they had: the outer columns sit either side of them)
@@ -80,7 +81,8 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   const all = services.data ?? []
   const popular = all.filter((s) => s.popular).slice(0, 9)
   const rest = all.filter((s) => !popular.includes(s))
-  const wallKey = popular.length ? `wall:${popular.map((s) => s.id).join()}` : null
+  // WALL_VERSION: part of the saved wall's name, raised when what the wall holds changes (a phone keeps it till the sync)
+  const wallKey = popular.length ? `wall:${WALL_VERSION}:${popular.map((s) => s.id).join()}` : null
   const picks = useQuery<Card[]>(wallKey, () => loadWall(popular.map((s) => s.id), PER, COLS), FRESH.catalogue)
   // What's switched on here: your own services, or three common ones when you have none yet (and always when this
   // is shown again from Settings, to see it as a new person does; that run saves nothing at all).
