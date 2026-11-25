@@ -1275,6 +1275,7 @@ async function main() {
       if (++done % 2000 === 0) log(`  ${done} of ${all.length} read`);
     });
     log(`film series: ${all.length} films, ${inOne} in a series; ${changed} changed${failed ? `, ${failed} failed` : ''}`);
+    await db.query('select public.refresh_start_wall()'); // the Start wall shows one film per series
     await stamp();
     await db.end();
     return;
