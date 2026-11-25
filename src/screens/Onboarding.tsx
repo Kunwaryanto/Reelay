@@ -214,6 +214,21 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
   // Picking: drag to look around the wall, tap a poster to choose it.
   const d = useRef<{ x: number; y: number; px: number; py: number; moved: boolean; lx: number; ly: number; lt: number; vx: number; vy: number } | null>(null)
   const dragged = useRef(false)
+  // while a finger drags, the wall's layer is moved directly (once a frame); the state catches up when it lets go
+  const panEl = useRef<HTMLDivElement>(null)
+  const held = useRef<{ x: number; y: number } | null>(null)
+  const raf = useRef(0)
+  const movePan = (x: number, y: number) => {
+    held.current = { x, y }
+    if (raf.current) return
+    raf.current = requestAnimationFrame(() => {
+      raf.current = 0
+      const el = panEl.current, at = held.current
+      if (!el || !at) return
+      el.style.transition = 'none'
+      el.style.transform = `translate3d(${at.x}px, ${at.y}px, 0)`
+    })
+  }
   const picking = step === 'pick' && !locked
   const n = sel.length
 
@@ -229,10 +244,11 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
           // caught while a throw is still gliding: start from where the wall is on screen, not where the glide was
           // going (that made the wall jump ahead for a frame)
           let px = pan.x, py = pan.y
-          const el = e.currentTarget.querySelector<HTMLElement>('.ob-pan')
+          const el = panEl.current
           if (el && pan.tr !== 'none') {
             const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
             px = m.m41; py = m.m42
+            el.style.transition = 'none'; el.style.transform = `translate3d(${px}px, ${py}px, 0)`
             setPan({ x: px, y: py, tr: 'none' })
           }
           d.current = { x: e.clientX, y: e.clientY, px, py, moved: false, lx: e.clientX, ly: e.clientY, lt: Date.now(), vx: 0, vy: 0 }
@@ -248,7 +264,8 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
           s.vx = 0.8 * ((e.clientX - s.lx) / dt) + 0.2 * s.vx
           s.vy = 0.8 * ((e.clientY - s.ly) / dt) + 0.2 * s.vy
           s.lx = e.clientX; s.ly = e.clientY; s.lt = t
-          setPan({ x: band(s.px + mx, BX), y: band(s.py + my, BY), tr: 'none' })
+          // straight onto the layer, once a frame: drawing the whole wall again for every finger move made it stutter
+          movePan(band(s.px + mx, BX), band(s.py + my, BY))
         }}
         onPointerUp={() => {
           const s = d.current
@@ -257,10 +274,16 @@ export default function Onboarding({ onDone, onLeave, replay }: { onDone: () => 
           dragged.current = true
           setTimeout(() => { dragged.current = false }, 0)
           // throw: carry the release speed a little further, then settle inside the range
-          setPan((p) => ({ x: clamp(p.x + s.vx * 220, BX), y: clamp(p.y + s.vy * 220, BY), tr: 'transform 600ms var(--ease-out)' }))
+          if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0 }
+          const at = held.current ?? { x: s.px, y: s.py }
+          held.current = null
+          const to = { x: clamp(at.x + s.vx * 220, BX), y: clamp(at.y + s.vy * 220, BY), tr: 'transform 600ms var(--ease-out)' }
+          // set on the layer too: if the state comes out the same as before, React leaves the style alone
+          if (panEl.current) { panEl.current.style.transition = to.tr; panEl.current.style.transform = `translate3d(${to.x}px, ${to.y}px, 0)` }
+          setPan(to)
         }}
         onPointerCancel={() => { d.current = null }}>
-        <div className="ob-pan" style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`, transition: pan.tr }}>
+        <div className="ob-pan" ref={panEl} style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`, transition: pan.tr }}>
           <div className="ob-scale">
             <div className="ob-cam" style={{ transform: CAM[cam.at], transition: cam.tr }}>
               <div className="ob-cols" data-reveal={revealing || undefined}>

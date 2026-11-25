@@ -805,3 +805,4 @@ Measured on the database before and after:
 - Search holds still (25 Nov): with the keyboard up, a drag on anything that can't scroll (the prompt, ideas, the field) no longer moves the whole page up under the keyboard; result lists that can scroll still do.
 - Black launch screens (25 Nov): `apple-touch-startup-image` per iPhone size (`public/splash`, plain black), so the one frame of the web view's dark grey before the first paint is covered. iOS reads them when the app is added to the Home Screen: re-add it to get them.
 - Onboarding wall (25 Nov): grabbing the wall while a throw still glides holds it where it is on screen; before, it jumped ahead to where the glide was going (the "flicker").
+- Dragging the onboarding wall moves its layer directly, once a frame, instead of drawing the wall again on every finger move (it stuttered with 64 posters); the state is set when the finger lets go.
