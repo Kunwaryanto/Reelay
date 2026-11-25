@@ -1,9 +1,13 @@
 # Browser tests: the built app against a mock Supabase, in Chromium at iPhone size (tests/e2e, docs/testing.md).
 name: Browser tests
+# Runs when app code reaches main (staging is tested before each push, so pushes to sprint-2 don't run it here: it
+# saves most of the free Actions minutes). Also checks vercel.json and the lint, which the old Check workflow did.
 on:
   push:
-    branches: [sprint-2, main]
+    branches: [main]
+    paths: ['src/**', 'tests/**', 'public/**', 'index.html', 'package.json', 'package-lock.json', 'vite.config.*', 'tsconfig*.json', 'vercel.json', '.oxlintrc*', '.github/workflows/browser-tests.yml']
   pull_request:
+    paths: ['src/**', 'tests/**', 'public/**', 'index.html', 'package.json', 'package-lock.json', 'vite.config.*', 'tsconfig*.json', 'vercel.json', '.oxlintrc*', '.github/workflows/browser-tests.yml']
   workflow_dispatch:
 jobs:
   e2e:
@@ -16,6 +20,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: vercel.json matches Vercel's schema
+        run: |
+          curl -fsS https://openapi.vercel.sh/vercel.json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);delete j['\$schema'];require('fs').writeFileSync('/tmp/vercel-schema.json',JSON.stringify(j))})"
+          npx -y ajv-cli@5 validate --strict=false -s /tmp/vercel-schema.json -d vercel.json
+      - run: npm run lint
       - name: Build against the mock Supabase
         run: npm run build
         env:
