@@ -100,7 +100,7 @@ export default function Watchlist() {
   const off = list.filter((r) => !r.mine)
   const sections = [
     { id: 'on', title: hasPicked ? 'On your services' : 'Streaming now', sub: String(on.length), rows: on },
-    { id: 'off', title: hasPicked ? 'Not on your services' : 'Not streaming in Sweden', sub: 'Notify when it is', rows: off },
+    { id: 'off', title: hasPicked ? 'Not on your services' : 'Not streaming in Sweden', sub: String(off.length), rows: off },
   ].filter((x) => x.rows.length)
 
   const header = (
