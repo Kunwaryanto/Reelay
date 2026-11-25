@@ -1141,8 +1141,8 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 @media (prefers-reduced-motion: reduce) { .wl-row[data-fresh] { animation: none; } }
 
 /* ---- Letterboxd ---- */
-/* Posters of films the person has logged on Letterboxd are greyed (the service mark stays as it is). */
-.cover[data-watched] > img { filter: grayscale(1) brightness(0.55); }
+/* Posters of films the person has logged on Letterboxd are greyed (the service mark stays as it is), in Search's rows too. */
+.cover[data-watched] > img, .wl-poster[data-watched] > img, .s-thumb[data-watched] > img { filter: grayscale(1) brightness(0.55); }
 
 /* Title page: who has watched it, under the scores */
 /* part of the top block (meta, scores, this row, the text): an even 32px of visible space above and below,

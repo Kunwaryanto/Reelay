@@ -103,6 +103,9 @@ export function useWatchedSync() {
 export const useWatched = (): ReadonlySet<number> => useSyncExternalStore(subscribe, () => watched)
 /** Does this poster get a check? Only when the person keeps "Mark watched films" on. */
 export const useWatchedMark = (id: number): boolean => useSyncExternalStore(subscribe, () => marks && watched.has(id))
+const NONE: ReadonlySet<number> = new Set()
+/** The films to grey on posters: the watched ones, when the member has Mark watched films on (else none). */
+export const useMarkedWatched = (): ReadonlySet<number> => useSyncExternalStore(subscribe, () => (marks ? watched : NONE))
 
 // ---- One title: who watched it ----
 export type Watcher = { name: string; username: string; logs: LbLog[]; rating: number | null; last: string | null }

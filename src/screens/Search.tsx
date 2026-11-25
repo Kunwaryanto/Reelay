@@ -8,7 +8,7 @@ import { flushSync } from 'react-dom'
 import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
-import { useWatched } from '../lib/letterboxd'
+import { useMarkedWatched, useWatched, useWatchedMark } from '../lib/letterboxd'
 import { useNav, useNavActions } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import {
@@ -178,11 +178,12 @@ function Row({ h, near, onOpen, before }: { h: Hit; near?: boolean; onOpen: () =
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   const li = useRef<HTMLLIElement>(null)
   const close = useNearScreen(li, near)
+  const watched = useWatchedMark(h.id)
   useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
     <li ref={li}>
       <PageLink to={paths.title(h.id)} className="s-row press-row" handlers={joinHandlers(hold.handlers, { onPointerDown: () => warmFacts([h.id], true) })} onClick={() => { if (!hold.fired()) onOpen() }}>
-        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-poster" data-watched={watched || undefined}>{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
       </PageLink>
     </li>
@@ -219,6 +220,7 @@ export default function Search() {
   const myOnly = onlyMine && hasPicked
   // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
   const seen = useWatched()
+  const marked = useMarkedWatched()
   const seenIds = useMemo(() => [...seen].sort((a, b) => a - b).slice(0, 400), [seen])
   const hiding = hideSeen && seen.size > 0
 
@@ -434,7 +436,7 @@ export default function Search() {
             <li key={r.t === 'q' ? `q:${r.text}` : `t:${r.id}`}>
               <PageButton to={r.t === 'title' ? paths.title(r.id) : null} className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(paths.title(r.id)) } }}>
                 {r.t === 'title'
-                  ? <span className="s-thumb">{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
+                  ? <span className="s-thumb" data-watched={marked.has(r.id) || undefined}>{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                   : <span className="s-thumb-icon"><Icon name="search" size={20} /></span>}
                 <span className="s-recent-text"><b>{r.text}</b>{r.t === 'title' && <small>{r.sub}</small>}</span>
               </PageButton>
