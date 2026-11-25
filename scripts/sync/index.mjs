@@ -286,6 +286,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? first : null,
     akaOf(kind, d),
     ...heroOf(d),
+    film ? d.belongs_to_collection?.id ?? null : null, // the series of films it belongs to (one per series on the walls)
   ];
   // Top 10 cast, plus directors (films) or creators (series).
   const cast = film
@@ -312,11 +313,11 @@ async function saveTitleOnce({ kind, d }, dropIds) {
     const t = await c.query(
       `insert into public.titles (tmdb_id, kind, imdb_id, wikidata_id, title, original_title, year, end_year,
          runtime_min, seasons, last_season_on, overview, genres, original_language, countries, age_rating,
-         poster_path, backdrop_path, logo_path, popularity, released_on, aka, hero_path, hero_poster, keep_reason, synced_at)
+         poster_path, backdrop_path, logo_path, popularity, released_on, aka, hero_path, hero_poster, collection_id, keep_reason, synced_at)
        values ($1,$2,
          case when exists (select 1 from public.titles o where o.imdb_id = $3 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $3 end,
          case when exists (select 1 from public.titles o where o.wikidata_id = $4 and not (o.tmdb_id = $1 and o.kind = $2)) then null else $4 end,
-         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'streaming', now())
+         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'streaming', now())
        on conflict (tmdb_id, kind) do update set
          imdb_id = excluded.imdb_id, wikidata_id = excluded.wikidata_id, title = excluded.title,
          original_title = excluded.original_title, year = excluded.year, end_year = excluded.end_year,
@@ -325,7 +326,7 @@ async function saveTitleOnce({ kind, d }, dropIds) {
          countries = excluded.countries, age_rating = excluded.age_rating, poster_path = excluded.poster_path,
          backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path, popularity = excluded.popularity,
          released_on = excluded.released_on, aka = excluded.aka, hero_path = excluded.hero_path,
-         hero_poster = excluded.hero_poster, synced_at = now()
+         hero_poster = excluded.hero_poster, collection_id = excluded.collection_id, synced_at = now()
        returning id`,
       row,
     );
@@ -1254,6 +1255,26 @@ async function main() {
       if (++done % 4000 === 0) log(`  ${done} of ${all.length} read, ${changed} changed`);
     });
     log(`title pictures: ${all.length} titles, ${posters} textless posters, ${backdrops} backdrops, ${all.length - posters - backdrops - failed} with neither (fall back); ${changed} changed${failed ? `, ${failed} failed` : ''}`);
+    await stamp();
+    await db.end();
+    return;
+  }
+  // SYNC_ONLY=collection: which series of films each well-known film belongs to (TMDB's collections), once
+  if (ONLY === 'collection') {
+    log('film series only');
+    const all = (await db.query(`select id, tmdb_id, collection_id from public.titles where kind = 'film' and imdb_votes >= 10000 order by popularity desc`)).rows;
+    let done = 0, changed = 0, failed = 0, inOne = 0;
+    await pool(all, 8, async (t) => {
+      try {
+        const d = await tmdb(`/movie/${t.tmdb_id}`, {});
+        if (!d) { failed++; return; }
+        const c = d.belongs_to_collection?.id ?? null;
+        if (c) inOne++;
+        if (c !== t.collection_id) { await db.query('update public.titles set collection_id = $2 where id = $1', [t.id, c]); changed++ }
+      } catch (e) { failed++; if (failed <= 5) log(`  movie:${t.tmdb_id} failed:`, e.message) }
+      if (++done % 2000 === 0) log(`  ${done} of ${all.length} read`);
+    });
+    log(`film series: ${all.length} films, ${inOne} in a series; ${changed} changed${failed ? `, ${failed} failed` : ''}`);
     await stamp();
     await db.end();
     return;
