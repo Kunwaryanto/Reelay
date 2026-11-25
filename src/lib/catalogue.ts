@@ -179,35 +179,21 @@ export async function loadPicks(): Promise<Card[]> {
 }
 
 /**
- * Onboarding's wall of posters: the most popular titles of each given service, laid out for six columns so that
- * any few neighbouring rows hold every service (slot (row, column) takes service (column + 3 × row) mod n).
- * Each card's `availability` holds only the service it stands for.
+ * Onboarding's wall of posters, chosen by the database (`onboarding_wall`): three films for every series (new series;
+ * films half new, half classics), each service's best-known first, never kids' titles, laid out so any few
+ * neighbouring slots hold every service and every part of the mix. Each card's `availability` holds only the service
+ * it stands for.
  */
-export async function loadWall(serviceIds: string[], rows = 6, cols = 6): Promise<Card[]> {
-  const n = serviceIds.length
-  if (!n) return []
-  // each service's best-known titles (fame: popularity and IMDb votes), those with 10,000+ votes first, never kids'
-  // titles (no one has set Suggestions yet). A small service without many known titles still fills its slots.
-  const lists = await Promise.all(serviceIds.map(async (s) => {
-    const l = unwrap((await supabase.from('titles').select(`${CARD},imdb_votes`).eq('availability.service_id', s)
-      .not('poster_path', 'is', null).not('tags', 'cs', '{kids}').order('fame', { ascending: false }).limit(40)) as never) as (Card & { imdb_votes: number | null })[]
-    const known = (c: { imdb_votes: number | null }) => (c.imdb_votes ?? 0) >= 10000
-    return [...l.filter(known), ...l.filter((c) => !known(c))].slice(0, 24) as Card[]
-  }))
-  const seen = new Set<number>()
-  const next = (i: number): Card | undefined => {
-    const l = lists[i]
-    while (l.length) { const c = l.shift()!; if (!seen.has(c.id)) { seen.add(c.id); return c } }
-  }
-  const out: Card[] = []
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const want = (c + 3 * r) % n
-    // a service that runs out lends its slot to the next one that still has titles
-    let card: Card | undefined
-    for (let k = 0; k < n && !card; k++) card = next((want + k) % n)
-    if (card) out.push(card)
-  }
-  return out
+export async function loadWall(serviceIds: string[], rows = 8, cols = 8): Promise<Card[]> {
+  if (!serviceIds.length) return []
+  const slots = unwrap(await supabase.rpc('onboarding_wall', { p_services: serviceIds, p_rows: rows, p_cols: cols })) as { pos: number; title_id: number; service_id: string }[]
+  if (!slots.length) return []
+  const cards = unwrap(await supabase.from('titles').select(CARD).in('id', slots.map((x) => x.title_id))) as unknown as Card[]
+  const byId = new Map(cards.map((c) => [c.id, c]))
+  return slots.sort((a, b) => a.pos - b.pos).flatMap((x) => {
+    const c = byId.get(x.title_id)
+    return c ? [{ ...c, availability: [{ service_id: x.service_id, leaves_on: null }] }] : []
+  })
 }
 
 // ---- Invites (admins) ------------------------------------------------------

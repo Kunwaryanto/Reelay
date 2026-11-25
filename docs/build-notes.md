@@ -780,3 +780,10 @@ Measured on the database before and after:
 - The wall is 8 columns of 8 instead of 6 × 6. Services frames the same middle as before; Pick pans further, out to all
   64. The wall still waits only for the middle 36 posters; the outer ones load while Services is on screen and fade
   in when they arrive, so the start is no slower.
+
+## Walls: mostly films (25 Nov)
+
+- The Start wall and onboarding's wall now show three films for every series. Series are new ones only (started in
+  the last 3 years, or a new season in the last 2); films are half new (last 5 years) and half classics (15+ years
+  old, well known). Films from 5 to 15 years ago, the ones people have most likely seen, are left out. Onboarding's
+  wall is chosen by the database in one request instead of one per service.

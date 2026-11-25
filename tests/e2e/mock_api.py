@@ -27,6 +27,10 @@ def route(r):
     if 'image.tmdb.org' in u:
         logo='/l' in u.split('/t/p/')[1]
         return r.fulfill(content_type='image/svg+xml', body=svg(u.split('/')[-1],500,180,'LOGO') if logo else svg(u.split('/')[-1],400,600))
+    if '/rest/v1/rpc/onboarding_wall' in u:
+        b=r.request.post_data_json; sv=b['p_services']; n=b['p_rows']*b['p_cols']
+        MODE['wall_asked']=b
+        return r.fulfill(json=[{"pos":i,"title_id":2000+i,"service_id":sv[i%len(sv)]} for i in range(n)])
     if '/rest/v1/rpc/start_wall' in u: return r.fulfill(json=[f'/w{i}.jpg' for i in range(40)])
     if '/rest/v1/profiles' in u:
         if r.request.method!='GET': MODE.setdefault('patched',[]).append(r.request.post_data_json)
@@ -194,6 +198,8 @@ def hroute2(r):
     if '/watchlist' in u and 'titles!inner' in u: return r.fulfill(json=[{"added_at":"2026-11-20","title":dict(card(500+i,(MODE['leave'] if isinstance(MODE.get('leave'),str) else (datetime.date.today()+datetime.timedelta(days=3)).isoformat()) if MODE.get('leave') and i==5 else None), kind='film' if i>=4 else card(500+i)['kind'], runtime_min=[95,88,140,130,92,85,99,150,97,120,91,110][i%12])} for i in range(12)] if CASE['personal'] else [])
     if '/titles' in u and '&id=in.' in u and 'backdrop_path' in u:
         ids=[int(x) for x in re.search(r'&id=in\.\(([\d,]+)\)',u).group(1).split(',')]; return r.fulfill(json=[card(i) for i in ids])
+    if '/titles' in u and re.search(r'[?&]id=in\.\(\d', u):   # cards by id (onboarding's wall)
+        ids=[int(x) for x in re.search(r'[?&]id=in\.\(([\d,]+)\)',u).group(1).split(',')]; return r.fulfill(json=[card(i) for i in ids])
     if '/titles' in u and 'trend_rank' in u: 
         k='film' if 'kind=eq.film' in u else 'series'; return r.fulfill(json=[dict(card(600+i*3+(0 if k=='film' else 1)),kind=k) for i in range(12)])
     if '/titles' in u and 'scores!inner' in u and 'imdb_votes' in u and 'backdrop_path' in u: return r.fulfill(json=[card(700+i) for i in range(10)])
