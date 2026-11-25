@@ -1,12 +1,11 @@
 # Browser tests: the built app against a mock Supabase, in Chromium at iPhone size (tests/e2e, docs/testing.md).
 name: Browser tests
-# Runs when app code reaches main (staging is tested before each push, so pushes to sprint-2 don't run it here: it
-# saves most of the free Actions minutes). Also checks vercel.json and the lint, which the old Check workflow did.
+# Runs on the pull request that merges sprint-2 into main, before the merge (main deploys to everyone at once, so it
+# is tested before it gets there, and not again after). Pushes to sprint-2 alone don't run it: staging is tested on
+# the computer before each push, which saves the free Actions minutes. Also checks vercel.json and the lint.
 on:
-  push:
-    branches: [main]
-    paths: ['src/**', 'tests/**', 'public/**', 'index.html', 'package.json', 'package-lock.json', 'vite.config.*', 'tsconfig*.json', 'vercel.json', '.oxlintrc*', '.github/workflows/browser-tests.yml']
   pull_request:
+    branches: [main]
     paths: ['src/**', 'tests/**', 'public/**', 'index.html', 'package.json', 'package-lock.json', 'vite.config.*', 'tsconfig*.json', 'vercel.json', '.oxlintrc*', '.github/workflows/browser-tests.yml']
   workflow_dispatch:
 jobs:
