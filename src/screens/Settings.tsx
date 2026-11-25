@@ -10,7 +10,7 @@ import { askPermission, permission, type Permission } from '../lib/push'
 import { paths, type SettingsPage } from '../lib/routes'
 import { FRESH, clearSavedData, lastLoadError, useQuery } from '../lib/query'
 import { BUILD, checkVersion, reloadApp, useNewVersion } from '../lib/update'
-import { BackButton, Button, Icon, Pill, Sheet, SmallButton, Spinner, useToast } from '../ui'
+import { BackButton, BusyLabel, Button, Icon, Pill, Sheet, SmallButton, Spinner, useToast } from '../ui'
 import { COMMON_TAGS, MORE_TAGS, setHiddenTags, useHiddenTags } from '../lib/hidden'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -499,7 +499,7 @@ function Delete() {
         <p>This deletes your account, your watchlist, the services you picked and your notification settings.</p>
         <p>It can’t be undone.</p>
       </div>
-      <div className="set-action"><button type="button" className="btn-danger press" disabled={busy} onClick={() => setAsking(true)}>Delete account{busy && <Spinner light />}</button></div>
+      <div className="set-action"><button type="button" className="btn-danger press" disabled={busy} aria-busy={busy || undefined} onClick={() => setAsking(true)}><BusyLabel busy={busy} light>Delete account</BusyLabel></button></div>
       {asking && (
         <div className="ios-alert" role="alertdialog" aria-label="Delete account">
           <div>

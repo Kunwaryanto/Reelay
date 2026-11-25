@@ -82,13 +82,19 @@ export const Spinner = ({ light = false, label }: { light?: boolean; label?: str
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }
 
+/** A button's text with its busy state: the text stays (hidden) while the spinner shows over it, so a button never
+ *  changes width when it starts or stops working. Every pill button with a spinner uses this. */
+export function BusyLabel({ busy, light, children }: { busy?: boolean; light?: boolean; children: ReactNode }) {
+  return <><span className="busy-label">{children}</span>{busy && <span className="busy-spin"><Spinner light={light} label="Working" /></span>}</>
+}
+
 /** 44px white pill: the main action of a screen or sheet. */
 export function Button({ busy, children, className = '', ...rest }: BtnProps) {
-  return <button type="button" className={`btn press ${className}`} aria-busy={busy || undefined} {...rest}>{busy ? <Spinner label="Working" /> : children}</button>
+  return <button type="button" className={`btn press ${className}`} aria-busy={busy || undefined} {...rest}><BusyLabel busy={busy}>{children}</BusyLabel></button>
 }
 /** 32px pill: a small standalone action. Grey on plain black, white with `solid`. */
 export function SmallButton({ solid, busy, children, ...rest }: BtnProps & { solid?: boolean }) {
-  return <button type="button" className="btn-small press" data-solid={solid} aria-busy={busy || undefined} {...rest}>{children}{busy && <Spinner light={!solid} />}</button>
+  return <button type="button" className="btn-small press" data-solid={solid} aria-busy={busy || undefined} {...rest}><BusyLabel busy={busy} light={!solid}>{children}</BusyLabel></button>
 }
 /** 44px frosted pill over artwork (Start). */
 export const GlassButton = ({ children, ...rest }: BtnProps) => <button type="button" className="btn-glass press" {...rest}>{children}</button>

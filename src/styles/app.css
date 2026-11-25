@@ -50,7 +50,11 @@ button { font: inherit; color: inherit; }
 /* Working: no second tap while the first is still going. Disabled: dimmed and dead. */
 [aria-busy='true'] { pointer-events: none; }
 .btn:disabled, .btn-small:disabled, .btn-danger:disabled, .btn-glass:disabled, .icon-btn:disabled, .pill:disabled { opacity: 0.4; pointer-events: none; }
-.btn[aria-busy='true'], .btn-small[aria-busy='true'] { opacity: 1; }
+.btn[aria-busy='true'], .btn-small[aria-busy='true'], .btn-danger[aria-busy='true'] { opacity: 1; }
+/* busy: the text keeps the button's width (hidden) and the spinner sits over it (BusyLabel) */
+.btn, .btn-small, .btn-danger { position: relative; }
+[aria-busy='true'] > .busy-label { visibility: hidden; }
+.busy-spin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .set-switch[aria-disabled='true'] > i { opacity: 0.4; }
 /* Keyboard and Switch Control: one clear ring. A finger never shows it. */
 :where(button, a, [role='switch'], [role='checkbox'], [role='menuitem'], summary):focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
