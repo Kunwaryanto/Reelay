@@ -798,3 +798,4 @@ Measured on the database before and after:
   by fame, the crowd's old favourites, concert films and half-hour TV specials are gone.
 - The walls' films in even thirds: new, the modern canon (1980 to 20 years ago) and the old canon (before 1980:
   Seven Samurai, Metropolis, Some Like It Hot, On the Waterfront), so the older masters always get their places.
+- Less anime on the walls: fans rate it very high, so it filled the top. Now at most 4 of 64 on onboarding's wall and 3 of 48 on Start, the best rated.
