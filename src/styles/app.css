@@ -1220,7 +1220,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .spot-thumb .cover { border-radius: 6px; }
 .spot-meta { min-width: 0; display: flex; flex-direction: column; font: var(--type-meta); color: var(--text-muted); }
 .spot-meta span { text-wrap: pretty; }
-.spot-meta .spot-by { font: 400 15px/20px var(--font); color: var(--text-secondary); }
+.spot-meta .spot-by { font: var(--type-text); color: var(--text-secondary); }
 @media (prefers-reduced-motion: reduce) { .spot-item:has(> .spot[data-pressed]) { transform: none; } }
 
 /* Settings › Suggestions: tap a pill to stop it being suggested (white = hidden), every genre in the sheet */
