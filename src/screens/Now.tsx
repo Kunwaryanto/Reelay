@@ -324,9 +324,9 @@ function SpotCard({ card }: { card: HomeCard }) {
   const wide = card.hero_path && !card.hero_poster ? card.hero_path : card.backdrop_path
   const art = card.hero_path && card.hero_poster ? { src: tmdbImage(card.hero_path, 'w780'), sizes: '90vw' }
     : wide ? { src: tmdbImage(wide, 'w780'), srcSet: `${tmdbImage(wide, 'w780')} 780w, ${tmdbImage(wide, 'w1280')} 1280w`, sizes: '90vw' } : null
-  const service = card.availability[0]?.service_id
-  // where it plays, unless the reason already names the service ("New on Netflix", "Leaves Viaplay on Friday")
-  const svc = service && !(card.reason ?? '').includes(SERVICE_NAME[service] ?? service) ? SERVICE_NAME[service] ?? service : null
+  // where it plays, always: the one it arrived on or leaves when the pick is about that (the reasons don't name it)
+  const service = card.via ?? card.availability[0]?.service_id
+  const svc = service ? SERVICE_NAME[service] ?? service : null
   return (
     <div role="listitem" className="spot-item">
       <a className="spot" href={paths.title(card.id)} data-poster={card.hero_poster || undefined}

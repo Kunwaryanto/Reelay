@@ -62,3 +62,13 @@ def test_credit_line_names_everyone_without_cutting(app):
     assert any(' and 2 others' in b for b in by) and any('Kwan and' in b for b in by), by
     import re
     assert all(re.fullmatch(r'(Directed|Created) by (Celine Song|Vince Gilligan|Daniel Kwan and Daniel Scheinert|Matt Duffer and 2 others)', b) for b in by), by
+
+def test_service_always_at_the_bottom_never_in_the_reason(app):
+    # Where it plays is always on the card's bottom line; the reason says why it was picked and never names the
+    # service ("Just arrived", "Leaves on Friday", "New this week"). 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    out = pg.evaluate("""[...document.querySelectorAll('.spot')].map(s => ({ reason: s.querySelector('.spot-top small').textContent,
+      meta: s.querySelector('.spot-meta span:last-child').textContent }))""")
+    names = ['Netflix', 'HBO Max', 'Viaplay', 'SkyShowtime', 'Disney+', 'Prime Video', 'Apple TV', 'SVT Play', 'TV4 Play']
+    assert out and all(any(n in o['meta'] for n in names) for o in out), out
+    assert not any(n in o['reason'] for o in out for n in names), out

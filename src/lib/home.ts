@@ -22,6 +22,8 @@ export type HomeCard = Card & {
   imdb_votes?: number | null
   /** the spotlight: who made it ("Directed by Celine Song", "Created by Vince Gilligan") */
   by?: string
+  /** the spotlight: the service its bottom line names (the one it arrived on or leaves), when not its first */
+  via?: string
 }
 export type HomeRow = {
   id: string
@@ -75,7 +77,7 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 16
+export const HOME_VERSION = 17
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
@@ -87,15 +89,16 @@ function friendsLine(rows: { name: string; rating: number }[]): string {
   if (names.length <= 1) return `${names[0] ?? 'A friend'} rated it ${Number(rows[0]?.rating ?? 0).toFixed(1)}`
   return names.length === 2 ? `${names[0]} and ${names[1]} liked it` : `${names[0]} and ${names.length - 1} friends liked it`
 }
-/** "Leaves Netflix today", "… tomorrow", "… on Friday" (within the week), "… on 12 Dec" */
-function leavingLine(t: Card, day: string | undefined): string {
-  const svc = SERVICE_NAME[t.availability.find((a) => a.leaves_on === day)?.service_id ?? t.availability[0]?.service_id] ?? 'soon'
-  if (!day) return `Leaving ${svc}`
+/** "Leaves today", "… tomorrow", "… on Friday" (within the week), "… on 12 Dec": the service is on the card's
+ *  bottom line (`leavingVia`), so the reason doesn't name it */
+function leavingLine(day: string | undefined): string {
+  if (!day) return 'Leaving soon'
   const n = daysUntil(day)
   const d = new Date(`${day}T12:00:00`)
   const when = n <= 0 ? 'today' : n === 1 ? 'tomorrow' : n <= 6 ? `on ${d.toLocaleDateString('en-GB', { weekday: 'long' })}` : `on ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  return `Leaves ${svc} ${when}`
+  return `Leaves ${when}`
 }
+const leavingVia = (t: Card, day: string | undefined) => t.availability.find((a) => a.leaves_on === day)?.service_id
 /** "March", or "March 2025" for an earlier year */
 function monthOf(at: string): string {
   const d = new Date(at)
@@ -364,10 +367,10 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   // the spotlight's tall cards: the title page's picture, or a wide one to crop
   const tall = (t: HomeCard | undefined) => !!t && (!!t.hero_path || !!t.backdrop_path)
   const watchedAll = new Set(ask.watched)
+  // the spotlight's reasons don't name the service: the card's bottom line always does (`via`)
   const newLine = (t: HomeCard) => {
-    const svcId = arrivedOn.get(t.id) ?? t.availability[0]?.service_id
     const on = arrived.find((a) => a.title.id === t.id)?.happened_on
-    return `New on ${svcName(svcId)}${on && daysUntil(on) >= -6 ? ' this week' : ''}`
+    return on && daysUntil(on) >= -6 ? 'New this week' : 'New this month'
   }
   const hero: HomeCard[] = []
   const lead = (t: HomeCard | undefined, reason: string) => { if (wide(t) && !hero.some((h) => h.id === t!.id) && hero.length < 7) hero.push({ ...t!, reason }) }
@@ -397,32 +400,32 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   const shownBefore = spotHistory()
   const spots: HomeCard[] = []
   const decent = (t: HomeCard) => t.imdb_rating == null || t.imdb_rating >= 6.5
-  const spot = (list: HomeCard[], reason: (t: HomeCard) => string, opts: { n?: number; bar?: boolean; again?: boolean } = {}) => {
+  const spot = (list: HomeCard[], reason: (t: HomeCard) => string, opts: { n?: number; bar?: boolean; again?: boolean; via?: (t: HomeCard) => string | undefined } = {}) => {
     let n = opts.n ?? 1
     for (const t of list) {
       if (spots.length >= 6 || n <= 0) return
       if (!tall(t) || inHero.has(t.id) || spots.some((x) => x.id === t.id) || watchedAll.has(t.id)) continue
       if (opts.bar && !decent(t)) continue
       if (!opts.again && shownBefore.has(t.id)) continue
-      spots.push({ ...t, reason: reason(t) }); n--
+      spots.push({ ...t, reason: reason(t), via: opts.via?.(t) }); n--
     }
   }
   if (alt.length) spot(altList, () => altReason)
-  spot(playable.filter((t) => arrivedSaved.has(t.id)), (t) => `Just arrived on ${svcName(arrivedSaved.get(t.id)!)}`, { again: true })
+  spot(playable.filter((t) => arrivedSaved.has(t.id)), () => 'Just arrived', { again: true, via: (t) => arrivedSaved.get(t.id) })
   spot(rowFriends, (t) => friendsLine(friends.filter((f) => f.title_id === t.id)))
   const since = new Map(saved.filter((x) => x.title && x.added_at).map((x) => [x.title.id, x.added_at!]))
   const longSaved = playable.filter((t) => since.has(t.id) && daysUntil(since.get(t.id)!.slice(0, 10)) <= -45)
   spot(longSaved, (t) => `On your watchlist since ${monthOf(since.get(t.id)!)}`)
   spot(playable.filter(isShort), (t) => `Only ${shortRuntime(t.runtime_min)}`)
-  spot(rowLeaving, (t) => leavingLine(t, leavesOn.get(t.id)), { bar: true, again: true })
-  spot(rowNew, (t) => newLine(t), { bar: true })
+  spot(rowLeaving, (t) => leavingLine(leavesOn.get(t.id)), { bar: true, again: true, via: (t) => leavingVia(t, leavesOn.get(t.id)) })
+  spot(rowNew, (t) => newLine(t), { bar: true, via: (t) => arrivedOn.get(t.id) })
   spot(rowAwards, (t) => wins.get(t.id)!.line, { bar: true })
   spot(rowTheme, (t) => (t.imdb_rating ? `Few have seen it · IMDb ${Number(t.imdb_rating).toFixed(1)}` : 'A hidden gem'))
   spot(rowTrendS, () => 'Everyone’s watching it this week', { bar: true })
   spot(rowTrendF, () => 'Everyone’s watching it this week', { bar: true, n: 2 })
   // a thin day: the same reasons again, with titles picked before
   if (spots.length < 3) {
-    spot(rowNew, (t) => newLine(t), { bar: true, again: true })
+    spot(rowNew, (t) => newLine(t), { bar: true, again: true, via: (t) => arrivedOn.get(t.id) })
     spot(rowTrendF, () => 'Everyone’s watching it this week', { bar: true, again: true, n: 2 })
   }
   noteSpots(spots.map((t) => t.id))
