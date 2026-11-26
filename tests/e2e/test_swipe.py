@@ -8,7 +8,7 @@ STRIP = "document.querySelector('.stack[data-active=true]')"
 
 def open_title(app):
     pg = app()
-    pg.goto(m.B + '/'); pg.wait_for_timeout(2500)
+    pg.goto(m.B + '/'); pg.settle(5000)
     pg.evaluate(f"(() => {{ const a = ({TOP}).querySelector('a.card'); a.dispatchEvent(new PointerEvent('pointerdown', {{bubbles: true}})); a.click() }})()")
     pg.wait_for_timeout(1500)
     assert pg.evaluate("location.pathname").startswith('/title/')

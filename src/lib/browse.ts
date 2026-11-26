@@ -2,6 +2,8 @@
 // A category is a set of filters over streaming titles; nothing here is stored in the database.
 import { MIN_ROW, type Card } from './catalogue'
 import { supabase } from './supabase'
+import { localDay } from './days'
+import { hiddenTags, suggestable } from './hidden'
 
 export type Kind = Card['kind']
 /** 'home': lists that only Home's rows open (View all); they aren't shown in Browse */
@@ -43,30 +45,32 @@ export type Category = {
   list?: Sort
   /** the list's name when it is opened for films or series only ("New films") */
   labels?: Record<Kind, string>
+  /** the Suggestions tag it is all about: hiding that tag takes the category out of Browse */
+  tag?: string
 }
 
 const thisYear = new Date().getFullYear()
-const g = (id: string, label: string, tint: string, genres: string[], only?: Kind): Category =>
-  ({ id, section: 'genres', label, tint, rule: { genres }, noun: label.toLowerCase(), only })
+const g = (id: string, label: string, tint: string, genres: string[], only?: Kind, tag?: string): Category =>
+  ({ id, section: 'genres', label, tint, rule: { genres }, noun: label.toLowerCase(), only, tag })
 const d = (label: string, from: number, tint: string): Category =>
   ({ id: label.toLowerCase(), section: 'decades', label, tint, rule: { from, to: from + 9 }, noun: label })
 const c = (id: string, label: string, adjective: string, country: string, tint: string): Category =>
   ({ id, section: 'countries', label, tint, rule: { country }, noun: adjective })
 
 export const CATEGORIES: Category[] = [
-  g('drama', 'Drama', '#6B2E3A', ['Drama']),
-  g('crime', 'Crime', '#2F3B52', ['Crime']),
-  g('thriller', 'Thriller', '#3F2A4F', ['Thriller', 'Mystery']),
-  g('comedy', 'Comedy', '#8A5A1F', ['Comedy']),
-  g('action', 'Action', '#7A2A1A', ['Action', 'Action & Adventure']),
-  g('horror', 'Horror', '#1F3A33', ['Horror'], 'film'),
-  g('war', 'War', '#4B4A32', ['War', 'War & Politics']),
-  g('romance', 'Romance', '#7A3550', ['Romance']),
-  g('animation', 'Animation', '#1F4F6B', ['Animation']),
-  g('family', 'Family', '#2E5A3A', ['Family', 'Kids']),
-  g('reality', 'Reality', '#5A4632', ['Reality'], 'series'),
-  g('sci-fi', 'Sci-fi', '#23395B', ['Science Fiction', 'Sci-Fi & Fantasy']),
-  g('documentary', 'Documentary', '#55555E', ['Documentary']),
+  g('drama', 'Drama', '#6B2E3A', ['Drama'], undefined, 'drama'),
+  g('crime', 'Crime', '#2F3B52', ['Crime'], undefined, 'crime'),
+  g('thriller', 'Thriller', '#3F2A4F', ['Thriller', 'Mystery'], undefined, 'thriller'),
+  g('comedy', 'Comedy', '#8A5A1F', ['Comedy'], undefined, 'comedy'),
+  g('action', 'Action', '#7A2A1A', ['Action', 'Action & Adventure'], undefined, 'action'),
+  g('horror', 'Horror', '#1F3A33', ['Horror'], 'film', 'horror'),
+  g('war', 'War', '#4B4A32', ['War', 'War & Politics'], undefined, 'war'),
+  g('romance', 'Romance', '#7A3550', ['Romance'], undefined, 'romance'),
+  g('animation', 'Animation', '#1F4F6B', ['Animation'], undefined, 'animation'),
+  g('family', 'Family', '#2E5A3A', ['Family', 'Kids'], undefined, 'family'),
+  g('reality', 'Reality', '#5A4632', ['Reality'], 'series', 'reality'),
+  g('sci-fi', 'Sci-fi', '#23395B', ['Science Fiction', 'Sci-Fi & Fantasy'], undefined, 'scifi'),
+  g('documentary', 'Documentary', '#55555E', ['Documentary'], undefined, 'documentaries'),
 
   { id: 'leaving-soon', section: 'lists', label: 'Leaving soon', tint: '#5A3A2A', rule: { leaving: true }, list: 'leaving' },
   { id: 'highest-rated', section: 'lists', label: 'Highest rated', tint: '#4B4A32', rule: { votes: [20000] }, list: 'rated' },
@@ -101,6 +105,8 @@ export const SECTIONS: { id: SectionId; title: string; shown: number }[] = [
   { id: 'countries', title: 'Countries', shown: 4 },
 ]
 export const categoryOf = (id: string) => CATEGORIES.find((x) => x.id === id)
+/** A category Browse offers: not one all about a tag the member hides (Settings › Suggestions). */
+export const offered = (c: Category, hidden: string[] = hiddenTags()) => !c.tag || !hidden.includes(c.tag)
 
 // ---- Rows on a category page ------------------------------------------------------
 
@@ -129,16 +135,16 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   if (res.error) throw new Error(res.error.message)
   return res.data as T
 }
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+const inDays = localDay
 const today = () => inDays(0)
 
 const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'
 const ART = 'id,kind,title,year,runtime_min,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
 
-type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean }
+type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean; cover?: boolean }
 
 /** Streaming titles in a category. `row` narrows it the way that row on the category page does. */
-export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets }: Opts = {}): Promise<Card[]> {
+export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets, cover }: Opts = {}): Promise<Card[]> {
   const r = cat.rule
   const k = kind ?? cat.only
   // The IMDb rating and votes are on the title itself (kept in step with scores by a trigger), so rated lists are
@@ -146,7 +152,8 @@ export async function titlesIn(cat: Category, { kind, sort = 'popular', row, lim
   // facets: what the filter drawer checks on the phone (genre, language, length, rating)
   const extra = facets ? ',genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)' : ''
   const joins = `${r.arrived ? ',availability_events!inner(event,happened_on)' : ''}${r.awards ? ',awards!inner(won)' : ''}`
-  let q = supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`)
+  // nothing the member hides from suggestions (the category cards' pictures are everyone's: they skip this)
+  let q = cover ? supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`) : suggestable(supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`))
   if (k) q = q.eq('kind', k)
   if (r.genres) q = q.overlaps('genres', r.genres)
   if (r.from !== undefined) q = q.gte('year', r.from)
@@ -207,6 +214,6 @@ export async function loadCovers(): Promise<Record<string, string | null>> {
   return out
 }
 async function supabaseTop(cat: Category) {
-  const list = await titlesIn(cat, { sort: cat.list === 'rated' ? 'rated' : 'popular', limit: 5, art: true })
+  const list = await titlesIn(cat, { sort: cat.list === 'rated' ? 'rated' : 'popular', limit: 5, art: true, cover: true })
   return list.map((t) => ({ id: t.id, backdrop_path: t.backdrop_path ?? null, poster_path: t.poster_path }))
 }

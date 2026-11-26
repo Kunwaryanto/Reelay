@@ -114,14 +114,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
     if (step !== 'code' || ok) { setStep(next); setSendErr('') }
     // iOS only opens the keyboard for a field focused during the tap itself, and the sheet or page isn't there
     // yet. So focus a stand-in field now (the keyboard comes up) and hand the focus to the real one once it exists.
-    if (next !== 'gone') {
-      const stand = document.createElement('input')
-      stand.setAttribute('aria-hidden', 'true')
-      stand.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0'
-      document.body.append(stand)
-      stand.focus({ preventScroll: true })
-      setTimeout(() => stand.remove(), 1000)
-    }
+    if (next !== 'gone') holdKeyboard(next === 'code')
     setOpen(true)
   }
 
@@ -149,6 +142,9 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
       sentAt.current = Date.now()
       tries.current = 0
       setCode(''); setCodeErr(''); setSecs(60); setOk(false); setResent(resend)
+      // the email field is about to go: hand the keyboard to a stand-in so it stays up for the code. Put away
+      // here and opened again by iOS on its own when coming back from Mail, it pushed the sheet down and back.
+      if (document.activeElement instanceof HTMLInputElement) holdKeyboard(true)
       setStep('code')
     } catch {
       setSendErr(navigator.onLine ? 'net' : 'offline')
@@ -217,7 +213,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
             <h2>{joined ? 'You’re in. Add Reelay to your Home Screen' : inAppBrowser ? 'Open this page in Safari' : 'Add to Home Screen'}</h2>
             {inAppBrowser ? <p>Reelay is added to your Home Screen from Safari. This app’s own browser can’t do that.</p> : (
               <ol>
-                <li><span>1</span><span>Tap <Icon name="more_horiz" size={16} />, then <Icon name="ios_share" size={16} /> <b>Share</b></span></li>
+                <li><span>1</span><span>Tap <Icon name="notes" size={16} />, then <Icon name="ios_share" size={16} /> <b>Share</b></span></li>
                 <li><span>2</span><span>Tap <Icon name="add_box" size={16} /> <b>Add to Home Screen</b></span></li>
                 <li><span>3</span><span>Tap <b>Add</b></span></li>
               </ol>
@@ -271,7 +267,7 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
             <h2 className="sheet-title">{ok ? 'You’re in' : 'Check your email'}</h2>
             <div className="sent-to">
               <p>{ok ? 'Signed in as ' : 'Sent to '}{email.trim()}</p>
-              {!ok && <QuietButton onClick={() => { setStep('email'); setCode(''); setCodeErr('') }}>Change</QuietButton>}
+              {!ok && <QuietButton onClick={() => { holdKeyboard(); setStep('email'); setCode(''); setCodeErr('') }}>Change</QuietButton>}
             </div>
             <div className={`code ${codeErr === 'wrong' ? `shake-${shakeClass}` : ''}`} data-dim={codeErr === 'locked' ? 'locked' : checking ? 'checking' : undefined}>
               <input ref={codeInput} type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6}
@@ -298,6 +294,18 @@ export default function Start({ onSignedIn }: { onSignedIn: () => void }) {
       </SignIn>
     </div>
   )
+}
+
+/** Keep the keyboard up while the sheet's field changes (or isn't there yet): iOS only opens it for a field focused
+ *  during a tap, and closes it when the focused field goes. A stand-in holds the focus until the real field takes it. */
+function holdKeyboard(numeric = false) {
+  const stand = document.createElement('input')
+  stand.setAttribute('aria-hidden', 'true')
+  if (numeric) stand.inputMode = 'numeric' // the keyboard the next field wants, so it doesn't change on the way
+  stand.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0'
+  document.body.append(stand)
+  stand.focus({ preventScroll: true })
+  setTimeout(() => stand.remove(), 1000)
 }
 
 // In the Home Screen app sign-in is a sheet. In Safari it's its own page: Safari moves its whole visible area

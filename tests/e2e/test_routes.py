@@ -12,7 +12,7 @@ CASES = [
 @pytest.mark.parametrize('path,bar,text', CASES)
 def test_route(app, path, bar, text):
     pg = app()
-    pg.goto(m.B + path); pg.wait_for_timeout(1800)
+    pg.goto(m.B + path); pg.settle(4000)
     shown = pg.evaluate("document.querySelector('.tabbar')?.dataset.hidden") == 'false'
     assert shown == bar
     if text: assert text in pg.evaluate(f"({TOP})?.innerText || ''")

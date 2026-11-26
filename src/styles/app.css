@@ -50,7 +50,11 @@ button { font: inherit; color: inherit; }
 /* Working: no second tap while the first is still going. Disabled: dimmed and dead. */
 [aria-busy='true'] { pointer-events: none; }
 .btn:disabled, .btn-small:disabled, .btn-danger:disabled, .btn-glass:disabled, .icon-btn:disabled, .pill:disabled { opacity: 0.4; pointer-events: none; }
-.btn[aria-busy='true'], .btn-small[aria-busy='true'] { opacity: 1; }
+.btn[aria-busy='true'], .btn-small[aria-busy='true'], .btn-danger[aria-busy='true'] { opacity: 1; }
+/* busy: the text keeps the button's width (hidden) and the spinner sits over it (BusyLabel) */
+.btn, .btn-small, .btn-danger { position: relative; }
+[aria-busy='true'] > .busy-label { visibility: hidden; }
+.busy-spin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .set-switch[aria-disabled='true'] > i { opacity: 0.4; }
 /* Keyboard and Switch Control: one clear ring. A finger never shows it. */
 :where(button, a, [role='switch'], [role='checkbox'], [role='menuitem'], summary):focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -78,9 +82,11 @@ button { font: inherit; color: inherit; }
 .page { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: none; overscroll-behavior-y: contain; padding-bottom: calc(110px + var(--edge-b)); -webkit-overflow-scrolling: touch; }
 .page-plain { padding: calc(var(--safe-top) + 50px) var(--margin) 110px; }
 .page-bar { margin-left: -14px; height: var(--hit); display: flex; align-items: center; }
+/* every back button sits 15px under the safe area, as on Title, Person, Browse and Home's cog; the title below stays put */
+.page-plain > .page-bar:first-child { margin-top: -35px; margin-bottom: 35px; }
 .page-title { margin: 16px 0 0; font: var(--type-title); letter-spacing: var(--track-title); }
 .page-title-tab { margin-top: 44px; }
-.page-back { position: absolute; z-index: 2; top: calc(var(--safe-top) + 19px); left: 12px; }
+.page-back { position: absolute; z-index: 2; top: calc(var(--safe-top) + 15px); left: 12px; }
 .page-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
 .empty { margin: 8px 0 0; font: var(--type-body); color: var(--text-muted); }
 .row + .empty, .rise > .empty { padding: 0 var(--margin); }
@@ -159,6 +165,15 @@ button { font: inherit; color: inherit; }
 .now-settings { position: absolute; z-index: 4; top: calc(var(--safe-top) + 15px); right: 12px; }
 .hero { position: relative; height: 540px; margin-bottom: var(--row-gap); }
 .hero-gap { height: calc(var(--safe-top) + 70px); }
+/* Watchlist news under the hero: posters fanned, a heading-size line and the titles under it; no card, no heading */
+.news { display: flex; align-items: center; gap: var(--space-4); width: calc(100% - 2 * var(--margin)); margin: 0 var(--margin) var(--row-gap); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; text-decoration: none; }
+.news-stack { flex: none; display: flex; }
+.news-stack .cover { width: 44px; border-radius: 6px; box-shadow: 0 0 0 2px var(--bg); }
+.news-stack .cover + .cover { margin-left: -18px; }
+.news-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.news-text b { font: var(--type-heading); letter-spacing: var(--track-heading); color: var(--text-primary); }
+.news-text small { font: var(--type-text); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news > .ms { flex: none; color: var(--text-faint); }
 .hero-stage { position: relative; height: 100%; touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
 .hero-slide { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; z-index: 0; -webkit-touch-callout: none; }
 .hero-slide[data-on='true'] { pointer-events: auto; z-index: 2; }
@@ -168,7 +183,7 @@ button { font: inherit; color: inherit; }
 .hero-text { position: absolute; inset: 0; opacity: 0; transition: opacity 450ms var(--ease-out); }
 .hero-slide[data-on='true'] .hero-text { opacity: 1; }
 .hero-logo { position: absolute; left: 18%; bottom: 96px; width: 64%; height: 88px; object-fit: contain; object-position: center bottom; }
-.hero-name { position: absolute; left: 20px; right: 20px; bottom: 96px; text-align: center; font: 600 28px/32px var(--font); letter-spacing: -0.02em; text-wrap: balance; }
+.hero-name { position: absolute; left: 20px; right: 20px; bottom: 96px; text-align: center; font: var(--type-display); letter-spacing: var(--track-display); text-wrap: balance; }
 .hero-meta { position: absolute; left: 20px; right: 20px; bottom: 64px; text-align: center; font: var(--type-text); color: var(--text-secondary); }
 .hero-dots { position: absolute; z-index: 3; left: 0; right: 0; bottom: 36px; display: flex; justify-content: center; gap: 4px; pointer-events: none; }
 .hero-dots > span { position: relative; overflow: hidden; width: 8px; height: 3px; border-radius: 1.5px; background: var(--track); transition: width 350ms var(--ease-out); }
@@ -181,7 +196,7 @@ button { font: inherit; color: inherit; }
 .hold { position: absolute; inset: 0; z-index: 30; }
 .hold-back { position: absolute; inset: 0; background: rgba(0, 0, 0, 0); -webkit-backdrop-filter: blur(0px) saturate(100%); backdrop-filter: blur(0px) saturate(100%); transition: background var(--dur-menu-close) var(--ease-sheet), -webkit-backdrop-filter var(--dur-menu-close) var(--ease-sheet), backdrop-filter var(--dur-menu-close) var(--ease-sheet); }
 .hold[data-open='true'] .hold-back { background: rgba(0, 0, 0, 0.3); -webkit-backdrop-filter: var(--blur-backdrop); backdrop-filter: var(--blur-backdrop); transition-duration: var(--dur-menu-open); }
-.hold-poster { position: absolute; border-radius: 16px; corner-shape: squircle; overflow: hidden; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); transform-origin: 0 0; transition: transform var(--dur-menu-close) var(--ease-sheet), border-radius var(--dur-menu-close) var(--ease-sheet), box-shadow var(--dur-menu-close) var(--ease-sheet); }
+.hold-poster { position: absolute; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); transform-origin: 0 0; transition: transform var(--dur-menu-close) var(--ease-sheet), border-radius var(--dur-menu-close) var(--ease-sheet), box-shadow var(--dur-menu-close) var(--ease-sheet); }
 .hold-poster > .cover { width: 100%; height: 100%; margin: 0; }
 .hold-menu { position: absolute; width: 290px; border-radius: var(--radius-menu); corner-shape: squircle; overflow: hidden; background: rgba(44, 44, 44, 0.78); -webkit-backdrop-filter: var(--blur-menu); backdrop-filter: var(--blur-menu); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); opacity: 0; transform: scale(0.6); transition: opacity var(--dur-menu-close) var(--ease-sheet), transform var(--dur-menu-close) var(--ease-sheet); }
 .hold[data-open='true'] .hold-menu { opacity: 1; transition-duration: var(--dur-menu-open); }
@@ -292,6 +307,7 @@ button.pill-open { padding: 0 12px 0 10px; }
 /* first opening: invisible while the keyboard comes up and is measured, then placed below the screen and slid up */
 .sheet[data-waiting] { opacity: 0; pointer-events: none; transition: none; }
 .sheet[data-entering] { transform: translateY(110%); transition: none; }
+.sheet[data-moving] :is(input, textarea) { caret-color: transparent; }
 /* the sheet is dragged, not scrolled; a list inside scrolls without Safari's bounce, so at its top a pull down moves only the sheet */
 .sheet-body { touch-action: none; }
 /* lists in a sheet scroll natively, momentum and bounce included; the bounce stays inside the list (contain), and at
@@ -328,6 +344,7 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 @keyframes blink { 50%, 100% { opacity: 0; } }
 .code-status { margin: 12px 0 0; min-height: 20px; display: flex; align-items: center; gap: 6px; font: var(--type-meta); color: var(--text-faint); }
 .code-status .resent { color: var(--text-secondary); }
+/* Paste: a pill at the end of the status line, big enough to hit with the keyboard up */
 .code-status button { height: var(--hit); margin: -12px 0; padding: 0; border: 0; background: none; font: var(--type-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; cursor: pointer; transition: color var(--dur-press) var(--ease-out); }
 .code-status button[data-ready='true'] { color: #fff; font-weight: 500; }
 @keyframes shake { 0%, 100% { transform: none; } 15% { transform: translateX(-6px); } 30% { transform: translateX(5px); } 45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-2px); } 90% { transform: translateX(1px); } }
@@ -484,7 +501,6 @@ html[data-runway] .tabbar { touch-action: none; }
 .wl-section-head { margin: 0 var(--margin); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .wl-section-head h2 { margin: 0; font: var(--type-heading); letter-spacing: var(--track-heading); }
 .wl-section-head > span { font: var(--type-meta); color: var(--text-faint); white-space: nowrap; }
-.wl-section ul { list-style: none; margin: 4px var(--margin) 0; padding: 0; }
 .wl-row { position: relative; min-width: 0; overflow: hidden; }
 /* --x: how far the row is slid (px, negative is left), --r the same as a plain number; both written by the swipe */
 .wl-slide { position: relative; display: flex; align-items: center; background: var(--bg); touch-action: pan-y; user-select: none; -webkit-user-select: none; transform: translateX(var(--x, 0px)); transition: transform 320ms var(--ease-sheet); will-change: transform; }
@@ -527,22 +543,12 @@ html[data-runway] .tabbar { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .wl-slide, .wl-remove, .wl-remove > span, .wl-switch > i, .wl-switch > i::after { transition: none; } }
 
 /* ---- Watchlist, empty: a wall to pick from ---- */
-.pick { overflow: hidden; padding: 0; }
-.pick-pan { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-.pick-wall { position: absolute; left: 50%; top: 50%; width: 944px; height: 1496px; margin: -748px 0 0 -472px; will-change: transform; }
-.pick-wall[data-settle='true'] { transition: transform 600ms var(--ease-out); }
-.pick-poster { position: absolute; width: 128px; height: 192px; padding: 0; border: 0; border-radius: 10px; corner-shape: squircle; overflow: hidden; background: var(--surface); cursor: pointer; transition: transform 160ms var(--ease-out); -webkit-touch-callout: none; }
-.pick-poster:active { transform: scale(0.97); }
-.pick-poster img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
-.pick-poster i { position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 0.5px var(--hairline); transition: background-color 160ms var(--ease-out); pointer-events: none; }
-.pick-poster[data-dim='true'] i { background: rgba(0, 0, 0, 0.25); }
-.pick-poster[aria-pressed='true'] i { box-shadow: inset 0 0 0 1.5px #fff; }
-.pick-fade { position: absolute; left: 0; right: 0; top: 0; height: calc(var(--safe-top) + 170px); background: linear-gradient(180deg, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.75) 45%, rgba(0, 0, 0, 0) 100%); pointer-events: none; }
+.pick { overflow: hidden; padding: 0; } /* the empty Watchlist: onboarding's wall (PosterWall, .ob-* below) */
+.pick .ob-wall { z-index: 0; }
 .pick-hint { position: absolute; z-index: 2; left: var(--margin); right: var(--margin); top: calc(var(--safe-top) + 54px); margin: 0; font: var(--type-body); color: var(--text-muted); pointer-events: none; transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
 .pick-hint[data-hide='true'] { opacity: 0; transform: translateY(-4px); }
 .pick-add { position: absolute; z-index: 4; left: 0; right: 0; bottom: calc(96px + var(--edge-b)); display: flex; justify-content: center; opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out); }
 .pick-add[data-show='true'] { opacity: 1; transform: none; pointer-events: auto; }
-@media (prefers-reduced-motion: reduce) { .pick-poster:active { transform: none; } .pick-wall[data-settle='true'] { transition: none; } }
 .sheet:focus { outline: none; }
 
 /* ---- Search ---- */
@@ -775,13 +781,16 @@ html[data-runway] .tabbar { touch-action: none; }
 .ob-wall[data-leaving] { transition: opacity 800ms cubic-bezier(0.4, 0, 0.6, 1) 60ms, filter 700ms var(--ease-out); }
 .ob-pan { position: absolute; inset: 0; }
 .ob-scale { position: absolute; left: 50%; top: 50%; width: 0; height: 0; scale: var(--k, 1); }
-.ob-cam { position: absolute; width: 510px; height: 818px; margin: -409px 0 0 -255px; will-change: transform; }
-.ob-cols { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5.05px; align-items: start; }
+/* 8 columns of 80.8px (the middle 6 are where the 6-column wall was) */
+.ob-cam { position: absolute; width: 681.7px; height: 818px; margin: -409px 0 0 -340.85px; will-change: transform; }
+.ob-cols { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5.05px; align-items: start; }
 .ob-col { display: flex; flex-direction: column; gap: 5.05px; }
 @keyframes ob-drift { from { transform: translate3d(0, var(--S), 0); } }
 @media (prefers-reduced-motion: no-preference) { .ob-col[data-drift] { animation: ob-drift 2500ms cubic-bezier(0.25, 1, 0.5, 1) both; } }
 .ob-tile { position: relative; flex: none; width: 100%; height: 121.19px; padding: 0; border: 0; border-radius: 6.3px; corner-shape: squircle; overflow: hidden; background: var(--surface); cursor: pointer; }
 .ob-tile img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.ob-tile img[data-late] { opacity: 0; transition: opacity 400ms var(--ease-out); }
+.ob-tile img[data-late][data-in] { opacity: 1; }
 /* dimming is one opacity fade on an overlay; grey flips once, hidden under the dim, so nothing repaints per frame */
 .ob-tile i { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease-out) var(--dd, 0ms); }
 .ob-tile[data-lit='false'] i { opacity: 0.82; }
@@ -1072,7 +1081,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .skel[data-kind='rows'] { padding-top: calc(540px + var(--row-gap)); }
 .skel[data-kind='rows'] section { margin-left: var(--margin); }
 .skel[data-kind='rows'] i { width: 150px; height: 12px; margin: 4px 0; border-radius: 6px; }
-.skel[data-kind='rows'] section > div { margin-top: 12px; display: flex; gap: 16px; overflow: hidden; }
+.skel[data-kind='rows'] section > div { margin-top: 16px; display: flex; gap: 16px; overflow: hidden; }
 .skel[data-kind='rows'] span { flex: none; width: 147px; aspect-ratio: 147 / 220; border-radius: var(--radius-media); corner-shape: squircle; }
 /* grid: three across, fading out down the page */
 .grid-wrap { position: relative; }
@@ -1083,7 +1092,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .grid-wrap > .skel[data-kind='grid'] { margin-top: 0; }
 .skel[data-kind='grid'] span { aspect-ratio: 147 / 220; border-radius: 10px; corner-shape: squircle; }
 /* title: where the name and the first lines will be, under the (dark) top picture */
-.skel[data-kind='title'] { padding: 514px var(--margin) 0; }
+.skel[data-kind='title'] { padding: 510px var(--margin) 0; }
 .skel[data-kind='title'] i { height: 22px; border-radius: 8px; width: 62%; }
 .skel[data-kind='title'] i + i { height: 10px; border-radius: 5px; width: 45%; margin-top: 14px; }
 .skel[data-kind='title'] i + i + i { width: 30%; margin-top: 8px; }
@@ -1097,11 +1106,11 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .skel[data-kind='person'] header div { flex: 1; }
 .skel[data-kind='person'] header b { height: 18px; width: 55%; border-radius: 7px; }
 .skel[data-kind='person'] header b + b { height: 10px; width: 40%; margin-top: 10px; border-radius: 5px; }
-.skel[data-kind='person'] > div { margin-top: 72px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 62px; }
+.skel[data-kind='person'] > div { margin-top: 70px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 62px; }
 .skel[data-kind='person'] > div span { aspect-ratio: 147 / 220; border-radius: 10px; corner-shape: squircle; }
 /* cards: Browse's category tiles, two across */
 .br-body { position: relative; }
-.br-body > .skel[data-kind='cards'] { padding-top: 56px; }
+.br-body > .skel[data-kind='cards'] { padding-top: 45px; }
 .skel[data-kind='cards'] { padding: calc(var(--safe-top) + 70px) var(--margin) 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   -webkit-mask-image: linear-gradient(180deg, #000 40%, transparent 95%); mask-image: linear-gradient(180deg, #000 40%, transparent 95%); }
 .skel[data-kind='cards'] span { height: 96px; border-radius: var(--radius-media); corner-shape: squircle; }
@@ -1128,10 +1137,8 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 @media (prefers-reduced-motion: reduce) { .wl-row[data-fresh] { animation: none; } }
 
 /* ---- Letterboxd ---- */
-/* Posters of films the person has logged: a check in the corner opposite the service mark (the picture itself is left alone). */
-.cover-seen { position: absolute; top: 7px; left: 7px; height: 14px; display: flex; align-items: center; color: #fff; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
-.cover-seen .ms { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
-.cover[data-ready='true'] > .cover-seen { opacity: 1; }
+/* Posters of films the person has logged on Letterboxd are greyed (the service mark stays as it is), in Search's rows too. */
+.cover[data-watched] > img, .wl-poster[data-watched] > img, .s-thumb[data-watched] > img { filter: grayscale(1) brightness(0.55); }
 
 /* Title page: who has watched it, under the scores */
 /* part of the top block (meta, scores, this row, the text): an even 32px of visible space above and below,
@@ -1188,16 +1195,46 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 /* the spotlight: large cards side by side, the next one peeking in */
 .spot-row { margin-top: var(--space-3); display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding: 0 var(--margin); padding: 0 var(--margin); }
 .spot-row .spot-item { flex: none; width: calc(100% - 2 * var(--margin) - 32px); scroll-snap-align: start; }
-.spot { position: relative; display: block; aspect-ratio: 16 / 10; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; }
-.spot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 /* a wide picture arrives like a poster: plain until decoded, then the picture and what is written on it fade in together */
 .near-img { position: absolute; inset: 0; }
 .near-img > img { opacity: 0; transition: opacity var(--dur-image-in) var(--ease-out); }
 .near-img[data-ready='true'] > img { opacity: 1; }
-.spot-text { transition: opacity var(--dur-image-in) var(--ease-out); }
-.spot:has(.near-img[data-ready='false']) .spot-text { opacity: 0; }
-.spot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.82) 100%); }
-.spot-text { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; }
-.spot-text small { font: var(--type-meta); font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.spot-text b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: var(--type-title); line-height: 22px; letter-spacing: var(--track-title); text-wrap: balance; }
-.spot-text span { margin-top: 2px; font: var(--type-meta); color: var(--text-secondary); }
+/* Tonight's picks: a tall card. The reason (a small line) and the title at the top over a dark start, a small
+   poster with who made it and where it plays at the bottom over a dark end, as under a title page's name. */
+.spot { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; -webkit-touch-callout: none; }
+/* pressed, the item shrinks, not the card, as with posters (the card shrinks, the cover keeps its corners): a
+   transform on the rounded, clipping element itself redrew its corners while pressed on iPhone */
+.spot-item { transition: transform var(--dur-press) var(--ease-out); }
+.spot-item:has(> .spot[data-pressed]) { transform: scale(0.97); }
+.spot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+.spot[data-poster] img { object-position: center top; }
+.spot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.86) 100%); }
+.spot-top, .spot-bot { position: absolute; z-index: 1; left: 14px; right: 14px; transition: opacity var(--dur-image-in) var(--ease-out); }
+.spot:has(.near-img[data-ready='false']) :is(.spot-top, .spot-bot) { opacity: 0; }
+.spot-top { top: 8px; display: flex; flex-direction: column; }
+.spot-top small { font: 500 13px/16px var(--font); color: var(--text-secondary); text-wrap: balance; }
+.spot-top b { margin-top: 3px; font: var(--type-display); line-height: 27px; letter-spacing: var(--track-display); text-wrap: balance; }
+.spot-bot { bottom: 14px; display: flex; align-items: flex-end; gap: 10px; }
+.spot-thumb { flex: none; width: 40px; }
+.spot-thumb .cover { border-radius: 6px; }
+.spot-meta { min-width: 0; display: flex; flex-direction: column; font: var(--type-meta); color: var(--text-muted); }
+.spot-meta span { text-wrap: pretty; }
+.spot-meta .spot-by { font: var(--type-text); color: var(--text-secondary); }
+@media (prefers-reduced-motion: reduce) { .spot-item:has(> .spot[data-pressed]) { transform: none; } }
+
+/* Settings › Suggestions: tap a pill to stop it being suggested (white = hidden), every genre in the sheet */
+.sg-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.lb-head + .sg-pills { margin-top: 8px; padding-bottom: 8px; }
+.sg-more { margin-top: 12px; }
+.page-plain > .rows.sg-more { margin-left: 0; margin-right: 0; }
+.sg-done { height: var(--hit); margin-right: -8px; padding: 0 8px; border: 0; background: none; font: var(--type-text); color: var(--text-faint); cursor: pointer; }
+
+/* Watchlist as posters, three a row, under the two section headings */
+.wl-wall { list-style: none; margin: 10px var(--margin) 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.wl-tile { position: relative; min-width: 0; }
+.wl-tile > a { display: block; position: relative; color: inherit; -webkit-touch-callout: none; transition: transform var(--dur-press) var(--ease-out); }
+.wl-tile > a[data-pressed] { transform: scale(0.96); }
+.wl-soon { position: absolute; left: 5px; bottom: 5px; padding: 0 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.72); font-family: var(--font); font-weight: 600; font-size: 10px; line-height: 16px; color: var(--text-primary); white-space: nowrap; }
+.wl-bellmark { position: absolute; right: 5px; top: 5px; display: flex; color: var(--text-primary); }
+@media (prefers-reduced-motion: no-preference) { .wl-tile[data-fresh] { animation: wl-tile-in 500ms var(--ease-out) both; } }
+@keyframes wl-tile-in { from { opacity: 0; transform: scale(0.92); } }

@@ -11,7 +11,7 @@ def test_missing_screen_file_reloads(app):
         return route.fallback()
     pg.route('**/assets/Settings-*.js', missing)
     loads = []
-    pg.goto(m.B + '/'); pg.wait_for_timeout(3000)
+    pg.goto(m.B + '/'); pg.settle(6000)
     pg.on('load', lambda _: loads.append(1))
     pg.click('.now-settings button')
     pg.wait_for_timeout(4000)

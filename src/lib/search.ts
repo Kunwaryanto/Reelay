@@ -1,5 +1,7 @@
 // Search: what the words mean (filters such as a service, a decade or a genre) and the lookups behind the screen.
 import { supabase } from './supabase'
+import { localDay } from './days'
+import { suggestable } from './hidden'
 
 export type Hit = {
   id: number
@@ -44,6 +46,8 @@ export type Filters = {
   services?: string[]
   /** titles to leave out (Hide watched) */
   hide?: number[]
+  /** tags the member doesn't want suggested (only for Search's ideas: what is typed always finds everything) */
+  notTags?: string[]
 }
 
 /** A word in the query that became a filter chip. */
@@ -139,7 +143,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   if (res.error) throw new Error(res.error.message)
   return res.data as T
 }
-const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10)
+const inDays = localDay
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 type Raw = {
@@ -218,6 +222,7 @@ export function narrow<Q>(query: Q, f: Filters): Q {
   if (f.length === 'short') q = q.lt('runtime_min', 90)
   if (f.length === 'mid') q = q.lte('runtime_min', 120)
   if (f.length === 'long') q = q.gt('runtime_min', 120)
+  if (f.notTags?.length) q = suggestable(q, f.notTags)
   return q as Q
 }
 
@@ -379,7 +384,7 @@ export function guess(typed: string, removed: string[]): { tokens: Token[]; kind
 }
 
 /** For "Popular right now" under an empty result. */
-export const loadPopular = () => byFilters({}, 3)
+export const loadPopular = (hidden: string[] = []) => byFilters({ notTags: hidden }, 3)
 
 /** `mine`: the search starts with My services on (for a member with services). */
 export type Idea = { query: string; title: string; sub: string; poster_path: string | null; mine?: boolean }
@@ -391,9 +396,10 @@ const IDEAS: [string, string, string, Filters][] = [
 /** Leaving soon is about what the member can still watch: on their services, when they have any. */
 const MINE_IDEAS = new Set(['leaving soon'])
 /** The three suggestions before typing, each with the poster of its top result. */
-export async function loadIdeas(picked: string[] = []): Promise<Idea[]> {
+export async function loadIdeas(picked: string[] = [], hidden: string[] = []): Promise<Idea[]> {
   const on = (q: string) => picked.length > 0 && MINE_IDEAS.has(q)
-  const tops = await Promise.all(IDEAS.map(([q, , , f]) => byFilters(on(q) ? { ...f, services: picked } : f, 1)))
+  // the poster on each idea: nothing the member hides from suggestions
+  const tops = await Promise.all(IDEAS.map(([q, , , f]) => byFilters({ ...(on(q) ? { ...f, services: picked } : f), notTags: hidden }, 1)))
   return IDEAS.map(([query, title, sub], i) => ({ query, title, sub: on(query) ? 'On your services' : sub, mine: on(query), poster_path: tops[i][0]?.poster_path ?? null }))
     .filter((_, i) => tops[i].length > 0)
 }

@@ -1,4 +1,4 @@
-// Settings and its pages: Your services, Letterboxd, Region, Credits, Privacy, Delete account. (Invite friends has its own file.)
+// Settings and its pages: Your services, Suggestions, Letterboxd, Region, Credits, Privacy, Delete account. (Invite friends has its own file.)
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '../lib/auth'
 import { inviteState, loadInvites, type Invite } from '../lib/catalogue'
@@ -10,7 +10,8 @@ import { askPermission, permission, type Permission } from '../lib/push'
 import { paths, type SettingsPage } from '../lib/routes'
 import { FRESH, clearSavedData, lastLoadError, useQuery } from '../lib/query'
 import { BUILD, checkVersion, reloadApp, useNewVersion } from '../lib/update'
-import { BackButton, Button, Icon, Sheet, SmallButton, Spinner, useToast } from '../ui'
+import { BackButton, BusyLabel, Button, Icon, Pill, Sheet, SmallButton, Spinner, useToast } from '../ui'
+import { COMMON_TAGS, MORE_TAGS, setHiddenTags, useHiddenTags } from '../lib/hidden'
 
 const DAY = 24 * 60 * 60 * 1000
 const chevron = <Icon name="chevron_right" size={16} style={{ color: 'var(--text-faint)', marginLeft: -10 }} />
@@ -90,6 +91,7 @@ export default function Settings() {
   const { push } = useNavActions()
   const { mine } = useMyServices()
   const lb = useLetterboxd()
+  const hidden = useHiddenTags()
   const services = useQuery<Service[]>('services', loadServices, FRESH.catalogue)
   const invites = useQuery<Invite[]>(isAdmin && session ? `invites:${session.user.id}` : null, loadInvites, FRESH.live)
   const waiting = (invites.data ?? []).filter((i) => inviteState(i) === 'waiting').length
@@ -115,6 +117,7 @@ export default function Settings() {
       <section className="settings-block set-first">
         <ul className="rows">
           <Link label="Your services" note={services.data ? servicesLabel(names) : ''} to="/settings/services" />
+          <Link label="Suggestions" note={hidden.length ? `${hidden.length} hidden` : ''} to={paths.settings('suggestions')} />
           <Link label="Letterboxd" note={lb.account ? lb.account.username : ''} to="/settings/letterboxd" />
           {isAdmin && <Link label="Invite friends" note={waiting > 0 ? `${waiting} waiting` : ''} to="/settings/invites" />}
         </ul>
@@ -192,6 +195,50 @@ function Services() {
     <Page title="Your services">
       <p className="sheet-text">Reelay shows what’s on these first.</p>
       <div className="settings-block set-list"><ServiceList /></div>
+    </Page>
+  )
+}
+
+/** What the member doesn't want suggested: the common tags, then every genre in a sheet. A pill is white when
+ *  hidden. What is picked from the sheet joins the pills on the page and stays there while the page is open, so
+ *  taking it off again doesn't make it vanish under the finger. */
+function Suggestions() {
+  const { update } = useProfile()
+  const hidden = useHiddenTags()
+  const toast = useToast()
+  const [sheet, setSheet] = useState(false)
+  const [extra, setExtra] = useState(() => MORE_TAGS.filter(([t]) => hidden.includes(t)).map(([t]) => t))
+  const flip = async (tag: string) => {
+    const before = hidden
+    const next = before.includes(tag) ? before.filter((x) => x !== tag) : [...before, tag]
+    setHiddenTags(next)
+    if (MORE_TAGS.some(([t]) => t === tag) && !extra.includes(tag)) setExtra([...extra, tag])
+    try {
+      await update({ hidden_tags: [...next].sort() })
+    } catch {
+      setHiddenTags(before)
+      toast({ text: navigator.onLine ? 'Couldn’t save that. Try again.' : 'You’re offline. Connect to change this.' })
+    }
+  }
+  const pills = (tags: [string, string][]) => (
+    <div className="sg-pills" role="group">
+      {tags.map(([t, label]) => <Pill key={t} selected={hidden.includes(t)} onClick={() => flip(t)}>{label}</Pill>)}
+    </div>
+  )
+  return (
+    <Page title="Suggestions">
+      <p className="sheet-text">Reelay won’t suggest these. Search still finds them.</p>
+      {pills([...COMMON_TAGS, ...MORE_TAGS.filter(([t]) => extra.includes(t))])}
+      <ul className="rows sg-more">
+        <li><button type="button" onClick={() => setSheet(true)}><span className="row-text"><b>More genres</b></span>{chevron}</button></li>
+      </ul>
+      <Sheet open={sheet} onClose={() => setSheet(false)} label="More genres">
+        <div className="lb-head">
+          <h2>More genres</h2>
+          <button type="button" className="sg-done" onClick={() => setSheet(false)}>Done</button>
+        </div>
+        {pills(MORE_TAGS)}
+      </Sheet>
     </Page>
   )
 }
@@ -452,7 +499,7 @@ function Delete() {
         <p>This deletes your account, your watchlist, the services you picked and your notification settings.</p>
         <p>It can’t be undone.</p>
       </div>
-      <div className="set-action"><button type="button" className="btn-danger press" disabled={busy} onClick={() => setAsking(true)}>Delete account{busy && <Spinner light />}</button></div>
+      <div className="set-action"><button type="button" className="btn-danger press" disabled={busy} aria-busy={busy || undefined} onClick={() => setAsking(true)}><BusyLabel busy={busy} light>Delete account</BusyLabel></button></div>
       {asking && (
         <div className="ios-alert" role="alertdialog" aria-label="Delete account">
           <div>
@@ -476,6 +523,7 @@ function Delete() {
 export function settingsPage(page: Exclude<SettingsPage, 'invites'>): ReactNode {
   switch (page) {
     case 'services': return <Services />
+    case 'suggestions': return <Suggestions />
     case 'letterboxd': return <Letterboxd />
     case 'region': return <Region />
     case 'version': return <Version />

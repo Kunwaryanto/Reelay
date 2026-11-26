@@ -82,13 +82,19 @@ export const Spinner = ({ light = false, label }: { light?: boolean; label?: str
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }
 
+/** A button's text with its busy state: the text stays (hidden) while the spinner shows over it, so a button never
+ *  changes width when it starts or stops working. Every pill button with a spinner uses this. */
+export function BusyLabel({ busy, light, children }: { busy?: boolean; light?: boolean; children: ReactNode }) {
+  return <><span className="busy-label">{children}</span>{busy && <span className="busy-spin"><Spinner light={light} label="Working" /></span>}</>
+}
+
 /** 44px white pill: the main action of a screen or sheet. */
 export function Button({ busy, children, className = '', ...rest }: BtnProps) {
-  return <button type="button" className={`btn press ${className}`} aria-busy={busy || undefined} {...rest}>{busy ? <Spinner label="Working" /> : children}</button>
+  return <button type="button" className={`btn press ${className}`} aria-busy={busy || undefined} {...rest}><BusyLabel busy={busy}>{children}</BusyLabel></button>
 }
 /** 32px pill: a small standalone action. Grey on plain black, white with `solid`. */
 export function SmallButton({ solid, busy, children, ...rest }: BtnProps & { solid?: boolean }) {
-  return <button type="button" className="btn-small press" data-solid={solid} aria-busy={busy || undefined} {...rest}>{children}{busy && <Spinner light={!solid} />}</button>
+  return <button type="button" className="btn-small press" data-solid={solid} aria-busy={busy || undefined} {...rest}><BusyLabel busy={busy} light={!solid}>{children}</BusyLabel></button>
 }
 /** 44px frosted pill over artwork (Start). */
 export const GlassButton = ({ children, ...rest }: BtnProps) => <button type="button" className="btn-glass press" {...rest}>{children}</button>
@@ -217,8 +223,6 @@ export function Cover({ path, service, eager, sizes = '147px', watched }: { path
       )}
       <div className="hair" aria-hidden="true" />
       {service && <span className="cover-mark" aria-hidden="true"><ServiceMark service={service} /></span>}
-      {/* logged on Letterboxd: a check in the other corner from the service */}
-      {watched && <span className="cover-seen" aria-hidden="true"><Icon name="check" size={14} /></span>}
     </div>
   )
 }
@@ -639,6 +643,16 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
       // Without a field to type in, focus the sheet itself rather than its first button
       // (which would wear a focus ring and could be scrolled into view).
       if (!keyboard) { d.tabIndex = -1; d.setAttribute('autofocus', '') }
+      // iOS draws a field's caret where the field was, not where the moving sheet has taken it: the caret sat
+      // below the field while the sheet rose. Hidden until the sheet has settled.
+      d.dataset.moving = 'true'
+      const settled = (e?: TransitionEvent) => {
+        if (e && (e.target !== d || e.propertyName !== 'transform')) return
+        if (d.dataset.waiting || d.dataset.entering) return
+        delete d.dataset.moving; d.removeEventListener('transitionend', settled); clearTimeout(t)
+      }
+      d.addEventListener('transitionend', settled)
+      const t = window.setTimeout(() => { delete d.dataset.moving; d.removeEventListener('transitionend', settled) }, 2000)
       d.show()
     }
     else if (!open && d.open) {
@@ -652,26 +666,35 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
 
 
   // First time only: wait for the keyboard to settle, measure the room it takes, keep it, then slide up.
+  // While the sheet is open the room only ever grows: a keyboard measured late (it can take longer than the
+  // 900 ms wait on a first launch) still lifts the sheet, and the keyboard going down later (Send code, leaving
+  // for Mail) never shrinks it back to an ordinary sheet.
   useEffect(() => {
     const d = ref.current
     if (!open || !keyboard || !d || !d.dataset.waiting) return
     const vv = window.visualViewport
-    let quiet = 0
-    const place = () => {
-      clearTimeout(quiet); clearTimeout(limit)
-      const box = d.offsetParent
-      const room = vv && box ? Math.round(openHeight - vv.height) : 0
-      if (room > 150) {
-        d.style.setProperty('--kb-room', `${room}px`)
-        try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
-      } else d.style.setProperty('--kb-room', '0px') // no on-screen keyboard: an ordinary sheet
+    let quiet = 0, best = 0
+    const show = () => {
+      if (!d.dataset.waiting) return
       d.dataset.entering = 'true'
       delete d.dataset.waiting
       requestAnimationFrame(() => requestAnimationFrame(() => { delete d.dataset.entering }))
     }
-    // settled = no keyboard movement for 120 ms; give up after 900 ms (no keyboard came up)
+    const place = () => {
+      clearTimeout(quiet)
+      const room = vv ? Math.round(openHeight - vv.height) : 0
+      if (room > 150 && room > best) {
+        best = room
+        clearTimeout(limit)
+        d.style.setProperty('--kb-room', `${room}px`)
+        try { localStorage.setItem(KB_KEY, String(room)) } catch { /* private mode */ }
+        show()
+      }
+    }
+    // settled = no keyboard movement for 120 ms; after 900 ms with no keyboard, an ordinary sheet (a hardware
+    // keyboard), which a keyboard that turns up after all still lifts
     const moved = () => { clearTimeout(quiet); quiet = window.setTimeout(place, 120) }
-    const limit = window.setTimeout(place, 900)
+    const limit = window.setTimeout(() => { if (!best) { d.style.setProperty('--kb-room', '0px'); show() } }, 900)
     vv?.addEventListener('resize', moved)
     return () => { clearTimeout(quiet); clearTimeout(limit); vv?.removeEventListener('resize', moved) }
   }, [open, keyboard])
@@ -691,8 +714,29 @@ export function Sheet({ open, onClose, label, keyboard, children }: { open: bool
       e.preventDefault()
       field.focus({ preventScroll: true })
     }
+    // A tap on one of the sheet's buttons while a field has the focus: keep the focus (and so the keyboard) where
+    // it is. iOS otherwise blurs the field on the tap, and the keyboard dropped at Send code.
+    // On a touch screen the tap is taken at touchend (its default, which moves the focus, is cancelled) and the
+    // button is pressed by hand; a touch that moved (a drag of the sheet) is left alone.
+    const fieldFocused = () => { const a = document.activeElement; return (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) && d.contains(a) }
+    const keep = (e: MouseEvent) => { if (fieldFocused() && (e.target as HTMLElement).closest('button')) e.preventDefault() }
+    let at: { x: number; y: number } | null = null
+    const down = (e: TouchEvent) => { at = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }
+    const up = (e: TouchEvent) => {
+      const b = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null
+      const p = e.changedTouches[0]
+      if (!b || !at || !p || b.disabled || !fieldFocused() || Math.hypot(p.clientX - at.x, p.clientY - at.y) > 10) return
+      e.preventDefault()
+      b.click()
+    }
     d.addEventListener('touchstart', onTouch, { passive: false })
-    return () => d.removeEventListener('touchstart', onTouch)
+    d.addEventListener('touchstart', down, { passive: true })
+    d.addEventListener('touchend', up, { passive: false })
+    d.addEventListener('mousedown', keep)
+    return () => {
+      d.removeEventListener('touchstart', onTouch); d.removeEventListener('touchstart', down)
+      d.removeEventListener('touchend', up); d.removeEventListener('mousedown', keep)
+    }
   }, [open])
 
   // Drag the sheet down to close it, from anywhere on it: rows and buttons included (a touch that moves is a drag,

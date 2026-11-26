@@ -8,7 +8,7 @@ import { flushSync } from 'react-dom'
 import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
 import { takeKeyboard } from '../lib/keyboard'
-import { useWatched } from '../lib/letterboxd'
+import { useMarkedWatched, useWatched, useWatchedMark } from '../lib/letterboxd'
 import { useNav, useNavActions } from '../lib/nav'
 import { FRESH, useQuery } from '../lib/query'
 import {
@@ -18,6 +18,7 @@ import {
 } from '../lib/search'
 import { FilterDrawer, SOURCES, SERVER_ROWS, DECADES, countryName, decadeYears, langName, lengthName, sortName, type Count, type Draft, type Len, type Sort } from './SearchFilters'
 import { Icon, LoadOn, PageButton, PageLink, joinHandlers, LoadFailed, PillCount, SmallButton, useKeyboardRoom, useLongPress, useNearScreen, useHold } from '../ui'
+import { hiddenKey, useHiddenTags } from '../lib/hidden'
 
 type Kind = 'all' | 'series' | 'film' | 'people'
 
@@ -177,11 +178,12 @@ function Row({ h, near, onOpen, before }: { h: Hit; near?: boolean; onOpen: () =
   const hold = useLongPress((el) => onHold(cardOf(h), el.querySelector<HTMLElement>('.wl-poster')!))
   const li = useRef<HTMLLIElement>(null)
   const close = useNearScreen(li, near)
+  const watched = useWatchedMark(h.id)
   useEffect(() => { if (near || close) warmFacts([h.id]) }, [near, close, h.id])
   return (
     <li ref={li}>
       <PageLink to={paths.title(h.id)} className="s-row press-row" handlers={joinHandlers(hold.handlers, { onPointerDown: () => warmFacts([h.id], true) })} onClick={() => { if (!hold.fired()) onOpen() }}>
-        <span className="wl-poster">{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
+        <span className="wl-poster" data-watched={watched || undefined}>{h.poster_path && <img src={tmdbImage(h.poster_path, 'w185')} alt="" loading={near || close ? 'eager' : 'lazy'} decoding={near ? 'sync' : 'async'} draggable={false} />}<span className="hair" aria-hidden="true" /></span>
         <span className="wl-text"><b>{h.title}</b><small>{metaOf(h)}</small></span>
       </PageLink>
     </li>
@@ -211,12 +213,14 @@ export default function Search() {
 
   const mineQ = useServicesQuery()
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
-  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}`, () => loadIdeas(picked), FRESH.catalogue)
-  const popular = useQuery<Hit[]>('search-popular', loadPopular, FRESH.catalogue)
+  const hidden = useHiddenTags()
+  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}${hiddenKey(hidden)}`, () => loadIdeas(picked, hidden), FRESH.catalogue)
+  const popular = useQuery<Hit[]>(`search-popular${hiddenKey(hidden)}`, () => loadPopular(hidden), FRESH.catalogue)
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
   // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
   const seen = useWatched()
+  const marked = useMarkedWatched()
   const seenIds = useMemo(() => [...seen].sort((a, b) => a - b).slice(0, 400), [seen])
   const hiding = hideSeen && seen.size > 0
 
@@ -346,6 +350,33 @@ export default function Search() {
   // lands on the empty page where the field used to be, which takes the focus away and closes the keyboard again.
   // React's onTouchStart is passive and can't cancel the tap, so this listens on the element itself.
   const box = useRef<HTMLDivElement>(null)
+  // With the keyboard up, iOS lets a drag on anything that doesn't scroll move the whole page up under it (the
+  // prompt and the field slide away, then snap back). Only a list that can really scroll may move: every other
+  // drag on Search is held still.
+  useEffect(() => {
+    // only while the keyboard is up (Search stays mounted behind the other tabs, which scroll as usual)
+    if (!typing) return
+    const hold = (e: TouchEvent) => {
+      for (let n = e.target as HTMLElement | null; n && n !== document.body; n = n.parentElement) {
+        const cs = getComputedStyle(n)
+        if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return
+        if (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1) return
+      }
+      if (e.cancelable) e.preventDefault()
+    }
+    // on the whole document, first (a touch that starts beside the page moves it too), not just on Search's own
+    document.addEventListener('touchmove', hold, { passive: false, capture: true })
+    // and if iOS pans anyway, put it straight back: Search is laid out for the page standing at the top
+    const vv = window.visualViewport
+    const back = () => { if ((vv && vv.offsetTop > 0) || window.scrollY > 0) window.scrollTo(0, 0) }
+    vv?.addEventListener('scroll', back)
+    window.addEventListener('scroll', back)
+    return () => {
+      document.removeEventListener('touchmove', hold, { capture: true })
+      vv?.removeEventListener('scroll', back)
+      window.removeEventListener('scroll', back)
+    }
+  }, [typing])
   const focusedAt = useRef(0)
   useEffect(() => {
     const el = box.current
@@ -432,7 +463,7 @@ export default function Search() {
             <li key={r.t === 'q' ? `q:${r.text}` : `t:${r.id}`}>
               <PageButton to={r.t === 'title' ? paths.title(r.id) : null} className="s-recent" onClick={() => { if (r.t === 'q') run(r.text); else { setDrawer(false); push(paths.title(r.id)) } }}>
                 {r.t === 'title'
-                  ? <span className="s-thumb">{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
+                  ? <span className="s-thumb" data-watched={marked.has(r.id) || undefined}>{r.poster_path && <img src={tmdbImage(r.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                   : <span className="s-thumb-icon"><Icon name="search" size={20} /></span>}
                 <span className="s-recent-text"><b>{r.text}</b>{r.t === 'title' && <small>{r.sub}</small>}</span>
               </PageButton>

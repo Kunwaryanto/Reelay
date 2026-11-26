@@ -34,7 +34,7 @@ Copied from the notes beside the screens on the Current page of the design canva
 
 ## Watchlist feedback (22 Nov)
 
-- Adding has no toast. On the title page the bookmark button shows it: the fill flows in (260 ms) and the icon pops with a ring; removing empties it with a dip, also without a toast (the button is right there to undo). In the long-press menu the item uses the same bookmark, empty to add and filled when saved, with no animation: the menu closes at once. “Removed … Undo” stays for the long-press menu and the Watchlist's swipe, where the title leaves the screen. Reduce Motion: the fill still changes, nothing moves.
+- Adding has no toast. On the title page the bookmark button shows it: the fill flows in (260 ms) and the icon pops with a ring; removing empties it with a dip, also without a toast (the button is right there to undo). In the long-press menu the item uses the same bookmark, empty to add and filled when saved, with no animation: the menu closes at once. “Removed … Undo” stays for the long-press menu and the Watchlist, where the title leaves the screen. Reduce Motion: the fill still changes, nothing moves.
 
 ## Long press on a poster (try it on Now)
 
@@ -139,7 +139,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 
 - **This title / person isn’t available** (v272): the Start poster wall at 62% black, the heading with a soft shadow and a glass Search pill; Back and the tab bar stay. Shown for a removed title or person and for an address the app doesn't know.
 - **Notify me** asks iOS for permission the first time (inside the tap). Blocked: it says so and doesn't turn on. In Safari it saves and says notifications need the Home Screen app.
-- **Long press** now also works on Watchlist rows and Search rows, with the same menu. The small row poster lifts to about 150px wide.
+- **Long press** now also works on Watchlist posters and Search rows, with the same menu. The small row poster lifts to about 150px wide.
 
 ## Person (built 21 Nov, `src/screens/Person.tsx`)
 
@@ -163,7 +163,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 - Long-press menu (sketch E, 22 Nov): 290 wide. Header: the name (15/20 medium, white), a facts line (Film · year · length · two genres; series: years · seasons · genres), "Directed by" (films) or "Created by" (series) with up to two names in the lighter grey, the scores (IMDb, RT, Letterboxd), and "Leaves <service> …" in grey when it leaves within 30 days. No plot and no "On <service>": the Open in row says where. Kind and year show at once; the rest comes from the title's facts (`lib/facts.ts`), fetched light and early: for every poster and row as it comes near the screen, one request per batch of titles, and at once for the one under a finger; late lines fade in (240 ms). Room is kept for the name and score lines while that loads; a line the title turns out not to have is then dropped, so the header is as tall as its lines and the space under the last line is always the same (13px). The name sits 10px above the facts, the same gap as between the facts and the scores.
 - Title page meta, three lines: the facts (Film · year · length), then "Directed by" / "Created by" with up to two names (names in the lighter grey, as in the long-press menu), then the genres (series: episode length · genres). The Details list keeps its full row.
 - Saving and the Watchlist: a title saved from a poster's long-press menu or its title page is put into the Watchlist's own list at once, from what the screen already shows (name, year, poster, services), so opening the Watchlist shows its row in place. 600 ms after a save the list is refreshed quietly to fill in genres, rating and length. A row that still arrives while the Watchlist is showing (a slow save, another device) opens up and fades in over 320 ms; rows are never popped in.
-- Watchlist row swipe (like a row in iOS Mail): the row follows the finger exactly, from where the swipe was recognised (no jump), written straight to the element (`--x`), not through React. Swiped right it gives 14px at most. Remove sits behind and is as wide as what the row uncovers (80 at least). Let go past 44px, or on a leftward flick: it rests open at 88px. Remove is the word only, no icon (13/17 medium, white). Past 55% of the row Remove is "full" (the word moves to its leading edge); letting go there, or a hard flick past 120px, removes: the row slides away (200 ms), the list closes up (220 ms), then the toast with Undo. Settling uses `--ease-sheet`, 320 ms. Tapping Remove plays the same exit.
+- Watchlist as posters (25 Nov, design A, staging): three a row under two headings: On your services (leaving soonest first, a small "3 days" label bottom left, then the rest) and Not on your services (a bell top right when Notify me is on). Seen films are greyed, as on every poster. Tap opens the title; hold opens the app's poster menu, where Remove and Notify me live (the menu's notify item reads "Notifying you" when on). The row swipe, per-row bells and the services link are gone.
 - Pressed posters and rows: when a page opens, the poster or row that was pressed is put back to its normal size at once (`lib/press.ts`, called from `push`). Its ease back was otherwise cut short as the page covered it on iPhone and played out on coming back, as a poster growing from small to normal.
 - Top picture swipe (Home and category pages): read from touch events and claimed on its first sideways move. On a pushed page the strip of pages scrolls sideways too, and iOS took the swipe for that, so the picture never changed. A swipe starting within 28px of the left edge is left alone (it goes back).
 - Long-press menu: tapping the name and facts, or the lifted poster, opens the title's page; the menu and poster fade where they are (180 ms) as the page slides in (flying the poster back put it on top of the arriving page). The lift of the finger that opened the menu doesn't count, on any row: with a poster low on the screen the menu opens right under that finger, so taps are taken from 350 ms after it is up, and rows show a press only from then. The header is not a link: iOS lifts a link under a resting finger into its own preview with the address.
@@ -376,7 +376,7 @@ Built to the Launch and loading note above: ready = data in and the first hero p
 ## Letterboxd (22 Nov, staging)
 
 - **Settings › Letterboxd**: one sentence of intro (it reads the public diary nightly, marks watched films, friends see each other's ratings). Not connected: a field with the placeholder "Letterboxd username" and a small grey Connect pill inside it, with "Films only. Your diary must be public." under it; an unknown member gets an inline error there. Connected: the username with "N films · read HH:MM" and a Profile link, the Mark watched films switch (no subtitle), Import your history, and Disconnect with "Removes your films and ratings from Reelay." Copy is kept to one short line per row.
-- **Posters**: a film the person has logged gets a bare white check top left (the service mark stays top right); the picture is not dimmed. The switch (Mark watched films) is off until the member turns it on.
+- **Posters**: a film the person has logged is greyed (25 Nov: was a white check top left), also in Search's results and recent titles; the service mark stays as it is. The switch (Mark watched films) is off until the member turns it on.
 - **Title page, scores**: IMDb · Critics · Audience · Letterboxd, so four fit on one line (Critics and Audience are Rotten Tomatoes).
 - **Title page, who watched it** (films only): one 44px row under the scores, with an even 32px of visible space above and below (24px and 22px margins; the row's own air makes up the rest), as part of the top block with up to three initials (yours white, first). "You and 7 friends have watched it" / "You and Anna have watched it" / "3 friends have watched it" / "Anna and Erik have watched it" / "You’ve watched it twice" / "You watched it 12 Mar 2025". Second line: "You 4.0 · Friends 3.7"; with one friend their own rating instead of an average. No row when nobody has.
 - **The sheet**: opens from the row when someone else has watched it or you have more than one log. Everyone and Friends averages, your logs (date, stars as a number; "Rewatch"/"First watch" only when there are several), then friends, most recent first ("3 days ago", "12 Mar", "Feb 2024"; "Watched twice · last …"; "no rating"). Open goes to the film on Letterboxd.
@@ -732,3 +732,98 @@ Measured on the database before and after:
   ("the") no longer looks up services for a thousand titles before keeping 30.
 - Order: exact name, streaming, starts with › contains › near miss, then fame (trending plus how well known), so
   The Godfather comes before this year's hits for "god". "&" and "and" are the same.
+
+## Title page picture chosen on purpose (24 Nov)
+
+- The sync picks the title page's picture from every poster and backdrop TMDB has: a textless poster first (the
+  page's tall shape, no title text, the art made for the title), else the best voted textless backdrop at least
+  1920 wide, loaded at full size so the tall crop stays sharp. Without either, the page shows what it did before.
+
+## Watchlist news under the hero (25 Nov)
+
+- Home's "From your watchlist" row is gone. In its place, one line under the hero when something on the watchlist
+  has news: up to three posters fanned, "2 just arrived" (or "Just arrived", "Leaving soon", "3 leaving soon") at
+  heading size, and under it the titles and where ("Dune: Part Two on Netflix · The Holdovers leaves Viaplay in
+  3 days"), cut with "…". No card, no heading. Arrivals count for 14 days on the member's services; leaving is within
+  14 days. One title opens its page; more open the Watchlist. Nothing new: no line.
+- The line forgets what you've seen: an arrival goes once you've opened its title (or tapped the line to open the
+  Watchlist, which counts as seeing all of them). Something leaving stays until it leaves. A film you've logged on
+  Letterboxd goes. Remembered on the phone, so Safari and the Home Screen app each keep their own.
+
+## Days by the phone's clock (25 Nov)
+
+- "Leaves today", "Leaves in 3 days", what counts as new or leaving, and Home's daily rows follow the phone's own
+  date. Before, they followed UTC, so just after midnight in Sweden they were a day behind.
+
+## Suggestions (25 Nov)
+
+- Settings › Suggestions (under Your services, "3 hidden"): "Reelay won't suggest these. Search still finds them."
+  Pills, white when hidden: Kids, Anime, Horror, Reality, Documentaries, Stand-up; More genres opens a sheet with every
+  other genre A–Z, and one picked there joins the pills on the page. No ×: a pill flips, it isn't removed.
+- Hidden titles leave Home (hero, rows, Picked for you), Browse (rows, lists, and a category card all about a hidden
+  genre), Explore and the posters on Search's ideas, and More like this. Searching by name, the watchlist and the
+  watchlist news under Home's hero still show everything. "Hide watched films" stays on the Letterboxd page.
+- Kids is what's made for young children: TMDB's Kids genre, and animated family films and series few grown-ups watch
+  (under 50,000 IMDb votes, or under 10,000 rated 7.0+). Toy Story, Frozen II, Moana 2, Home Alone 2 and SpongeBob still
+  show; Paw Patrol, Barbie, Peppa Pig and Bluey don't. Anime is animation from Japan. Stand-up comes from TMDB's
+  "stand-up comedy" keyword (324 titles).
+
+## Well-known titles on the Start and onboarding walls (25 Nov)
+
+- Both walls used TMDB's popularity alone (this week's clicks), which can put an obscure new release first. They now
+  order by fame (popularity plus IMDb votes, as search does): the Start wall takes only titles with 10,000+ votes
+  rated 6.5+, and onboarding's wall (where the first Watchlist picks come from) puts each service's titles with
+  10,000+ votes first. Neither shows kids' titles.
+
+## Onboarding: 64 titles to pick from (25 Nov)
+
+- The wall is 8 columns of 8 instead of 6 × 6. Services frames the same middle as before; Pick pans further, out to all
+  64. The wall still waits only for the middle 36 posters; the outer ones load while Services is on screen and fade
+  in when they arrive, so the start is no slower.
+
+## Walls: mostly films (25 Nov)
+
+- The Start wall and onboarding's wall now show three films for every series. Series are new ones only (started in
+  the last 5 years; long-running shows with a new season don't count); films are half new (last 5 years) and half classics (20+ years
+  old, well known). Films from 5 to 20 years ago, the ones people have most likely seen, are left out. Onboarding's
+  wall is chosen by the database in one request instead of one per service.
+- The walls' classics now include the canon: 2 of every 8 posters are films rated 4.0+ on Letterboxd (with 25,000+
+  IMDb votes, 20+ years old), best rated first, such as Seven Samurai, Harakiri, Ran, Cinema Paradiso and Persona;
+  1 of 8 is another well-known classic (Home Alone, Titanic). IMDb's ratings were tried first and gave the crowd's
+  favourites instead (Shawshank, Fight Club). 270 canon films stream now; 2001: A Space Odyssey isn't one of them.
+- Fixed: an outer poster on onboarding's wall that the phone already had could stay blank.
+- Then every title on the walls became an enthusiast's pick: new films by Letterboxd rating (3.7+: Past Lives,
+  Hamnet, No Other Land, Sing Sing), the canon (4.0+), and new series that critics rate 85%+ on Rotten Tomatoes as
+  well as IMDb 7.8+ (Severance, Slow Horses, The Pitt, Arcane): IMDb alone let in fan-voted shows. Blockbusters picked
+  by fame, the crowd's old favourites, concert films and half-hour TV specials are gone.
+- The walls' films in even thirds: new, the modern canon (1980 to 20 years ago) and the old canon (before 1980:
+  Seven Samurai, Metropolis, Some Like It Hot, On the Waterfront), so the older masters always get their places.
+- Less anime on the walls: fans rate it very high, so it filled the top. Now at most 4 of 64 on onboarding's wall and 3 of 48 on Start, the best rated.
+- One film per series on the walls (one Lord of the Rings, one Harry Potter), the modern canon with the less obvious
+  first (La Haine and Paris, Texas before Shawshank and Fight Club), and series need 90%+ from critics and IMDb 8.0+.
+- Series on the walls also need an Emmy or Golden Globe nomination: critics' scores alone let in Clarkson's Farm, Bosch: Legacy and Dexter: Resurrection. Now Severance, Shōgun, Andor, The Bear, The Pitt, Hacks, Slow Horses.
+- Search holds still (25 Nov): with the keyboard up, a drag on anything that can't scroll (the prompt, ideas, the field) no longer moves the whole page up under the keyboard; result lists that can scroll still do.
+- Launch flash (25 Nov): one frame of dark grey between the black launch screen and the first paint on some cold starts. It is iOS's web view before any page exists (WebKit bug 311569, open, no known web-side fix): the page is black from its first byte (inline background on html/body, `color-scheme: dark`, theme-color and manifest colours #000). Black `apple-touch-startup-image`s were tried and didn't cover it, so they were taken out again.
+- Onboarding wall (25 Nov): grabbing the wall while a throw still glides holds it where it is on screen; before, it jumped ahead to where the glide was going (the "flicker").
+- Dragging the onboarding wall moves its layer directly, once a frame, instead of drawing the wall again on every finger move (it stuttered with 64 posters); the state is set when the finger lets go.
+- Empty Watchlist (25 Nov): the same wall as onboarding's Pick step (one module, `PosterWall.tsx`): 64 posters from `onboarding_wall` for the member's services (the common ones while they have none), the drift-in, smooth dragging, tap to pick, "Add N to Watchlist". The older 7 × 7 wall (and `loadPicks`) is gone.
+- Sign-in sheet (25 Nov): the caret is hidden while the sheet moves (`.sheet[data-moving]`; iOS drew it where the field had been, below it, as the sheet rose). The keyboard is held from the email step to the code step and back (`holdKeyboard` in Start.tsx, a stand-in field with the next field's keyboard): before, it went down at Send code and iOS brought it back by itself on returning from Mail, pushing the sheet down and up.
+- First Home after signing in (25 Nov): the tab bar's 6 s fallback counts from when the signed-in app starts, not from the page load (after a slow sign-in the tab bar sat on black before Home). Home's own wordmark fades when the placeholders come in, as the start-up one does, instead of sitting over them.
+- Sign-in sheet keeps its size (25 Nov): the first time on a phone the sheet measures the keyboard once and stops listening (it kept listening, so when the keyboard went down at Send code it measured "no keyboard" and dropped). A tap on a sheet's button keeps the field's focus (`mousedown` default prevented in `Sheet`), so iOS doesn't blur the field and drop the keyboard at Send code.
+- Busy buttons keep their width (25 Nov): `BusyLabel` in `src/ui` keeps the text in place, hidden, with the spinner over it (Button, SmallButton, Delete account). Use it for any new pill button with a spinner.
+- Sign-in sheet height, again (25 Nov): while the sheet is open the keyboard room only grows. A keyboard that turns up after the 900 ms wait (first launch after adding the app) still lifts the sheet; before, the sheet stayed an ordinary sheet under the keyboard. The keyboard going down never shrinks it.
+- Add to Home Screen card: step 1 shows Safari's page menu icon (three lines, the last shorter: `notes`), the one in iOS 26's address bar, not •••. The icon font is now loaded with `?v=3`.
+- Search holds still, round 2 (25 Nov): while the keyboard is up the hold is on the whole document (a touch beside Search's page panned it too), and if iOS pans anyway the page is put straight back (`scrollTo(0, 0)` on the visual viewport's scroll). Only while typing: Search stays mounted behind the other tabs.
+- Send code keeps the keyboard, round 2: a tap on a sheet's button while a field has the focus is taken at touchend (default cancelled, the button clicked by hand), as `mousedown` alone didn't stop iOS moving the focus.
+- Home arrives whole (25 Nov): the wordmark stays until Home is ready, then Home rises in; placeholders only after 8 s (was 3.3), the tab bar's fallback at 9 s.
+- Quick first Home (25 Nov): with no Home saved, Home comes from the server's ready-made generic part (`home_base`, one request) and shows at once: trending, new on your services, leaving soon, new films and series. The whole Home (personal and rotating rows) is built meanwhile and put in place when Home next comes to the front (or at the next opening).
+- Paste code (25 Nov): a "Paste code" pill at the end of the code's status line (while no digit is typed) reads the clipboard (iOS asks with its own Paste bubble) and takes the 6 digits from whatever was copied; nothing to take: "No code to paste". Removed 26 Nov: it took more taps than the keyboard's own code suggestion; pasting into the boxes still takes the 6 digits from the whole mail line.
+- The document holds still (25 Nov, `holdDocument` in keyboard.ts, Home Screen app only): while a field in a sheet or Search has the focus, a pan of the visible area by iOS is put straight back (the code sheet jumped up and down as the keyboard came back after Mail).
+- Back from Mail (26 Nov): iOS still brought the keyboard back by itself on return and panned the whole app up while it rose (too fast to put back mid-way). Now a field in a sheet lets go of the focus when the app is left (`holdDocument`, visibilitychange): back in the app the sheet stands still with the keyboard down; a tap on the code boxes (focused without scrolling) brings the keyboard and Mail's code suggestion back.
+- Placeholders checked (25 Nov): `test_skeletons.py` measures every kind of placeholder against the page that replaces it. Its first run found rows' posters 4px high, the title page's name 4px low, person's posters 2px low and Browse's cards 11px low; all fixed. The Watchlist's section counts are gone again (the pills already count).
+- Tonight's picks (25 Nov, design C1): the spotlight is "Tonight's picks" (from 17:00; "Today's picks" before) with tall 4:5 cards: the title page's picture (a textless poster where the sync found one), the reason (13 px, sentence case, light grey) and the title at the top, and at the bottom a small poster with "Directed by …" / "Created by …" (13 px regular, near-white, the size of the reason line) over the meta line (grey). Pressed it shrinks like a poster; held, the small poster lifts into the poster menu.
+- Tonight's picks, type (26 Nov): text sits 8 px from the top, 14 px from the sides and bottom. The title is `--type-display` (28 px bold, −0.02em), shared with Home's hero name when a film has no logo, on 27 px lines with 3 px above it. Nothing on the card is clipped or cut with an ellipsis: titles, reasons and credits wrap (test_spotlight).
+- Tonight's picks, corners and names (26 Nov): pressed, the card's list item shrinks rather than the card itself (as poster cards do), so its corners stay as they are. A held poster lifts with a poster's own 12 px corners, not 20 (a small poster lifted 3x looked like a blob). Who made it, on the card and in the hold menu: one name, two joined with "and", three or more as the first and "N others"; never cut, a long name wraps.
+- Tonight's picks, where it plays (26 Nov): the bottom line always ends with the service (the one it arrived on or leaves, when that is the reason), and the reasons no longer name it: "Just arrived", "Leaves today / on Friday / on 12 Dec", "New this week" / "New this month", and for a short saved film "Under 100 minutes" (the length is on the bottom line). HOME_VERSION 18.
+- Better picks: one per reason, never a hero title or a logged one; discovery picks need IMDb 6.5+ where known; picks of the last week (kept on the phone, `reelay.spot-shown`) step aside unless the title just arrived on the watchlist or is leaving. Order: films like one they loved, watchlist arrivals, friends, a long-saved watchlist title, a short one, leaving, new, award, hidden gem, trending.
+- Better reasons: "Leaves Netflix on Friday" (weekday within the week, else the date), "New on Viaplay this week", "Anna and Erik liked it", "On your watchlist since March", "Best Picture · Oscars 2020", "Few have seen it · IMDb 8.1", "Everyone's watching it this week". Home's cards carry `hero_path`, `hero_poster`, `imdb_rating`, `imdb_votes` (migration `20261125001800` for the base); the picks' directors and creators come in one small request. HOME_VERSION 16.

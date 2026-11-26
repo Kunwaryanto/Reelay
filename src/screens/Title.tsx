@@ -1,7 +1,8 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { paths } from '../lib/routes'
 import { MIN_ROW, SERVICE_NAME, kindWord, leavingFor, openLink, runtime, type Award, type TitleDetail } from '../lib/catalogue'
 import { tmdbImage } from '../lib/images'
+import { titleHero } from '../lib/pictures'
 import { firstName, fullDate, looseDate, times, useTitleLogs, useWatched, type TitleLogs } from '../lib/letterboxd'
 import { useServicesQuery } from '../lib/profile'
 import { useDimOnScroll, useNavActions } from '../lib/nav'
@@ -10,7 +11,9 @@ import { titlePage } from '../lib/pages'
 import { useSaved } from '../lib/saved'
 import { takeOpenedFrom } from '../lib/push'
 import { supabase } from '../lib/supabase'
+import { markNewsSeen } from '../lib/newsSeen'
 import { PageContent, PageLink, usePageFrame, PinnedArt, BackButton, GlassButton, Icon, Laurel, PosterRow, PosterWall, SectionHeader, Sheet, TitleCard } from '../ui'
+import { shown, useHiddenTags } from '../lib/hidden'
 
 const LANG: Record<string, string> = { en: 'English', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean' }
 const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('')
@@ -192,11 +195,12 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
   // you've logged on Letterboxd left out, as Home does
   const mine = useServicesQuery().data
   const watched = useWatched()
+  const hidden = useHiddenTags()
   const more = useMemo(() => {
     const on = new Set(mine ?? [])
-    const list = t.more.filter((c) => c.kind !== 'film' || !watched.has(c.id))
+    const list = t.more.filter((c) => (c.kind !== 'film' || !watched.has(c.id)) && shown(c, hidden))
     return on.size ? [...list.filter((c) => c.availability.some((a) => on.has(a.service_id))), ...list.filter((c) => !c.availability.some((a) => on.has(a.service_id)))] : list
-  }, [t.more, mine, watched])
+  }, [t.more, mine, watched, hidden])
   // opened from a notification: where it streams lights up once, then settles
   const [flash] = useState(() => takeOpenedFrom(paths.title(t.id)))
   const [open, setOpen] = useState(false)
@@ -226,13 +230,14 @@ function Body({ t, stale }: { t: TitleDetail; stale: boolean }) {
     ['English title', t.title_en && t.title_en !== t.title ? t.title_en : ''],
     ['Language', t.original_language ? LANG[t.original_language] ?? t.original_language.toUpperCase() : ''],
   ] as [string, string][]).filter((d) => d[1])
-  const art = tmdbImage(t.backdrop_path, 'w1280') ?? tmdbImage(t.poster_path, 'w780')
+  const hero = titleHero(t)
+  const art = hero.src
   const long = (t.overview?.length ?? 0) > 170
 
   return (
     <>
       <section className="title-top" aria-labelledby="t-title">
-        {art && <PinnedArt><img className="title-art" data-poster={!t.backdrop_path} src={art} alt="" fetchPriority="high" /></PinnedArt>}
+        {art && <PinnedArt><img className="title-art" data-poster={hero.poster} src={art} alt="" fetchPriority="high" /></PinnedArt>}
         <div className="title-head">
           <h1 id="t-title">{t.title}</h1>
           <div className="title-actions">
@@ -348,6 +353,8 @@ const part = (character: string) => character.replace(VOICE, '').trim()
 
 export default function Title({ id }: { id: number }) {
   const frame = usePageFrame(Number.isFinite(id) ? titlePage(id) : null)
+  // opened: an arrival in Home's watchlist news has been seen
+  useEffect(() => { if (Number.isFinite(id)) markNewsSeen(id) }, [id])
   const onScroll = useDimOnScroll()
   return (
     <>

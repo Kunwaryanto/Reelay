@@ -14,6 +14,7 @@ import { categoryPage, coverPictures, coverSrc, coversPage, explorePage, fits, g
 import { ALL_TITLES, exploreCards, exploreCount, exploreKey, exploreOf, exploreTitle, type ExploreStart } from '../lib/explore'
 import { BackButton, useJoinedRef, usePageRefresh, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, LoadOn, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
 import { Hero } from './Now'
+import { useHiddenTags } from '../lib/hidden'
 
 type Pick = 'all' | Kind
 const PICKS: [Pick, string][] = [['all', 'All'], ['film', 'Films'], ['series', 'Series']]
@@ -99,6 +100,7 @@ export default function Browse() {
   const pull = usePageRefresh(covers)
   const pageRef = useJoinedRef(page, pull.bind.ref)
   useWarmCovers(covers.data)
+  useHiddenTags() // a category all about a hidden tag leaves (fits)
   // the first cards' pages load ahead, a moment after Browse has settled
   useEffect(() => {
     const t = setTimeout(() => {
@@ -177,6 +179,7 @@ export function BrowseSection({ section, kind }: { section: SectionId; kind?: Ki
   const pick: Pick = kind ?? 'all'
   // above the fold: the first eight cards' pictures (Browse usually fetched them already, then it shows at once)
   const { q: covers, phase, pull } = usePageFrame(sectionPage(section, pick))
+  useHiddenTags()
   const sec = SECTIONS.find((s) => s.id === section)
   const cats = sectionCats(section, pick)
   return (

@@ -12,7 +12,7 @@ def test_invite_link_says_join_and_keeps_its_code(app):
         return r.fulfill(json={'status': 'created'})
     pg.route('**/functions/v1/redeem-invite', fn)
     try:
-        pg.goto(m.B + '/i/abc123'); pg.wait_for_timeout(2500)
+        pg.goto(m.B + '/i/abc123'); pg.settle(5000)
         assert 'Join Reelay' in pg.inner_text('body'), 'Join while the invite is checked'
         assert bodies and bodies[0].get('token') == 'abc123', 'the code was read'
         held[0].fulfill(json={'status': 'valid'}); pg.wait_for_timeout(500)

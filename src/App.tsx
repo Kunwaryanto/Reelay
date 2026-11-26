@@ -17,6 +17,7 @@ import { checkStamp } from './lib/stamp'
 import { endBoot } from './lib/boot'
 import { useLaunched } from './lib/launch'
 import { HoldProvider, OfflinePill, TabBar, ToastProvider } from './ui'
+import { useHiddenSync } from './lib/hidden'
 
 // Screens Home doesn't need at launch load as their own files, so the app starts sooner: they are asked for as soon
 // as the app has started (the tabs mount at once) or when first opened, and show nothing until they are in.
@@ -79,6 +80,7 @@ function Shell() {
   const launched = useLaunched()
   useEffect(() => { if (launched) endBoot() }, [launched])
   useWatchedSync()
+  useHiddenSync()
   const [arriving, setArriving] = useState(!launched)
   useEffect(() => { if (!launched) return; const t = setTimeout(() => setArriving(false), 1100); return () => clearTimeout(t) }, [launched])
   // keep this device's notification address fresh, and open what a tapped notification points at

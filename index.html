@@ -29,11 +29,13 @@
     <meta name="apple-mobile-web-app-title" content="Reelay" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
-    <!-- TODO: plain black apple-touch-startup-image per iPhone size, generated in the build -->
+    <!-- No apple-touch-startup-image: iOS makes the launch screen from the manifest (black). The one frame of dark grey
+         between it and the first paint is the web view's own colour before any page exists (WebKit bug 311569); plain
+         black startup images were tried on 25 Nov and didn't cover it. -->
 
     <!-- Fonts are self-hosted (src/styles/fonts.css); preload the two every screen needs -->
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/material-symbols-reelay.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/material-symbols-reelay.woff2?v=3" as="font" type="font/woff2" crossorigin />
   </head>
   <body style="background:#000">
     <div id="root"></div>

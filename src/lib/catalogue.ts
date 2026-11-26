@@ -1,5 +1,6 @@
 // Reads the catalogue (titles, where they stream, scores, cast) and the user's watchlist.
 import { supabase } from './supabase'
+import { daysUntil } from './days'
 
 // link: the whole link, before links were stored in two parts (kept readable until that database change is live)
 export type Avail = { service_id: string; leaves_on: string | null; type?: string; link_path?: string | null; link?: string | null; service?: { link_base?: string | null } | null }
@@ -15,6 +16,8 @@ export type Card = {
   seasons?: number | null
   runtime_min?: number | null
   availability: Avail[]
+  /** what Settings › Suggestions can hide by (only where a list is narrowed on the phone) */
+  tags?: string[]
 }
 export type Row = { id: string; title: string; items: Card[]; notes?: 'leaving' }
 
@@ -25,54 +28,6 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   return res.data as T
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
-
-
-// Now mixes films and series, and recent titles with classics, so popularity alone (which favours
-// long-running series) doesn't fill the page. A title is shown once: rows skip anything already above them.
-const YEAR = new Date().getFullYear()
-const RECENT_FROM = YEAR - 4 // the last five years
-const CLASSIC_TO = YEAR - 15 // fifteen years and older
-
-type Kind = Card['kind']
-type Bucket = { kind: Kind; from?: number; to?: number }
-
-const MIXED: Bucket[] = [
-  { kind: 'film', from: RECENT_FROM }, { kind: 'series', from: RECENT_FROM },
-  { kind: 'film', to: CLASSIC_TO }, { kind: 'series', to: CLASSIC_TO },
-]
-
-/** Round robin over the buckets, skipping titles already on the page, until the row is full. */
-function interleave(lists: Card[][], seen: Set<number>, max = 20): Card[] {
-  const out: Card[] = []
-  const at = lists.map(() => 0)
-  while (out.length < max && lists.some((l, i) => at[i] < l.length)) {
-    lists.forEach((l, i) => {
-      while (at[i] < l.length && out.length < max) {
-        const t = l[at[i]++]
-        if (seen.has(t.id)) continue
-        seen.add(t.id)
-        out.push(t)
-        break
-      }
-    })
-  }
-  return out
-}
-
-type Filter = { genresAny?: string[]; genresAll?: string[]; from?: number; to?: number }
-
-async function cards(b: Bucket, f: Filter, limit: number): Promise<Card[]> {
-  let q = supabase.from('titles').select(CARD).eq('kind', b.kind)
-  const from = Math.max(b.from ?? -Infinity, f.from ?? -Infinity)
-  const to = Math.min(b.to ?? Infinity, f.to ?? Infinity)
-  if (Number.isFinite(from)) q = q.gte('year', from)
-  if (Number.isFinite(to)) q = q.lte('year', to)
-  if (f.genresAny) q = q.overlaps('genres', f.genresAny)
-  if (f.genresAll) q = q.contains('genres', f.genresAll)
-  return unwrap((await q.order('popularity', { ascending: false }).limit(limit)) as never)
-}
-
 export type Person = { id: number; name: string; profile_path: string | null }
 export type Credit = { role: 'cast' | 'director' | 'creator' | 'writer'; character: string | null; sort_order: number; person: Person }
 export type Award = { id: number; award: string; year: number; short_category: string; won: boolean; person_name: string | null; rank: number }
@@ -81,6 +36,9 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
   original_title: string | null
   /** TMDB's English title, when the title shown is a Nordic original */
   title_en?: string | null
+  /** the title page's picture, chosen by the sync (titleHero) */
+  hero_path?: string | null
+  hero_poster?: boolean
   end_year: number | null
   runtime_min: number | null
   overview: string | null
@@ -97,7 +55,7 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
   // More like this is asked for at the same time: its list doesn't depend on the title's details
   const similar = supabase.rpc('similar_titles', { p_id: id })
   const title = unwrap(await supabase.from('titles').select(
-    'id,tmdb_id,kind,title,original_title,title_en,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
+    'id,tmdb_id,kind,title,original_title,title_en,hero_path,hero_poster,year,end_year,runtime_min,seasons,overview,genres,original_language,poster_path,backdrop_path,logo_path,' +
     'availability(*,service:services(*)),' +
     'scores(imdb_rating,rt_critics,rt_audience,letterboxd),' +
     'credits(role,character,sort_order,person:people(id,name,profile_path)),' +
@@ -110,7 +68,7 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
   const order = (sim.data as { id: number; pos: number }[] | null) ?? []
   if (order.length) {
     const pos = new Map(order.map((r) => [Number(r.id), r.pos]))
-    const cards = unwrap(await supabase.from('titles').select(CARD).in('id', [...pos.keys()])) as unknown as Card[]
+    const cards = unwrap(await supabase.from('titles').select(`${CARD},tags`).in('id', [...pos.keys()])) as unknown as Card[]
     more = cards.sort((a, b) => (pos.get(a.id) ?? 99) - (pos.get(b.id) ?? 99))
   } else if (sim.error && title.genres.length) {
     // the list can't be read (an older database): the most popular titles in the same first genre, as before
@@ -168,35 +126,23 @@ export async function loadMyServices(): Promise<string[]> {
 }
 
 /** Posters to pick from when the Watchlist is empty: recent and classic films and series, mixed. */
-export async function loadPicks(): Promise<Card[]> {
-  const lists = await Promise.all(MIXED.map((b) => cards(b, {}, 15)))
-  return interleave(lists, new Set(), 49)
-}
 
 /**
- * Onboarding's wall of posters: the most popular titles of each given service, laid out for six columns so that
- * any few neighbouring rows hold every service (slot (row, column) takes service (column + 3 × row) mod n).
- * Each card's `availability` holds only the service it stands for.
+ * Onboarding's wall of posters, chosen by the database (`onboarding_wall`): three films for every series (new series;
+ * films half new, half classics), each service's best-known first, never kids' titles, laid out so any few
+ * neighbouring slots hold every service and every part of the mix. Each card's `availability` holds only the service
+ * it stands for.
  */
-export async function loadWall(serviceIds: string[], rows = 6, cols = 6): Promise<Card[]> {
-  const n = serviceIds.length
-  if (!n) return []
-  const lists = await Promise.all(serviceIds.map(async (s) => unwrap((await supabase.from('titles').select(CARD)
-    .eq('availability.service_id', s).not('poster_path', 'is', null).order('popularity', { ascending: false }).limit(24)) as never) as Card[]))
-  const seen = new Set<number>()
-  const next = (i: number): Card | undefined => {
-    const l = lists[i]
-    while (l.length) { const c = l.shift()!; if (!seen.has(c.id)) { seen.add(c.id); return c } }
-  }
-  const out: Card[] = []
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const want = (c + 3 * r) % n
-    // a service that runs out lends its slot to the next one that still has titles
-    let card: Card | undefined
-    for (let k = 0; k < n && !card; k++) card = next((want + k) % n)
-    if (card) out.push(card)
-  }
-  return out
+export async function loadWall(serviceIds: string[], rows = 8, cols = 8): Promise<Card[]> {
+  if (!serviceIds.length) return []
+  const slots = unwrap(await supabase.rpc('onboarding_wall', { p_services: serviceIds, p_rows: rows, p_cols: cols })) as { pos: number; title_id: number; service_id: string }[]
+  if (!slots.length) return []
+  const cards = unwrap(await supabase.from('titles').select(CARD).in('id', slots.map((x) => x.title_id))) as unknown as Card[]
+  const byId = new Map(cards.map((c) => [c.id, c]))
+  return slots.sort((a, b) => a.pos - b.pos).flatMap((x) => {
+    const c = byId.get(x.title_id)
+    return c ? [{ ...c, availability: [{ service_id: x.service_id, leaves_on: null }] }] : []
+  })
 }
 
 // ---- Invites (admins) ------------------------------------------------------
@@ -223,6 +169,12 @@ export async function restoreInvite(inv: Invite) {
 }
 
 /** "18 Nov" */
+/** who made it, never cut short: "Celine Song", "Daniel Kwan and Daniel Scheinert", "Matt Duffer and 2 others" */
+export function namesLine(names: string[]): string {
+  if (names.length <= 2) return names.join(' and ')
+  return `${names[0]} and ${names.length - 1} others`
+}
+
 export function shortDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`
@@ -267,7 +219,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 export function leavingNote(date: string | null | undefined): string | null {
   if (!date) return null
-  const days = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(today() + 'T00:00:00Z')) / 864e5)
+  const days = daysUntil(date)
   if (days < 0) return null
   if (days === 0) return 'Leaves today'
   if (days === 1) return 'Leaves tomorrow'
@@ -286,7 +238,7 @@ export const leavesOn = (t: { availability: { leaves_on?: string | null }[] }) =
 export function leavingFor(what: { availability: { leaves_on?: string | null }[] } | string | null | undefined, { stale = false, within }: { stale?: boolean; within?: number } = {}): string | null {
   const date = typeof what === 'string' || what == null ? what : leavesOn(what)
   if (stale || !date) return null
-  if (within !== undefined && (Date.parse(date + 'T00:00:00Z') - Date.now()) / 864e5 > within) return null
+  if (within !== undefined && daysUntil(date) > within) return null
   return leavingNote(date)
 }
 

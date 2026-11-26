@@ -14,7 +14,7 @@ def test_awards_group_by_category(app):
                         aw(3, 'Oscars', 1969, 'Best Director', False, 'Stanley Kubrick'), aw(4, 'Oscars', 1969, 'Best Director', False),
                         aw(5, 'Oscars', 1969, 'Production Design', False, 'Harry Lange'), aw(6, 'Oscars', 1969, 'Production Design', False, 'Ernest Archer')]
     try:
-        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2500)
+        pg = app(); pg.goto(m.B + '/title/3'); pg.settle(5000)
         r = rows(pg)
         assert r == ['Won · Oscars 1969 | Best Visual Effects · Stanley Kubrick', 'Nominated · Oscars 1969 | Best Director · Stanley Kubrick',
                      'Nominated · Oscars 1969 | Production Design · Harry Lange +1'], r
@@ -29,7 +29,7 @@ def test_awards_group_by_category(app):
 def test_awards_that_fit_are_plain_rows(app):
     m.MODE['awards'] = [aw(1, 'Oscars', 1969, 'Best Visual Effects', True, 'Stanley Kubrick'), aw(2, 'Oscars', 1969, 'Best Director', False)]
     try:
-        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2500)
+        pg = app(); pg.goto(m.B + '/title/3'); pg.settle(5000)
         assert pg.evaluate(f"!({TOP}).querySelector('.awards .view-all') && !({TOP}).querySelector('.awards > .rows button')")
     finally:
         m.MODE.pop('awards', None)
@@ -37,7 +37,7 @@ def test_awards_that_fit_are_plain_rows(app):
 def test_awards_view_all_opens_sheet(app):
     m.MODE['awards'] = [aw(i, 'Emmys', 2018 + i % 4, f'Category {i}', i % 3 == 0, f'Person {i}') for i in range(1, 10)]
     try:
-        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2500)
+        pg = app(); pg.goto(m.B + '/title/3'); pg.settle(5000)
         assert len(rows(pg)) == 4
         assert all('Won' in x for x in rows(pg)[:3]), rows(pg)   # wins first
         pg.evaluate(f"({TOP}).querySelector('.awards .view-all').click()"); pg.wait_for_timeout(700)
@@ -51,7 +51,7 @@ def test_awards_view_all_opens_sheet(app):
 def test_a_cut_line_offers_the_sheet(app):
     m.MODE['awards'] = [aw(1, 'Oscars', 1969, 'Best Writing, Story and Screenplay Written Directly for the Screen', False, 'Arthur C. Clarke')]
     try:
-        pg = app(); pg.goto(m.B + '/title/3'); pg.wait_for_timeout(2500)
+        pg = app(); pg.goto(m.B + '/title/3'); pg.settle(5000)
         assert pg.evaluate(f"!!({TOP}).querySelector('.awards .view-all') && !!({TOP}).querySelector('.awards > .rows button')")
     finally:
         m.MODE.pop('awards', None)

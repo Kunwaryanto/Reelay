@@ -3,18 +3,20 @@ import { useServicesQuery } from '../lib/profile'
 import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
 import { paths } from '../lib/routes'
-import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, openLink, runtime, type Card } from '../lib/catalogue'
-import { HOME_VERSION, loadHome, type HomeCard, type HomeData } from '../lib/home'
+import { SERVICE_NAME, kindWord, leavingFor, lengthOf, metaLine, namesLine, openLink, runtime, type Card } from '../lib/catalogue'
+import { HOME_VERSION, loadHome, type HomeCard, type HomeData, type NewsItem, newsLine } from '../lib/home'
 import { useHome } from '../lib/homeData'
 import { useSaved } from '../lib/saved'
-import { useLetterboxd, watchedKey } from '../lib/letterboxd'
+import { useLetterboxd, useWatched, watchedKey } from '../lib/letterboxd'
+import { markNewsSeen, useNewsSeen } from '../lib/newsSeen'
+import { hiddenKey, useHiddenTags } from '../lib/hidden'
 import { useAuth } from '../lib/auth'
-import { useFacts } from '../lib/facts'
+import { useFacts, warmFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
-import { NearImage, NearRow, PageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
+import { Cover, NearImage, NearRow, PageLink, joinHandlers, useHold, useLongPress, usePageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
   const service = c.availability[0]?.service_id
@@ -146,6 +148,12 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
 }
 
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
+/** "Tonight's picks" from 17:00 (and through the night), "Today's picks" before. */
+const picksTitle = () => { const h = new Date().getHours(); return h >= 17 || h < 4 ? 'Tonight’s picks' : 'Today’s picks' }
+
+/** How long Home waits behind the wordmark before showing placeholders. */
+const LATE_MS = 8000
+
 export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLElement }; onClose: () => void }) {
   const saved = useSaved()
   const { push } = useNavActions()
@@ -232,7 +240,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   const years = film || !card.year ? card.year : d?.end_year && d.end_year !== card.year ? `${card.year}–${d.end_year}` : card.year
   const facts = [kindWord(card.kind), years, d && (film ? runtime(d.runtime_min) : d.seasons ? (d.seasons === 1 ? '1 season' : `${d.seasons} seasons`) : null),
     d?.genres.slice(0, 2).join(', ')].filter(Boolean).join(' · ')
-  const by = d?.by.slice(0, 2).join(', ')
+  const by = d?.by.length ? namesLine(d.by) : undefined
   const scores: [string, string][] = []
   if (d?.imdb != null) scores.push(['IMDb', Number(d.imdb).toFixed(1)])
   if (d?.rt != null) scores.push(['RT', `${d.rt}%`])
@@ -256,8 +264,9 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
       <div className="hold-back" onClick={close} />
       <div ref={lift} className="hold-poster" aria-hidden="true" onClick={openTitle} style={{
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
-        // 16px once lifted, whatever the starting size; back to the poster's own corners (and no shadow) on the way down
-        borderRadius: closing ? `calc(${closing.radius} / ${closing.k})` : 20 / scale,
+        // once lifted, a poster's own 12px corners on screen, whatever the starting size (a small poster lifted 3x
+        // with 20px looked like a blob); back to the poster's own corners (and no shadow) on the way down
+        borderRadius: closing ? `calc(${closing.radius} / ${closing.k})` : 12 / scale,
         boxShadow: closing ? '0 18px 50px rgba(0, 0, 0, 0)' : undefined,
         transform: open ? `translate(${left - rect.left}px, ${top - rect.top}px) scale(${scale})`
           : closing ? `translate(${closing.x}px, ${closing.y}px) scale(${closing.k})`
@@ -287,7 +296,7 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
           </a>
         ) : (
           <button type="button" role="menuitem" onClick={() => { if (!armed.current) return; saved.toggleNotify(card.id); close() }}>
-            <span>Notify me</span><Icon name="notifications" size={20} />
+            <span>{saved.isNotifying(card.id) ? 'Notifying you' : 'Notify me'}</span><Icon name="notifications" size={20} fill={saved.isNotifying(card.id)} />
           </button>
         )}
       </div>
@@ -295,27 +304,70 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   )
 }
 
-/** Titles given room between the rows, side by side: each card has its wide picture, why it is here, and where it plays. */
+/** Tonight's picks: tall cards side by side, each with its picture, why it is here as a small line over the title,
+ *  and at the bottom a small poster with who made it and where it plays (as under a title page's name). */
 function Spotlight({ cards }: { cards: HomeCard[] }) {
   return (
     <NearRow className="spot-row noscroll" role="list">
-      {cards.map((card) => {
-        const art = card.backdrop_path ? { src: tmdbImage(card.backdrop_path, 'w780'), srcSet: `${tmdbImage(card.backdrop_path, 'w780')} 780w, ${tmdbImage(card.backdrop_path, 'w1280')} 1280w`, sizes: '90vw' } : null
-        const service = card.availability[0]?.service_id
-        return (
-          <div key={card.id} role="listitem" className="spot-item"><PageLink to={paths.title(card.id)} className="spot press">
-            {art && <NearImage {...art} />}
-            <span className="spot-text">
-              {card.reason && <small>{card.reason}</small>}
-              <b>{card.title}</b>
-              {/* the service, unless the reason already names one ("New on Netflix") */}
-              <span>{metaLine(card, service && !/^(New|Now) on/.test(card.reason ?? '') ? SERVICE_NAME[service] ?? service : null)}</span>
-            </span>
-          </PageLink></div>
-        )
-      })}
+      {cards.map((card) => <SpotCard key={card.id} card={card} />)}
     </NearRow>
   )
+}
+
+function SpotCard({ card }: { card: HomeCard }) {
+  const { push } = useNavActions()
+  const onHold = useHold()
+  // held: the small poster lifts out into the poster menu, as a poster does
+  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.spot-thumb .cover')!))
+  const link = usePageLink(paths.title(card.id))
+  // the title page's picture (a textless poster fills the tall card best), else the wide one, cropped
+  const wide = card.hero_path && !card.hero_poster ? card.hero_path : card.backdrop_path
+  const art = card.hero_path && card.hero_poster ? { src: tmdbImage(card.hero_path, 'w780'), sizes: '90vw' }
+    : wide ? { src: tmdbImage(wide, 'w780'), srcSet: `${tmdbImage(wide, 'w780')} 780w, ${tmdbImage(wide, 'w1280')} 1280w`, sizes: '90vw' } : null
+  // where it plays, always: the one it arrived on or leaves when the pick is about that (the reasons don't name it)
+  const service = card.via ?? card.availability[0]?.service_id
+  const svc = service ? SERVICE_NAME[service] ?? service : null
+  return (
+    <div role="listitem" className="spot-item">
+      <a className="spot" href={paths.title(card.id)} data-poster={card.hero_poster || undefined}
+        {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
+        onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(card.id)) }}>
+        {art && <NearImage {...art} />}
+        <span className="spot-top">
+          {card.reason && <small>{card.reason}</small>}
+          <b>{card.title}</b>
+        </span>
+        <span className="spot-bot">
+          <span className="spot-thumb"><Cover path={card.poster_path} sizes="40px" /></span>
+          <span className="spot-meta">
+            {card.by && <span className="spot-by">{card.by}</span>}
+            <span>{metaLine(card, svc)}</span>
+          </span>
+        </span>
+      </a>
+    </div>
+  )
+}
+
+/** What is new on the member's watchlist, in one line under the hero: no card, no heading; the line is its own.
+ *  An arrival leaves it once seen (its page opened, or the line tapped); something leaving stays until it leaves. */
+function News({ news }: { news: NewsItem[] }) {
+  const { setTab } = useNavActions()
+  const line = newsLine(news, useNewsSeen(), useWatched())
+  if (!line) return null
+  const inner = (
+    <>
+      <span className="news-stack" aria-hidden="true">
+        {line.cards.map((t) => <Cover key={t.id} path={t.poster_path} sizes="44px" eager />)}
+      </span>
+      <span className="news-text"><b>{line.head}</b><small>{line.sub}</small></span>
+      <Icon name="chevron_right" size={20} />
+    </>
+  )
+  const label = `From your watchlist: ${line.head}. ${line.sub}`
+  return typeof line.to === 'number'
+    ? <PageLink to={paths.title(line.to)} className="news press" aria-label={label}>{inner}</PageLink>
+    : <button type="button" className="news press" aria-label={label} onClick={() => { markNewsSeen(...line.ids); setTab('watchlist') }}>{inner}</button>
 }
 
 /** Decode a Home's first pictures (the first hero's art and title logo, the first row's first posters), so it can
@@ -351,14 +403,16 @@ export default function Now() {
   const changes = useChanges(['watchlist', 'letterboxd'])
   const savedLoaded = useSaved().loaded
   const settled = svc !== undefined && lb.account !== undefined && savedLoaded
-  const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}` : null,
-    () => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [] }), changes, tab === 'now' && path === '/', decodeFold)
+  const hidden = useHiddenTags()
+  const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}${hiddenKey(hidden)}` : null,
+    (quick?: boolean) => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [], hidden }, { quick }), changes, tab === 'now' && path === '/', decodeFold)
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its
   // title logo, and the first posters of the first row. Ready within 300 ms: Now just rises.
   // Later than that: the wordmark rises on black and always finishes (900 ms) before fading into the page; still
-  // waiting at 3.3 s, grey placeholders stand in and the content rises over them.
+  // waiting at 8 s (something is wrong: a slow network), grey placeholders stand in and the content rises over
+  // them. Before that the wordmark simply stays: Home arrives whole, never as a skeleton first.
   const first = q.data?.hero[0]
   const firstArt = first ? tmdbImage(first.backdrop_path, 'w1280') ?? tmdbImage(first.poster_path, 'w780') : undefined
   const foldKey = q.data ? `${firstArt ?? ''}|${q.data.rows[0]?.id ?? ''}` : null
@@ -388,7 +442,7 @@ export default function Now() {
     const since = booted ? performance.now() : 0
     const a = booted ? undefined : setTimeout(() => { if (!readyRef.current) setPhase('mark') }, 300)
     const b = setTimeout(() => setPhase((p) => (p === 'mark' ? 'after' : p)), Math.max(0, (booted ? BOOT_RISE_MS : 1200) - since))
-    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), Math.max(0, 3300 - since))
+    const c = setTimeout(() => setPhase((p) => (p === 'after' && !readyRef.current ? 'late' : p)), Math.max(0, LATE_MS - since))
     return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c) }
   }, [booted])
   const show = ready && phase !== 'mark'
@@ -396,11 +450,14 @@ export default function Now() {
   // The wordmark stays mounted while it fades out over the arriving page (mounting it again would replay its rise).
   const [mark, setMark] = useState<'none' | 'on' | 'gone'>('none')
   if (phase === 'mark' && mark === 'none' && !booted) setMark('on')
+  // it fades as the page arrives, or as the placeholders come in when Home is slow (the start-up wordmark does the
+  // same: it sat over the placeholders for seconds after a first sign-in)
+  const markOff = show || phase === 'late'
   useEffect(() => {
-    if (!show || mark !== 'on') return
+    if (!markOff || mark !== 'on') return
     const t = setTimeout(() => setMark('gone'), 700)
     return () => clearTimeout(t)
-  }, [show, mark])
+  }, [markOff, mark])
   // Back on a new day: the wordmark covers the page while today's Home is made, then fades over it
   const [cover, setCover] = useState<'none' | 'on' | 'leaving'>('none')
   if (q.waking && cover !== 'on') setCover('on')
@@ -436,7 +493,7 @@ export default function Now() {
       {/* not before the content: at launch it fades in with the picture, never ahead of the wordmark */}
       {(show || failed || phase === 'late') && <div className="now-settings"><SettingsButton glass /></div>}
 
-      {mark === 'on' && !q.error && <div className="launch" data-leaving={show || undefined}><Wordmark height={32} rise /></div>}
+      {mark === 'on' && !q.error && <div className="launch" data-leaving={markOff || undefined}><Wordmark height={32} rise /></div>}
       {cover !== 'none' && <div className="launch" data-leaving={cover === 'leaving' || undefined}><Wordmark height={32} rise /></div>}
       {!show && !q.error && phase === 'late' && (
         <div className="now-holders" aria-hidden="true">
@@ -449,8 +506,9 @@ export default function Now() {
       {show && q.data && (
         <div className="now-in">
           {q.data.hero.length > 0 ? <Hero items={q.data.hero} /> : <div className="hero-gap" />}
+          {q.data.news?.length ? <News news={q.data.news} /> : null}
           {q.data.rows.map((row, r) => (
-            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={row.title} /><Spotlight cards={row.spotlight} /></section> :
+            row.spotlight ? <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}><SectionHeader title={picksTitle()} /><Spotlight cards={row.spotlight} /></section> :
             <section key={row.id} className="row" style={{ '--i': Math.min(r, 4) } as CSSProperties}>
               <SectionHeader title={row.title} viewAll={row.more === 'tab:watchlist' ? () => setTab('watchlist') : row.more} />
               <PosterRow>

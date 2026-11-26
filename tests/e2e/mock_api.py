@@ -4,7 +4,7 @@ built app by Playwright. Grown during development (see docs/testing.md); the tes
 `new()` opens a signed-in phone-sized page with the base mocks; `hroute` adds Home's data, `lbroute` Letterboxd.
 `B` is where the built app is served (vite preview, port 4317). Page errors are collected in `errs`.
 """
-import json, sys, base64, time, re, hashlib
+import json, sys, base64, time, re, hashlib, datetime
 from playwright.sync_api import sync_playwright
 import os as _os
 B=_os.environ.get('REELAY_URL', 'http://localhost:4317')
@@ -27,8 +27,14 @@ def route(r):
     if 'image.tmdb.org' in u:
         logo='/l' in u.split('/t/p/')[1]
         return r.fulfill(content_type='image/svg+xml', body=svg(u.split('/')[-1],500,180,'LOGO') if logo else svg(u.split('/')[-1],400,600))
+    if '/rest/v1/rpc/onboarding_wall' in u:
+        b=r.request.post_data_json; sv=b['p_services']; n=b['p_rows']*b['p_cols']
+        MODE['wall_asked']=b
+        return r.fulfill(json=[{"pos":i,"title_id":2000+i,"service_id":sv[i%len(sv)]} for i in range(n)])
     if '/rest/v1/rpc/start_wall' in u: return r.fulfill(json=[f'/w{i}.jpg' for i in range(40)])
-    if '/rest/v1/profiles' in u: return r.fulfill(json={"user_id":"u1","is_admin":True,"notify_leaving":True,"notify_arrivals":True,"notify_new_seasons":False,"onboarded_at":"2026-11-20T10:00:00Z"} if r.request.method=='GET' else None, status=200 if r.request.method=='GET' else 204)
+    if '/rest/v1/profiles' in u:
+        if r.request.method!='GET': MODE.setdefault('patched',[]).append(r.request.post_data_json)
+        return r.fulfill(json={"user_id":"u1","is_admin":True,"notify_leaving":True,"notify_arrivals":True,"notify_new_seasons":False,"onboarded_at":"2026-11-20T10:00:00Z","hidden_tags":MODE.get('hidden',[])} if r.request.method=='GET' else None, status=200 if r.request.method=='GET' else 204)
     if '/rest/v1/watchlist' in u:
         if r.request.method=='POST':
             d=json.loads(r.request.post_data); d=d if isinstance(d,list) else [d]
@@ -109,15 +115,35 @@ def route(r):
     if '/auth/v1/verify' in u: return r.fulfill(json=SESSION)
     if '/auth/v1/' in u: return r.fulfill(json={})
     return r.fulfill(status=404, json={})
+def watch_quiet(pg):
+    """Gives the page `settle(cap)`: wait until it is quiet (no request open for 250 ms, no short animation running),
+    at most `cap` ms. Used instead of a fixed wait after opening a page, so a fast run doesn't sleep and a slow one
+    (tests in parallel) doesn't give up too soon."""
+    import time
+    st = {'open': 0, 'last': time.monotonic()}
+    def up(_): st['open'] += 1; st['last'] = time.monotonic()
+    def down(_): st['open'] = max(0, st['open'] - 1); st['last'] = time.monotonic()
+    pg.on('request', up); pg.on('requestfinished', down); pg.on('requestfailed', down)
+    def settle(cap=4000):
+        end = time.monotonic() + cap / 1000
+        pg.wait_for_timeout(100)
+        while time.monotonic() < end:
+            if st['open'] == 0 and time.monotonic() - st['last'] >= 0.25 and not pg.evaluate(
+                "document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime < 3000)"):
+                return
+            pg.wait_for_timeout(50)
+    pg.settle = settle
+
 p=sync_playwright().start()
 if True:
     # the system Chrome where there is one (this sandbox), Playwright's own Chromium otherwise (CI)
     b=p.chromium.launch(executable_path='/usr/bin/google-chrome') if _os.path.exists('/usr/bin/google-chrome') else p.chromium.launch()
     def ctx(signed):
-        c=b.new_context(viewport={'width':390,'height':844},device_scale_factor=2,has_touch=True,service_workers='block')
+        c=b.new_context(viewport={'width':390,'height':844},device_scale_factor=2,has_touch=True,service_workers='block',**({'timezone_id':MODE['tz']} if MODE.get('tz') else {}))
         c.route(re.compile(r'https://(mock\.supabase\.co|image\.tmdb\.org)/.*'),route)
         if signed: c.add_init_script(f"localStorage.setItem('sb-mock-auth-token',{json.dumps(json.dumps(SESSION))})")
         pg=c.new_page(); pg.on('pageerror',lambda e: print('pageerror',str(e)[:300]))
+        watch_quiet(pg)
         return pg
 
 
@@ -155,7 +181,7 @@ def new():
     def tt(r):
         u=r.request.url
         if '/rest/v1/titles' in u and 'id=eq.' in u and 'overview' in u:
-            t=card(3); t.update({"tmdb_id":603692,"kind":"film","title":"John Wick: Chapter 4","year":2023,"original_title":None,"title_en":MODE.get("title_en"),"end_year":None,"runtime_min":170,"seasons":None,"overview":"With the price on his head ever increasing, John Wick uncovers a path to defeating the High Table.","genres":["Action","Thriller"],"original_language":"en",
+            t=card(3); t.update({"tmdb_id":603692,"kind":"film","title":"John Wick: Chapter 4","year":2023,"original_title":None,"title_en":MODE.get("title_en"),"hero_path":MODE.get("hero",[None,False])[0],"hero_poster":MODE.get("hero",[None,False])[1],"end_year":None,"runtime_min":170,"seasons":None,"overview":"With the price on his head ever increasing, John Wick uncovers a path to defeating the High Table.","genres":["Action","Thriller"],"original_language":"en",
               "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Viaplay","kind":"subscription"}}],
               "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":MODE.get('awards',[])})
             return r.fulfill(json=t)
@@ -178,8 +204,21 @@ def hroute(r):
     except Exception as e: print('  MOCK ERROR', repr(e), unquote(r.request.url).split('/rest/v1/')[-1][:260]); return r.fulfill(json=[])
 def hroute2(r):
     u=unquote(r.request.url); seenq.append(u.split('/rest/v1/')[-1][:90])
-    if '/availability_events' in u and 'title_id=in.' in u: return r.fulfill(json=[{"title_id":500+i,"service_id":"netflix"} for i in range(4)])
+    if '/availability_events' in u and 'title_id=in.' in u: return r.fulfill(json=[{"title_id":500+i,"service_id":"netflix","happened_on":(datetime.date.today()-datetime.timedelta(days=2+i*10)).isoformat()} for i in range(4)] if MODE.get('news',True) else [])
     if 'availability_events' in u: return r.fulfill(json=[{"happened_on":"2026-11-%02d"%(22-i//3),"service_id":['netflix','hbo-max','viaplay'][i%3],"title":dict(card(200+i),popularity=100-i)} for i in range(12)])
+    if '/rest/v1/credits' in u and 'title_id=in.' in u:
+        ids=[int(x) for x in re.search(r'title_id=in\.\(([^)]*)\)',u).group(1).split(',') if x]
+        # by its place in the request: one person, two (joined with "and") or three (the first "and 2 others"), for the spotlight's credit line
+        def who(i): return [["Celine Song"],["Vince Gilligan"],["Daniel Kwan","Daniel Scheinert"],["Matt Duffer","Ross Duffer","Shawn Levy"]][i%4]
+        return r.fulfill(json=[{"title_id":i,"role":"director" if card(i)['kind']=='film' else "creator","person":{"name":n}} for k,i in enumerate(ids) for n in who(k)])
+    if 'rpc/home_base' in u:
+        # the ready-made generic part of Home (only when a test asks for it: otherwise Home is built whole)
+        if not MODE.get('base'): return r.fulfill(status=404, json={})
+        MODE['base_asked']=MODE.get('base_asked',0)+1
+        def cs(lo,n,kind): return [dict(card(i),kind=kind) for i in range(lo,lo+n)]
+        return r.fulfill(json={"day":datetime.date.today().isoformat(),"trendF":cs(600,20,'film'),"trendS":cs(640,20,'series'),"newF":cs(680,12,'film'),"newS":cs(700,12,'series'),
+          "arrivals":[{"happened_on":"2026-11-%02d"%(22-i//3),"service_id":['netflix','hbo-max','viaplay'][i%3],"title":dict(card(720+i),popularity=100-i)} for i in range(12)],
+          "leaving":[{"leaves_on":(datetime.date.today()+datetime.timedelta(days=3+i)).isoformat(),"service_id":"netflix","title":card(760+i,(datetime.date.today()+datetime.timedelta(days=3+i)).isoformat())} for i in range(10)]})
     if 'rpc/home_because' in u:
         day=json.loads(r.request.post_data)['p_day']; alt=day%2==1
         return r.fulfill(json=[{"source":"Arrival" if alt else "Heat","title_id":(340 if alt else 300)+i,"rank":i+1} for i in range(8)] if CASE['personal'] else [])
@@ -189,9 +228,11 @@ def hroute2(r):
     if 'rpc/home_taste' in u: return r.fulfill(json=[{"genre":"Thriller","average":4.2,"films":12},{"genre":"Science Fiction","average":4.1,"films":9},{"genre":"Drama","average":3.9,"films":30}] if CASE['personal'] else [])
     # wins in today's award: one title can have several (the row shows it once, with "+n")
     if '/awards' in u: return r.fulfill(json=[{"award":"Oscars","short_category":["Best Picture","Best Director","Best Actress"][i%3],"rank":1+i%3,"year":2025-i,"title":card(400+i//2)} for i in range(20)])
-    if '/watchlist' in u and 'titles!inner' in u: return r.fulfill(json=[{"added_at":"2026-11-20","title":dict(card(500+i), kind='film' if i>=4 else card(500+i)['kind'], runtime_min=[95,88,140,130,92,85,99,150,97,120,91,110][i%12])} for i in range(12)] if CASE['personal'] else [])
+    if '/watchlist' in u and 'titles!inner' in u: return r.fulfill(json=[{"added_at":"2026-11-20","title":dict(card(500+i,(MODE['leave'] if isinstance(MODE.get('leave'),str) else (datetime.date.today()+datetime.timedelta(days=3)).isoformat()) if MODE.get('leave') and i==5 else None), kind='film' if i>=4 else card(500+i)['kind'], runtime_min=[95,88,140,130,92,85,99,150,97,120,91,110][i%12])} for i in range(12)] if CASE['personal'] else [])
     if '/titles' in u and '&id=in.' in u and 'backdrop_path' in u:
         ids=[int(x) for x in re.search(r'&id=in\.\(([\d,]+)\)',u).group(1).split(',')]; return r.fulfill(json=[card(i) for i in ids])
+    if '/titles' in u and re.search(r'[?&]id=in\.\(\d', u):   # cards by id (onboarding's wall)
+        ids=[int(x) for x in re.search(r'[?&]id=in\.\(([\d,]+)\)',u).group(1).split(',')]; return r.fulfill(json=[card(i) for i in ids])
     if '/titles' in u and 'trend_rank' in u: 
         k='film' if 'kind=eq.film' in u else 'series'; return r.fulfill(json=[dict(card(600+i*3+(0 if k=='film' else 1)),kind=k) for i in range(12)])
     if '/titles' in u and 'scores!inner' in u and 'imdb_votes' in u and 'backdrop_path' in u: return r.fulfill(json=[card(700+i) for i in range(10)])

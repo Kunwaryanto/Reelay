@@ -17,9 +17,11 @@ export async function loadServices(): Promise<Service[]> {
 export type Profile = {
   notify_leaving: boolean; notify_arrivals: boolean; notify_new_seasons: boolean
   onboarded_at: string | null
+  /** what they don't want suggested (Settings › Suggestions; see hidden.ts) */
+  hidden_tags: string[]
 }
 export type NotifyKey = 'notify_leaving' | 'notify_arrivals' | 'notify_new_seasons'
-const PROFILE = 'notify_leaving,notify_arrivals,notify_new_seasons,onboarded_at'
+const PROFILE = 'notify_leaving,notify_arrivals,notify_new_seasons,onboarded_at,hidden_tags'
 
 async function loadProfile(userId: string): Promise<Profile> {
   return unwrap(await supabase.from('profiles').select(PROFILE).eq('user_id', userId).single()) as Profile
