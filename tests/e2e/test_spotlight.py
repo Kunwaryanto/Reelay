@@ -75,3 +75,28 @@ def test_service_always_at_the_bottom_never_in_the_reason(app):
     # nor the length: a short saved film is "Under 100 minutes", with its length below
     assert not any(o['reason'].startswith('Only ') for o in out), out
     assert any(o['reason'] == 'Under 100 minutes' for o in out), out
+
+def test_taste_reasons_name_the_director_and_the_actor(app):
+    # From the member's own taste: a director of a film they loved ("From the director of Heat") and an actor in two
+    # films they loved ("With Florence Pugh"), one of each a day (home_makers). 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    reasons = [c['reason'] for c in pg.evaluate(CARDS)]
+    assert 'From the director of Heat' in reasons and 'With Florence Pugh' in reasons, reasons
+
+def test_held_card_stays_pressed_and_the_lifted_poster_has_clean_corners(app):
+    # Holding a pick: the card stays pressed while its poster is lifted (growing back under the opening menu showed as a
+    # jitter) and lets go as the menu closes; the lifted copy has no corners of its own inside the lift's, which left
+    # its dark background showing at the corners. 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    box = pg.evaluate("(()=>{const el=document.querySelector('.spot'); el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return [r.x+r.width/2, r.y+r.height/2]})()")
+    pg.wait_for_timeout(300)
+    pg.mouse.move(*box); pg.mouse.down(); pg.wait_for_timeout(900); pg.mouse.up(); pg.wait_for_timeout(700)
+    assert pg.evaluate("document.querySelector('.spot-press').dataset.pressed === 'true' && getComputedStyle(document.querySelector('.spot-press')).transform !== 'none'")
+    # the item the row snaps to never shrinks (that moved its snap point: the first card slid sideways on iPhone)
+    assert pg.evaluate("getComputedStyle(document.querySelector('.spot-item')).transform") == 'none'
+    assert pg.evaluate("getComputedStyle(document.querySelector('.hold-poster > .cover')).borderTopLeftRadius") == '0px'
+    # the lifted copy is painted from the original's decoded picture (a canvas, no new image to decode: a new <img>
+    # showed a frame or two late on iPhone as a dark box), and the original is hidden only then
+    assert pg.evaluate("!!document.querySelector('.hold-poster > .cover > canvas') && document.querySelector('.spot-thumb .cover').style.visibility === 'hidden'")
+    pg.mouse.click(5, 5); pg.wait_for_timeout(600)
+    assert pg.evaluate("document.querySelector('.spot-press').dataset.pressed === undefined && !document.querySelector('.hold-menu')")

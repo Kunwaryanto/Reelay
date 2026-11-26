@@ -235,14 +235,30 @@ export async function byFilters(f: Filters, max = PAGE, from = 0): Promise<Hit[]
 }
 /** A list made by filters loads this many titles at a time. */
 export const PAGE = 60
-/** How many streaming titles fit the filters (for the type pills and the filter drawer). */
-function countFiltered(f: Filters): Promise<number | null> {
-  return once(`count:${JSON.stringify(f)}`, async () => {
-    const res = await narrow(supabase.from('titles').select(`id,availability!inner(service_id)${scored(f) ? ',scores!inner(imdb_rating)' : ''}`, { count: 'exact', head: true }), f)
+export type Totals = { all: number; film: number; series: number }
+/** Beyond `Filters`, for Explore: services' leaving dates from this day on, and a least number of IMDb votes. */
+export type TotalsExtra = { leavesFrom?: string; minVotes?: number }
+/**
+ * How many streaming titles fit the filters, films and series apart (the type pills and the filter drawer), in one
+ * request: `title_totals` in the database, with the same filters as `narrow` (its kind is left out: both are counted).
+ * Counting through the list's own query built every title's services only to count them (1 to 1.4 s, three times).
+ */
+export function countTitles(f: Filters, extra: TotalsExtra = {}): Promise<Totals> {
+  const body = {
+    services: f.services, service: f.service, leaves_from: extra.leavesFrom, leaves_to: f.leaving ? inDays(30) : undefined,
+    from: f.from, to: f.to, genres: f.genres, decades: f.decades?.map(([a, b]) => [a ?? null, b]), country: f.country,
+    lang: f.lang, min_rating: f.minRating, min_votes: extra.minVotes, min_rt: f.minRt, min_lb: f.minLb, length: f.length,
+    hide: f.hide?.length ? f.hide : undefined, not_tags: f.notTags?.length ? f.notTags : undefined,
+  }
+  return once(`totals:${JSON.stringify(body)}`, async () => {
+    const res = await supabase.rpc('title_totals', { f: body })
     if (res.error) throw new Error(res.error.message)
-    return res.count as number | null
+    const by = Object.fromEntries((res.data as { kind: string; n: number }[]).map((x) => [x.kind, x.n]))
+    const film = by.film ?? 0, series = by.series ?? 0
+    return { all: film + series, film, series }
   })
 }
+const countFiltered = async (f: Filters): Promise<number> => { const t = await countTitles(f); return f.kind ? t[f.kind] : t.all }
 
 export type PersonHit = { id: number; name: string; profile_path: string | null; known_for: string | null }
 
@@ -319,8 +335,7 @@ export async function search(typed: string, removed: string[], extra: Filters = 
   const base = { tokens: p.tokens, people: p.people, kind: p.kind }
   if (p.pool) return { ...base, hits: p.pool.filter((h) => passes(h, f)) }
   if (!some(f) && !p.kind) return { ...base, hits: [] }
-  const totals = Promise.all([countFiltered(f), countFiltered({ ...f, kind: 'film' }), countFiltered({ ...f, kind: 'series' })])
-    .then(([all, film, series]) => ({ all: all ?? 0, film: film ?? 0, series: series ?? 0 }))
+  const totals = countTitles(f)
   if (!p.kind) {
     const [hits, t] = await Promise.all([byFilters(f), totals])
     return { ...base, hits, paged: { f, totals: t, mixed: hits.length } }

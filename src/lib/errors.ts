@@ -30,7 +30,9 @@ export async function reportError(kind: 'render' | 'error' | 'promise', err: unk
 // A new version was deployed while the app was open: the screens it loads only when they're opened (lazy) are
 // gone under their old names, and loading one fails. That isn't a bug to show: reload into the new version, once a
 // minute at most (offline, the reload would fail the same way).
-const STALE = /Importing a module script failed|Failed to fetch dynamically imported module|error loading dynamically imported module|Unable to preload CSS/i
+// Safari can also report the same thing as React finding nothing in the lazy screen it loaded ("undefined is not an
+// object (evaluating 'e._result.default')"): seen once on 24 Nov, right after a deploy, on Settings.
+const STALE = /Importing a module script failed|Failed to fetch dynamically imported module|error loading dynamically imported module|Unable to preload CSS|_result\.default/i
 export const isStaleBuild = (err: unknown) => STALE.test(String((err as Error)?.message ?? err))
 export function reloadForNewVersion(): boolean {
   try {

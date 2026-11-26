@@ -82,6 +82,11 @@ def route(r):
         q=json.loads(r.request.post_data)['q'].lower()
         hits=[i for i in range(3,40) if q in NAMES[i%len(NAMES)].lower()] or ([] if 'zzz' in q else [])
         return r.fulfill(json=[{"id":i} for i in hits])
+    if '/rest/v1/rpc/title_totals' in u:
+        # how many fit, films and series apart: the same pool the list pages through
+        MODE['totals_asked']=MODE.get('totals_asked',0)+1
+        pool=[card(i) for i in range(41,41+MODE.get('pool',14)) if i%5]
+        return r.fulfill(json=[{"kind":k,"n":sum(1 for t in pool if t['kind']==k)} for k in ('film','series')])
     # search by filters, and Explore (Browse lists made of filters: ordered by popularity then id, in pages)
     if '/rest/v1/titles' in u and ('original_language' in u or r.request.method=='HEAD' or 'id.asc' in u) and '?id=eq.' not in u and '&id=eq.' not in u:
         from urllib.parse import unquote
@@ -224,6 +229,8 @@ def hroute2(r):
         return r.fulfill(json=[{"source":"Arrival" if alt else "Heat","title_id":(340 if alt else 300)+i,"rank":i+1} for i in range(8)] if CASE['personal'] else [])
     if 'rpc/home_saved' in u: return r.fulfill(json=[{"source":"Severance","source_id":500,"title_id":360+i,"rank":i+1} for i in range(8)] if CASE['personal'] else [])
     if 'rpc/home_people' in u: return r.fulfill(json=[{"person_id":7,"name":"Denis Villeneuve","title_id":380+i} for i in range(6)] if CASE['personal'] else [])
+    if 'rpc/home_makers' in u: return r.fulfill(json=([{"role":"director","person_id":8,"name":"Michael Mann","source":"Heat","title_id":2400+i} for i in range(3)]
+        +[{"role":"actor","person_id":9,"name":"Florence Pugh","source":None,"title_id":2420+i} for i in range(3)]) if CASE['personal'] else [])
     if 'rpc/home_friends' in u: return r.fulfill(json=[{"title_id":320+i,"name":["Anna Berg","Erik","Maja"][i%3],"rating":5-0.5*(i%3)} for i in range(6)] if CASE['personal'] else [])
     if 'rpc/home_taste' in u: return r.fulfill(json=[{"genre":"Thriller","average":4.2,"films":12},{"genre":"Science Fiction","average":4.1,"films":9},{"genre":"Drama","average":3.9,"films":30}] if CASE['personal'] else [])
     # wins in today's award: one title can have several (the row shows it once, with "+n")
