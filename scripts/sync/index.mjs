@@ -1205,6 +1205,60 @@ async function syncStandup() {
   log(`stand-up: ${keys.size} on TMDB (keyword ${kw.id}), ${total} of ours; ${on.rowCount} marked, ${off.rowCount} unmarked`);
 }
 
+// Moods and themes (Browse's "Feel-good", "Heist"…): the films and series TMDB tags with any of a mood's keywords
+// (found by name), listed through discover among what streams in Sweden, kept in title_moods. A mood also leaves
+// out genres it can't be ("Feel-good" isn't horror). Weekly in the nightly sync (Sundays), or the Moods workflow.
+// The ids here are Browse's (src/lib/browse.ts, rule.mood).
+const MOODS = {
+  'feel-good': { keywords: ['feel-good', 'heartwarming', 'uplifting', 'wholesome'], not: ['Horror', 'War', 'Thriller', 'Crime', 'War & Politics'] },
+  'mind-bending': { keywords: ['mind-bending', 'time travel', 'time loop', 'alternate reality', 'parallel world', 'nonlinear timeline', 'simulated reality', 'surrealism'], not: [] },
+  'true-stories': { keywords: ['based on true story', 'biography', 'based on real events', 'true crime'], not: ['Animation'] },
+  'edge-of-your-seat': { keywords: ['suspenseful', 'tense', 'survival', 'hostage', 'manhunt', 'race against time', 'cat and mouse'], not: ['Comedy', 'Family', 'Animation', 'Kids'] },
+  'cosy': { keywords: ['cozy', 'cozy mystery', 'comforting', 'small town', 'village life', 'christmas'], not: ['Horror', 'War', 'Thriller', 'War & Politics'] },
+  'dark-gritty': { keywords: ['neo-noir', 'gritty', 'bleak', 'dystopia', 'corruption', 'drug cartel', 'organized crime'], not: ['Comedy', 'Family', 'Animation', 'Kids', 'Romance'] },
+  'based-on-a-book': { keywords: ['based on novel or book', 'based on novel', 'based on book', 'based on young adult novel'], not: [] },
+  'heist': { keywords: ['heist', 'bank robbery', 'robbery', 'con artist'], not: [] },
+  'coming-of-age': { keywords: ['coming of age', 'teenage life', 'first love'], not: ['Horror'] },
+};
+async function syncMoods() {
+  for (const [mood, def] of Object.entries(MOODS)) {
+    const ids = [];
+    for (const name of def.keywords) {
+      const found = await tmdb('/search/keyword', { query: name });
+      for (const k of found?.results ?? []) if (k.name?.toLowerCase() === name.toLowerCase()) ids.push(k.id);
+    }
+    if (!ids.length) { log(`moods: ${mood}: no keywords found, kept as it was`); continue; }
+    const keys = new Set();
+    for (const kind of ['movie', 'tv']) {
+      for (let page = 1; page <= 60; page++) {
+        const r = await tmdb(`/discover/${kind}`, {
+          with_keywords: ids.join('|'), watch_region: 'SE', with_watch_monetization_types: 'flatrate|free|ads', sort_by: 'popularity.desc', page,
+        });
+        for (const x of r?.results ?? []) keys.add(`${kind === 'movie' ? 'film' : 'series'}:${x.id}`);
+        if (!r || page >= Math.min(r.total_pages ?? 0, 500)) break;
+      }
+    }
+    if (keys.size < 20) { log(`moods: ${mood}: only ${keys.size} found, kept as it was`); continue; } // a failed read shouldn't empty it
+    const kinds = [...keys].map((k) => k.split(':')[0]), tmdbIds = [...keys].map((k) => Number(k.split(':')[1]));
+    const c = await db.connect();
+    try {
+      await c.query('begin');
+      // only what changed: the rows that left, then the new ones
+      const want = `select t.id from public.titles t join unnest($1::text[], $2::int[]) k(kind, tmdb_id) on t.kind = k.kind and t.tmdb_id = k.tmdb_id
+        where not (t.genres && $4::text[])`;
+      const gone = await c.query(`delete from public.title_moods m where m.mood = $3 and m.title_id not in (${want})`, [kinds, tmdbIds, mood, def.not]);
+      const added = await c.query(`insert into public.title_moods (mood, title_id) select $3, w.id from (${want}) w on conflict do nothing`, [kinds, tmdbIds, mood, def.not]);
+      await c.query('commit');
+      const n = (await db.query('select count(*)::int n from public.title_moods where mood = $1', [mood])).rows[0].n;
+      log(`moods: ${mood}: ${keys.size} on TMDB (${ids.length} keywords), ${n} of ours; ${added.rowCount} in, ${gone.rowCount} out`);
+    } catch (e) {
+      await c.query('rollback'); throw e;
+    } finally {
+      c.release();
+    }
+  }
+}
+
 async function syncSimilar() {
   const idOf = new Map((await db.query(
     'select t.id, t.kind, t.tmdb_id from public.titles t where exists (select 1 from public.availability a where a.title_id = t.id)',
@@ -1339,6 +1393,14 @@ async function main() {
     return;
   }
   // SYNC_ONLY=standup: which titles are stand-up (the Stand-up workflow); the nightly sync does it on Sundays
+  // SYNC_ONLY=moods: Browse's moods and themes (the Moods workflow); the nightly sync does it on Sundays
+  if (ONLY === 'moods') {
+    log('moods only');
+    await syncMoods();
+    await stamp();
+    await db.end();
+    return;
+  }
   if (ONLY === 'standup') {
     log('stand-up only');
     await syncStandup();
@@ -1432,6 +1494,7 @@ async function main() {
   if (FULL && new Date().getUTCDay() === 0) await syncNotable().catch((e) => log('notable failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncAwards().catch((e) => log('awards failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncStandup().catch((e) => log('stand-up failed:', e.message));
+  if (FULL && new Date().getUTCDay() === 0) await syncMoods().catch((e) => log('moods failed:', e.message));
   if (FULL) await reconcile();
   // the Start screen's poster wall, made once a night (public.start_wall reads it)
   if (FULL) await db.query('select public.refresh_start_wall()').catch((e) => log('start wall failed:', e.message));

@@ -1,0 +1,28 @@
+# Moods: Browse's moods and themes (title_moods), from TMDB keywords. The nightly sync does the same on Sundays.
+name: Moods
+on:
+  workflow_dispatch:
+concurrency:
+  group: nightly-sync
+  cancel-in-progress: false
+jobs:
+  moods:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+      SYNC_ONLY: moods
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Find the database address
+        run: |
+          npx supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          echo "POOLER_URL=$(cat supabase/.temp/pooler-url)" >> "$GITHUB_ENV"
+      - run: node scripts/sync/index.mjs
