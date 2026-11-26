@@ -1207,10 +1207,11 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 /* Tonight's picks: a tall card. The reason (a small line) and the title at the top over a dark start, a small
    poster with who made it and where it plays at the bottom over a dark end, as under a title page's name. */
 .spot { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); color: #fff; -webkit-touch-callout: none; }
-/* pressed, the item shrinks, not the card, as with posters (the card shrinks, the cover keeps its corners): a
-   transform on the rounded, clipping element itself redrew its corners while pressed on iPhone */
-.spot-item { transition: transform var(--dur-press) var(--ease-out); }
-.spot-item[data-pressed] { transform: scale(0.97); }
+/* pressed, a box between the item and the card shrinks: not the card (a transform on the rounded, clipping element
+   itself redrew its corners while pressed on iPhone) and not the item the row snaps to (shrunk, it moved its snap
+   point, and Safari slid the first card sideways as the hold menu opened) */
+.spot-press { transition: transform var(--dur-press) var(--ease-out); }
+.spot-press[data-pressed] { transform: scale(0.97); }
 .spot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 .spot[data-poster] img { object-position: center top; }
 .spot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.86) 100%); }
@@ -1225,7 +1226,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .spot-meta { min-width: 0; display: flex; flex-direction: column; font: var(--type-meta); color: var(--text-muted); }
 .spot-meta span { text-wrap: pretty; }
 .spot-meta .spot-by { font: var(--type-text); color: var(--text-secondary); }
-@media (prefers-reduced-motion: reduce) { .spot-item[data-pressed] { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .spot-press[data-pressed] { transform: none; } }
 
 /* Settings › Suggestions: tap a pill to stop it being suggested (white = hidden), every genre in the sheet */
 .sg-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }

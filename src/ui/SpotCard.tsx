@@ -38,6 +38,9 @@ export function SpotCard({ card }: { card: HomeCard }) {
   const svc = service ? SERVICE_NAME[service] ?? service : null
   return (
     <div role="listitem" className="spot-item">
+      {/* the press shrinks this box: not the item (it is what the row snaps to: a shrunk item moved the snap, and the
+          row slid the card sideways while held) and not the card (its rounded clip was redrawn while shrunk) */}
+      <div className="spot-press">
       <a className="spot" href={paths.title(card.id)} data-poster={card.hero_poster || undefined}
         {...joinHandlers(hold.handlers, link, { onPointerDown: () => warmFacts([card.id], true) })}
         onClick={(e) => { e.preventDefault(); if (!hold.fired()) push(paths.title(card.id)) }}>
@@ -54,6 +57,7 @@ export function SpotCard({ card }: { card: HomeCard }) {
           </span>
         </span>
       </a>
+      </div>
     </div>
   )
 }
