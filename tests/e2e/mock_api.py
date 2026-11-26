@@ -31,6 +31,25 @@ def route(r):
         b=r.request.post_data_json; sv=b['p_services']; n=b['p_rows']*b['p_cols']
         MODE['wall_asked']=b
         return r.fulfill(json=[{"pos":i,"title_id":2000+i,"service_id":sv[i%len(sv)]} for i in range(n)])
+    # Browse (migration 20261126000600): a category page, a whole row, the cards' pictures, one request each
+    if '/rest/v1/rpc/browse_covers' in u:
+        b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('covers',b))
+        return r.fulfill(json={c['id']:[{"id":3000+k*7+j,"path":f"/b{3000+k*7+j}.jpg"} for j in range(5)] for k,c in enumerate(b['p_cats'])})
+    if '/rest/v1/rpc/browse_page' in u:
+        b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('page',b))
+        kind=b.get('p_kind'); k0=len(MODE['browse_asked'])*100
+        def fit(i): c=card(i); return c if not kind or c['kind']==kind else None
+        cards=[c for c in (fit(i) for i in range(4000+k0, 4400+k0)) if c]
+        reasons=['Because you liked Past Lives','Adam rated it 4.5','Critics’ favourite · RT 96%','Best Picture · Oscar 2024']
+        picks=[{**c,"hero_path":None,"hero_poster":False,"reason":reasons[j],"via":None,"by":["Celine Song"]} for j,c in enumerate(cards[:4])]
+        rows=[{"id":rid,"items":cards[10+j*16:10+j*16+(16 if rid!='elsewhere' else 8)]} for j,rid in enumerate(b['p_rows'])]
+        if MODE.get('browse_empty'): picks=[]; rows=[]; cards=[]
+        return r.fulfill(json={"hero":[{**c,"logo_path":f"/l{c['id']}.png"} for c in cards[:3]],"picks":picks,"rows":rows})
+    if '/rest/v1/rpc/browse_list' in u:
+        b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('list',b))
+        kind=b.get('p_kind')
+        cards=[c for c in (card(i) for i in range(5000, 5300)) if not kind or c['kind']==kind][:b.get('p_limit',90)]
+        return r.fulfill(json=[{**c,"original_language":"en","scores":{"imdb_rating":7.1,"rt_critics":88,"letterboxd":3.6}} for c in cards])
     if '/rest/v1/rpc/start_wall' in u: return r.fulfill(json=[f'/w{i}.jpg' for i in range(40)])
     if '/rest/v1/profiles' in u:
         if r.request.method!='GET': MODE.setdefault('patched',[]).append(r.request.post_data_json)

@@ -2,7 +2,8 @@
 // waits for before it arrives. The page reads its content through its entry, and every link to it preloads through
 // the same entry (`warmPage`, from `usePageLink` and from `push`), so a page and its preload can't drift apart.
 // A new page that loads content gets an entry in `pageFor`.
-import { CATEGORIES, categoryOf, offered, loadCategory, loadCovers, rowsOf, titlesIn, type Category, type CategoryPage, type Kind, type RowDef, type SectionId, type Sort } from './browse'
+import { dayNumber } from './days'
+import { CATEGORIES, browseList, categoryOf, listOf, offered, loadCategory, loadCovers, rowDef, type Category, type CategoryPage, type Kind, type RowDef, type SectionId, type Sort } from './browse'
 import { loadTitle, type Card, type TitleDetail } from './catalogue'
 import { tmdbImage } from './images'
 import { posterPicture, titleArt, titleHero, warmPictures, type Picture } from './pictures'
@@ -77,22 +78,26 @@ export const sectionPage = (section: SectionId, kind: 'all' | Kind): Page<Record
   ...coversPage, fold: (covers) => coverPictures(covers, sectionCats(section, kind).slice(0, 8)),
 })
 
-/** A category's page: its first top picture, its title logo and the first row's first posters. */
+/** A category's page: its first top picture, its title logo and the first row's first posters. Built from the
+ *  member's services and Letterboxd films too, so it is looked up again when those change. */
 export const categoryPage = (cat: Category, kind?: Kind): Page<CategoryPage> => ({
-  key: `browse-cat:${cat.id}:${kind ?? 'all'}${hiddenKey()}`, load: () => loadCategory(cat, kind), catalogue: true,
+  key: `browse-cat:${cat.id}:${kind ?? 'all'}:d${dayNumber()}${hiddenKey()}`, load: () => loadCategory(cat, kind), catalogue: true, deps: ['services', 'letterboxd'],
   fold: (d) => [...titleArt(d?.hero[0]), { src: tmdbImage(d?.hero[0]?.logo_path, 'w500') },
     ...(d?.rows[0]?.items ?? []).slice(0, 3).map((c) => posterPicture(c.poster_path))],
 })
 
 /** What a grid page shows: a category's own list, or one of its rows. */
 export const gridDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
-  row === 'list' ? { id: 'popular', title: (kind && cat.labels?.[kind]) || cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only, notes: cat.rule.leaving ? 'leaving' : undefined }
-    : rowsOf(cat, kind).find((r) => r.id === row)
+  row === 'list' ? { id: listOf(cat).row, title: (kind && cat.labels?.[kind]) || cat.label, sort: cat.list ?? 'popular', kind: kind ?? cat.only, notes: cat.rule.leaving ? 'leaving' : undefined }
+    : rowDef(cat, row, kind)
 /** A grid (View all): four rows of posters, as a tall iPhone shows three and the top of a fourth. */
 export const gridPage = (cat: Category, def: RowDef, row: string, kind: Kind | undefined, sort: Sort): Page<Card[]> => ({
   key: `browse-grid:${cat.id}:${row}:${kind ?? 'all'}:${sort}${hiddenKey()}`,
-  load: () => titlesIn(cat, { kind: def.kind, sort, row: row === 'list' ? undefined : def.id, limit: 90, facets: true }),
-  catalogue: true, persist: false,
+  // the row's own order unless another is picked; a Browse list in its own order (Hidden gems: highest rated)
+  load: () => row === 'list'
+    ? browseList(cat, listOf(cat).row, def.kind, sort === (cat.list ?? 'popular') ? listOf(cat).sort : sort)
+    : browseList(cat, def.id, def.kind, sort === def.sort ? undefined : sort),
+  catalogue: true, deps: ['services', 'letterboxd'], persist: false,
   fold: (cards) => (cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path)),
 })
 
@@ -101,7 +106,7 @@ export const gridPage = (cat: Category, def: RowDef, row: string, kind: Kind | u
 export const explorePage = (d: Draft, pick: Pick, ctx: { picked: string[]; seen: number[] } = { picked: [], seen: [] }): Page<ExplorePage> => ({
   key: exploreKey(d, pick, ctx),
   load: () => loadExplore(d, pick, ctx),
-  catalogue: true, persist: false,
+  catalogue: true, deps: ['services'], persist: false,
   fold: (p) => (p?.cards ?? []).slice(0, 12).map((c) => posterPicture(c.poster_path)),
 })
 /** Where a grid route starts when its list is made of filters. */

@@ -41,7 +41,7 @@ def same(skel, real, size=True, centre=False):
             if size: assert all(abs(x - y) <= 3 for x, y in zip(a[2:], b[2:])), (k, a, b)
 
 @pytest.mark.parametrize('path,pairs', [
-    ('/browse/c/drama', {'poster': ('.skel span', 'section.row .cover')}),
+    ('/browse/c/drama', {'card': ('.skel b', 'section.row .spot')}),
     ('/browse/titles', {'poster': ('.skel span', '.cover')}),
     ('/person/1', {'picture': ('.skel header i', '.person-head .avatar'), 'poster': ('.skel > div span', '.cover')}),
     ('/browse', {'card': ('.skel span', '.br-card')}),

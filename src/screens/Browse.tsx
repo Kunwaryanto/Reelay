@@ -12,6 +12,7 @@ import { ALL_ROWS, SERVER_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraf
 import { paths } from '../lib/routes'
 import { categoryPage, coverPictures, coverSrc, coversPage, explorePage, fits, gridDef, gridPage, sectionCats, sectionPage, usePageQuery, warmPage } from '../lib/pages'
 import { ALL_TITLES, exploreCards, exploreCount, exploreKey, exploreOf, exploreTitle, type ExploreStart } from '../lib/explore'
+import { SpotRow } from '../ui/SpotCard'
 import { BackButton, useJoinedRef, usePageRefresh, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, LoadOn, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
 import { Hero } from './Now'
 import { useHiddenTags } from '../lib/hidden'
@@ -213,6 +214,13 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
         <PageContent frame={frame} what={cat.label} skeleton="rows">{(d) => (
           <>
             {d.hero.length > 0 ? <Hero items={d.hero} /> : <div className="br-top-gap" />}
+            {/* picks, as on Home: the member's own reasons first (a film they loved, a friend), then critics, awards, new */}
+            {d.picks.length > 0 && (
+              <section className="row">
+                <SectionHeader title="Picks for you" />
+                <SpotRow cards={d.picks} />
+              </section>
+            )}
             {d.rows.map((row, r) => (
               <section key={row.id} className="row">
                 {/* View all only when the row doesn't already hold the whole list */}
@@ -226,7 +234,7 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
                 </PosterRow>
               </section>
             ))}
-            {d.hero.length === 0 && d.rows.length === 0 && <p className="br-none">Nothing streaming here right now.</p>}
+            {d.hero.length === 0 && d.picks.length === 0 && d.rows.length === 0 && <p className="br-none">Nothing on your services here right now.</p>}
           </>
         )}</PageContent>
       </main>

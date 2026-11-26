@@ -1,13 +1,17 @@
-// Browse: the categories (genres, lists, decades, countries), and the lookups behind their pages.
-// A category is a set of filters over streaming titles; nothing here is stored in the database.
-import { MIN_ROW, type Card } from './catalogue'
+// Browse: the categories (moods and themes, genres, lists, decades, countries), and the lookups behind their pages.
+// A category is a rule over streaming titles, sent to the database with each lookup (browse_page, browse_list,
+// browse_covers: migration 20261126000600); nothing about categories is stored there. Like Home, Browse is the
+// member's own services, without their logged films or hidden tags (the database knows them: auth.uid()); one row
+// at the end of a category page shows what is on other services. Each page is one request.
+import { MIN_ROW, namesLine, type Card } from './catalogue'
 import { supabase } from './supabase'
-import { localDay } from './days'
-import { hiddenTags, suggestable } from './hidden'
+import { dayNumber } from './days'
+import { hiddenTags } from './hidden'
+import type { HomeCard } from './home'
 
 export type Kind = Card['kind']
 /** 'home': lists that only Home's rows open (View all); they aren't shown in Browse */
-export type SectionId = 'genres' | 'lists' | 'decades' | 'countries' | 'home'
+export type SectionId = 'moods' | 'genres' | 'lists' | 'decades' | 'countries' | 'home'
 export type Sort = 'popular' | 'rated' | 'newest' | 'leaving' | 'trending'
 
 type Rule = {
@@ -28,6 +32,8 @@ type Rule = {
   trending?: boolean
   /** has won an award */
   awards?: boolean
+  /** a mood or theme (title_moods, from TMDB keywords: MOODS in the sync) */
+  mood?: string
 }
 
 export type Category = {
@@ -54,10 +60,16 @@ const g = (id: string, label: string, tint: string, genres: string[], only?: Kin
   ({ id, section: 'genres', label, tint, rule: { genres }, noun: label.toLowerCase(), only, tag })
 const d = (label: string, from: number, tint: string): Category =>
   ({ id: label.toLowerCase(), section: 'decades', label, tint, rule: { from, to: from + 9 }, noun: label })
+const m = (id: string, label: string, tint: string, noun = label.toLowerCase()): Category =>
+  ({ id, section: 'moods', label, tint, rule: { mood: id }, noun })
 const c = (id: string, label: string, adjective: string, country: string, tint: string): Category =>
   ({ id, section: 'countries', label, tint, rule: { country }, noun: adjective })
 
 export const CATEGORIES: Category[] = [
+  m('feel-good', 'Feel-good', '#8A5A1F'), m('mind-bending', 'Mind-bending', '#23395B'), m('true-stories', 'True stories', '#55555E'),
+  m('edge-of-your-seat', 'Edge of your seat', '#3F2A4F', 'edge-of-your-seat'), m('cosy', 'Cosy', '#6B4A2A'), m('dark-gritty', 'Dark & gritty', '#1F3A33'),
+  m('based-on-a-book', 'Based on a book', '#2F4F5F', 'book adaptations'), m('heist', 'Heists', '#5B3A2A', 'heist'), m('coming-of-age', 'Coming of age', '#2E5A3A'),
+
   g('drama', 'Drama', '#6B2E3A', ['Drama'], undefined, 'drama'),
   g('crime', 'Crime', '#2F3B52', ['Crime'], undefined, 'crime'),
   g('thriller', 'Thriller', '#3F2A4F', ['Thriller', 'Mystery'], undefined, 'thriller'),
@@ -99,6 +111,7 @@ export const CATEGORIES: Category[] = [
 ]
 
 export const SECTIONS: { id: SectionId; title: string; shown: number }[] = [
+  { id: 'moods', title: 'Moods & themes', shown: 6 },
   { id: 'genres', title: 'Genres', shown: 6 },
   { id: 'lists', title: 'Lists', shown: 4 },
   { id: 'decades', title: 'Decades', shown: 4 },
@@ -110,110 +123,97 @@ export const offered = (c: Category, hidden: string[] = hiddenTags()) => !c.tag 
 
 // ---- Rows on a category page ------------------------------------------------------
 
-export type RowId = 'new' | 'popular' | 'leaving' | 'top-series' | 'top-films'
-export type RowDef = { id: RowId; title: string; kind?: Kind; sort: Sort; notes?: 'leaving' }
+/** A row's id is what the database calls it (browse_keep, browse_order). */
+export type RowId = 'popular' | 'new' | 'trending' | 'critics' | 'top' | 'gems' | 'classics' | 'awards' | 'leaving' | 'elsewhere'
+/** sort: the order a View all of the row starts in (its own, unless the member picks another) */
+export type RowDef = { id: RowId; title: string; kind?: Kind; sort: Sort; notes?: 'leaving'; own?: boolean }
 
-/** The rows a category page shows, for all kinds or just one. */
+const ROWS: Record<RowId, Omit<RowDef, 'id' | 'kind'>> = {
+  popular: { title: 'Popular', sort: 'popular' },
+  new: { title: 'New on your services', sort: 'popular', own: true },
+  trending: { title: 'Trending', sort: 'trending', own: true },
+  critics: { title: 'Critics’ favourites', sort: 'rated', own: true },
+  top: { title: 'Highest rated', sort: 'rated' },
+  gems: { title: 'Hidden gems', sort: 'rated' },
+  classics: { title: 'Classics', sort: 'rated', own: true },
+  awards: { title: 'Award winners', sort: 'popular' },
+  leaving: { title: 'Leaving soon', sort: 'leaving', notes: 'leaving' },
+  elsewhere: { title: 'On other services', sort: 'popular', own: true },
+}
+/** The quality rows take turns at the top by day, so a category page isn't the same every day. */
+const QUALITY: RowId[] = ['critics', 'classics', 'gems', 'awards', 'top']
+
+/** The rows a category page shows, in order (those with too few titles are left out when it loads). */
 export function rowsOf(cat: Category, kind?: Kind): RowDef[] {
   const k = kind ?? cat.only
-  const n = cat.noun ?? cat.label.toLowerCase()
-  const fresh: RowDef = cat.section === 'genres' ? { id: 'new', title: `New in ${n}`, sort: 'popular' }
-    : cat.section === 'countries' ? { id: 'new', title: `New from ${cat.label === 'United Kingdom' || cat.label === 'United States' ? 'the ' : ''}${cat.label}`, sort: 'popular' }
-      : { id: 'popular', title: `Popular from the ${cat.label}`, sort: 'popular' }
-  const rows: RowDef[] = [
-    { ...fresh, kind: k },
-    { id: 'leaving', title: 'Leaving soon', kind: k, sort: 'popular', notes: 'leaving' },
-  ]
-  if (k !== 'film') rows.push({ id: 'top-series', title: `Top ${n} series`, kind: 'series', sort: 'rated' })
-  if (k !== 'series') rows.push({ id: 'top-films', title: `Top ${n} films`, kind: 'film', sort: 'rated' })
-  return rows
+  const turn = dayNumber() % QUALITY.length
+  const quality = [...QUALITY.slice(turn), ...QUALITY.slice(0, turn)]
+  const ids: RowId[] = ['new', 'trending', ...quality, 'leaving', 'elsewhere']
+  // a list of things that are trending, leaving or award-winning already: not those rows again
+  const skip = new Set<RowId>([...(cat.rule.trending ? ['trending' as const] : []), ...(cat.rule.leaving ? ['leaving' as const] : []), ...(cat.rule.awards ? ['awards' as const] : [])])
+  return ids.filter((id) => !skip.has(id)).map((id) => ({ id, ...ROWS[id], kind: k }))
 }
+export const rowDef = (cat: Category, row: string, kind?: Kind): RowDef | undefined =>
+  row in ROWS ? { id: row as RowId, ...ROWS[row as RowId], kind: kind ?? cat.only } : undefined
 
 // ---- Lookups -----------------------------------------------------------------------
 
-function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message)
-  return res.data as T
+/** The rule as the database reads it. */
+const ruleOf = (cat: Category) => cat.rule
+
+/** A whole list: a row's View all, or a Browse list (Leaving soon, Hidden gems…). `sort`: another order than the
+ *  row's own. On the member's services (but the "elsewhere" row), as cards with what the filter drawer looks at. */
+export async function browseList(cat: Category, row: RowId, kind?: Kind, sort?: Sort, limit = 90): Promise<Card[]> {
+  const { data, error } = await supabase.rpc('browse_list', { p_rule: ruleOf(cat), p_row: row, p_kind: kind ?? cat.only ?? null, p_limit: limit, p_sort: sort ?? null })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Card[]
 }
-const inDays = localDay
-const today = () => inDays(0)
+/** A Browse list's own row and order (Leaving soon is the leaving row; the others are the category itself). */
+export const listOf = (cat: Category): { row: RowId; sort?: Sort } =>
+  cat.list === 'leaving' ? { row: 'leaving' } : cat.list === 'trending' ? { row: 'trending' }
+    : { row: 'popular', sort: cat.list && cat.list !== 'popular' ? cat.list : undefined }
 
-const CARD = 'id,kind,title,year,runtime_min,seasons,poster_path,availability!inner(service_id,leaves_on)'
-const ART = 'id,kind,title,year,runtime_min,poster_path,backdrop_path,logo_path,genres,seasons,availability!inner(service_id,leaves_on)'
-
-type Opts = { kind?: Kind; sort?: Sort; row?: RowId; limit?: number; art?: boolean; facets?: boolean; cover?: boolean }
-
-/** Streaming titles in a category. `row` narrows it the way that row on the category page does. */
-export async function titlesIn(cat: Category, { kind, sort = 'popular', row, limit = 20, art, facets, cover }: Opts = {}): Promise<Card[]> {
-  const r = cat.rule
-  const k = kind ?? cat.only
-  // The IMDb rating and votes are on the title itself (kept in step with scores by a trigger), so rated lists are
-  // read in rating order through an index and stop at `limit`, instead of joining and sorting every title's scores.
-  // facets: what the filter drawer checks on the phone (genre, language, length, rating)
-  const extra = facets ? ',genres,original_language,runtime_min,scores(imdb_rating,rt_critics,letterboxd)' : ''
-  const joins = `${r.arrived ? ',availability_events!inner(event,happened_on)' : ''}${r.awards ? ',awards!inner(won)' : ''}`
-  // nothing the member hides from suggestions (the category cards' pictures are everyone's: they skip this)
-  let q = cover ? supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`) : suggestable(supabase.from('titles').select(`${art ? ART : CARD}${extra}${joins}`))
-  if (k) q = q.eq('kind', k)
-  if (r.genres) q = q.overlaps('genres', r.genres)
-  if (r.from !== undefined) q = q.gte('year', r.from)
-  if (r.to !== undefined) q = q.lte('year', r.to)
-  if (r.country) q = q.contains('countries', [r.country])
-  if (r.under) q = q.eq('kind', 'film').gt('runtime_min', 40).lt('runtime_min', r.under)
-  if (r.rating !== undefined) q = q.gte('imdb_rating', r.rating)
-  if (r.votes) {
-    q = q.gte('imdb_votes', r.votes[0])
-    if (r.votes[1]) q = q.lte('imdb_votes', r.votes[1])
-  } else if (sort === 'rated') {
-    // enough votes for the rating to mean something; fewer for small categories (a country, an old decade)
-    q = q.gte('imdb_votes', cat.section === 'genres' ? 20000 : 3000)
-  }
-  if (row === 'new') q = q.gte('year', thisYear - 1)
-  if (row === 'leaving' || r.leaving) q = q.gte('availability.leaves_on', today()).lte('availability.leaves_on', inDays(30))
-  if (art) q = q.not('backdrop_path', 'is', null).not('logo_path', 'is', null)
-  if (r.arrived) q = q.eq('availability_events.event', 'added').gte('availability_events.happened_on', inDays(-r.arrived))
-  if (r.trending) q = q.not('trend_rank', 'is', null)
-  if (r.awards) q = q.eq('awards.won', true)
-
-  if (sort === 'rated') q = q.order('imdb_rating', { ascending: false, nullsFirst: false })
-  else if (sort === 'newest') q = q.order('year', { ascending: false, nullsFirst: false })
-  else if (sort === 'trending') q = q.order('trend_rank', { ascending: true, nullsFirst: false })
-  const list = unwrap(await q.order('popularity', { ascending: false }).limit(limit) as never) as Card[]
-  // soonest first (the most popular `limit` of those leaving; the database can't order titles by a service's date)
-  if (sort === 'leaving') {
-    const soonest = (c: Card) => c.availability.map((a) => a.leaves_on).filter(Boolean).sort()[0] ?? '9999'
-    list.sort((a, b) => soonest(a).localeCompare(soonest(b)))
-  }
-  return list
-}
-
+/** Tonight's picks' kind of card: a title, why, who made it and the service to name. */
+export type Pick = HomeCard
 /** `more`: the row has more titles than it shows (its View all is worth opening) */
-export type CategoryPage = { hero: Card[]; rows: (RowDef & { items: Card[]; more: boolean })[] }
+export type CategoryPage = { hero: Card[]; picks: Pick[]; rows: (RowDef & { items: Card[]; more: boolean })[] }
 const ROW_SHOWS = 15
 
+type Raw = { hero: Card[]; picks: (Card & { reason: string; via: string | null; by: string[] })[]; rows: { id: RowId; items: Card[] }[] }
+/** A category page in one request: its top titles, its picks (with why) and its rows. */
 export async function loadCategory(cat: Category, kind?: Kind): Promise<CategoryPage> {
   const defs = rowsOf(cat, kind)
-  const [hero, ...lists] = await Promise.all([
-    titlesIn(cat, { kind, limit: 3, art: true }),
-    ...defs.map((r) => titlesIn(cat, { kind: r.kind, sort: r.sort, row: r.id, limit: ROW_SHOWS + 1 })),
-  ])
-  return { hero, rows: defs.map((r, i) => ({ ...r, items: lists[i].slice(0, ROW_SHOWS), more: lists[i].length > ROW_SHOWS })).filter((r) => r.items.length >= MIN_ROW) }
+  const { data, error } = await supabase.rpc('browse_page', {
+    p_rule: ruleOf(cat), p_kind: kind ?? cat.only ?? null, p_rows: defs.map((d) => d.id), p_day: dayNumber(), p_shows: ROW_SHOWS,
+  })
+  if (error) throw new Error(error.message)
+  const raw = data as Raw
+  const items = new Map(raw.rows.map((r) => [r.id, r.items]))
+  const picks: Pick[] = raw.picks.map(({ by, via, ...c }) => ({
+    ...c, via: via ?? undefined,
+    by: by.length ? `${c.kind === 'film' ? 'Directed by' : 'Created by'} ${namesLine([...new Set(by)])}` : undefined,
+  }) as Pick)
+  return {
+    hero: raw.hero, picks,
+    rows: defs.map((r) => ({ ...r, items: (items.get(r.id) ?? []).slice(0, ROW_SHOWS), more: (items.get(r.id) ?? []).length > ROW_SHOWS }))
+      .filter((r) => r.items.length >= MIN_ROW),
+  }
 }
 
-/** One picture per category for the Browse cards: its most popular title's artwork, no title used twice. */
+/** One picture per category for the Browse cards: its most popular title's backdrop, no title used twice. In one
+ *  request; the database keeps them until the nightly sync has run (they are everyone's). */
 export async function loadCovers(): Promise<Record<string, string | null>> {
-  const tops = await Promise.all(CATEGORIES.map((cat) => cat.section === 'home' ? Promise.resolve([]) :
-    supabaseTop(cat).catch(() => [] as { id: number; backdrop_path: string | null; poster_path: string | null }[])))
+  const cats = CATEGORIES.filter((cat) => cat.section !== 'home')
+  const { data, error } = await supabase.rpc('browse_covers', { p_cats: cats.map((cat) => ({ id: cat.id, rule: ruleOf(cat), kind: cat.only ?? null })) })
+  if (error) throw new Error(error.message)
+  const tops = (data ?? {}) as Record<string, { id: number; path: string }[]>
   const used = new Set<number>()
   const out: Record<string, string | null> = {}
-  CATEGORIES.forEach((cat, i) => {
-    const pick = tops[i].find((t) => !used.has(t.id)) ?? tops[i][0]
+  for (const cat of cats) {
+    const list = tops[cat.id] ?? []
+    const pick = list.find((t) => !used.has(t.id)) ?? list[0]
     if (pick) used.add(pick.id)
-    out[cat.id] = pick ? pick.backdrop_path ?? pick.poster_path : null
-  })
+    out[cat.id] = pick?.path ?? null
+  }
   return out
-}
-async function supabaseTop(cat: Category) {
-  const list = await titlesIn(cat, { sort: cat.list === 'rated' ? 'rated' : 'popular', limit: 5, art: true, cover: true })
-  return list.map((t) => ({ id: t.id, backdrop_path: t.backdrop_path ?? null, poster_path: t.poster_path }))
 }
