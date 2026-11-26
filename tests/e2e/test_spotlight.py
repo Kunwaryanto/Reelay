@@ -92,6 +92,9 @@ def test_held_card_stays_pressed_and_the_lifted_poster_has_clean_corners(app):
     pg.wait_for_timeout(300)
     pg.mouse.move(*box); pg.mouse.down(); pg.wait_for_timeout(900); pg.mouse.up(); pg.wait_for_timeout(700)
     assert pg.evaluate("document.querySelector('.spot-item').dataset.pressed === 'true' && getComputedStyle(document.querySelector('.spot-item')).transform !== 'none'")
-    assert pg.evaluate("['.hold-poster > .cover', '.hold-poster > .cover img'].map(s => getComputedStyle(document.querySelector(s)).borderTopLeftRadius)") == ['0px', '0px']
+    assert pg.evaluate("getComputedStyle(document.querySelector('.hold-poster > .cover')).borderTopLeftRadius") == '0px'
+    # the lifted copy is painted from the original's decoded picture (a canvas, no new image to decode: a new <img>
+    # showed a frame or two late on iPhone as a dark box), and the original is hidden only then
+    assert pg.evaluate("!!document.querySelector('.hold-poster > .cover > canvas') && document.querySelector('.spot-thumb .cover').style.visibility === 'hidden'")
     pg.mouse.click(5, 5); pg.wait_for_timeout(600)
     assert pg.evaluate("document.querySelector('.spot-item').dataset.pressed === undefined && !document.querySelector('.hold-menu')")

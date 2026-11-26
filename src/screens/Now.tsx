@@ -170,13 +170,21 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   // and hide the original until the copy has landed back on it, so there's never two or a blank one.
   useLayoutEffect(() => {
     const copy = held.cover.cloneNode(true) as HTMLElement
-    // The copy's picture has to be on screen in the same frame the original is hidden, or the poster blinks
-    // (seen the first time a poster is held; after that the browser has the decoded picture at hand). So the copy
-    // shows the very file the original is showing, decoded before it paints, and the original is hidden only
-    // once the copy's picture is ready.
+    // The copy's picture has to be on screen in the same frame the original is hidden, or the poster blinks.
+    // A new <img>, even of the same file, is decoded again before Safari paints it (a frame or two late, seen as a
+    // dark box where the small poster of Tonight's picks was, and a blank lifted poster), so the copy is painted
+    // from the original's decoded picture: a canvas, drawn at once. Then a sharper file (the small poster was
+    // loaded at 40 px) takes over once it is decoded.
     const from = held.cover.querySelector('img')
     const img = copy.querySelector('img')
-    if (img && from) {
+    let drawn = false
+    if (img && from?.complete && from.naturalWidth) {
+      const c = document.createElement('canvas')
+      c.width = from.naturalWidth; c.height = from.naturalHeight
+      try { c.getContext('2d')?.drawImage(from, 0, 0); drawn = true } catch { /* keep the <img> */ }
+      if (drawn) img.replaceWith(c)
+    }
+    if (!drawn && img && from) {
       img.removeAttribute('srcset'); img.removeAttribute('sizes')
       img.loading = 'eager'; img.decoding = 'sync'
       img.src = from.currentSrc || from.src
@@ -185,10 +193,18 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
     let live = true
     const hide = () => { if (live) held.cover.style.visibility = 'hidden' }
     const late = setTimeout(hide, 200)
-    if (img?.src) img.decode().then(hide, hide); else hide()
+    if (drawn) hide()
+    else if (img?.src) img.decode().then(hide, hide)
+    else hide()
+    // sharper: the poster at the lifted size, laid over the copy once decoded
+    const sharp = held.card.poster_path ? new Image() : null
+    if (sharp && drawn) {
+      sharp.src = tmdbImage(held.card.poster_path, 'w342')!
+      sharp.decode().then(() => { if (live) copy.querySelector('canvas')?.after(sharp) }, () => {})
+    }
     const r = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
     return () => { live = false; clearTimeout(late); cancelAnimationFrame(r); held.cover.style.visibility = ''; copy.remove() }
-  }, [held.cover])
+  }, [held.cover, held.card.poster_path])
   // closing lands on the poster at its normal size (the pressed, slightly smaller size is only where it starts from)
   // It is measured again at that moment: the first measurement was taken mid-press (the card shrinks around its
   // own centre, not the poster's), so it can be a pixel or two off, which showed as a small jump at the end.
