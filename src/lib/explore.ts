@@ -4,10 +4,10 @@
 import type { Draft } from '../screens/SearchFilters'
 import { CATEGORIES, rowsOf, type Category, type Kind, type Sort } from './browse'
 import type { Card } from './catalogue'
-import { genreNames, narrow, type Filters } from './search'
+import { countTitles, genreNames, narrow, type Filters, type Totals } from './search'
 import { supabase } from './supabase'
 import { localDay } from './days'
-import { hiddenKey, suggestable } from './hidden'
+import { hiddenKey, hiddenTags, suggestable } from './hidden'
 
 export type Pick = 'all' | Kind
 /** Where a list starts: its filters as chips, the type pill and the sort. */
@@ -79,7 +79,7 @@ const FIELDS = 'id,kind,title,year,runtime_min,seasons,poster_path'
 /** A rated list keeps to titles with enough votes for the rating to mean something. */
 const RATED_VOTES = 3000
 
-export type Totals = { all: number; film: number; series: number }
+export type { Totals }
 export type ExplorePage = { cards: Card[]; totals: Totals }
 type Ctx = { picked: string[]; seen: number[] }
 
@@ -104,10 +104,10 @@ const scored = (d: Draft) => !!(d.rating || d.rt || d.lb)
 const today = () => localDay()
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function query(d: Draft, ctx: Ctx, kind: Kind | undefined, fields: string, head = false): any {
+function query(d: Draft, ctx: Ctx, kind: Kind | undefined, fields: string): any {
   const sel = `${fields},availability!inner(service_id,leaves_on)${scored(d) ? ',scores!inner(imdb_rating,rt_critics,letterboxd)' : ''}`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q: any = suggestable(narrow(supabase.from('titles').select(sel, head ? { count: 'exact', head: true } : undefined), filtersOf(d, ctx, kind)))
+  let q: any = suggestable(narrow(supabase.from('titles').select(sel), filtersOf(d, ctx, kind)))
   if (d.leaving) q = q.gte('availability.leaves_on', today())
   if (d.sort === 'rated') q = q.gte('imdb_votes', RATED_VOTES)
   return q
@@ -132,18 +132,18 @@ export async function exploreCards(d: Draft, pick: Pick, ctx: Ctx, from = 0): Pr
   return list
 }
 
-/** How many titles fit, of each type (the pills and the drawer's button). */
+/** How many titles fit, films and series apart (the pills and the drawer's button), in one request. */
+export function exploreTotals(d: Draft, ctx: Ctx): Promise<Totals> {
+  return countTitles({ ...filtersOf(d, ctx), notTags: hiddenTags() }, { leavesFrom: d.leaving ? today() : undefined, minVotes: d.sort === 'rated' ? RATED_VOTES : undefined })
+}
 export async function exploreCount(d: Draft, kind: Kind | undefined, ctx: Ctx): Promise<number> {
-  const res = await query(d, ctx, kind, 'id', true)
-  if (res.error) throw new Error(res.error.message)
-  return (res.count as number | null) ?? 0
+  const t = await exploreTotals(d, ctx)
+  return kind ? t[kind] : t.all
 }
 
 export async function loadExplore(d: Draft, pick: Pick, ctx: Ctx): Promise<ExplorePage> {
-  const [cards, all, film, series] = await Promise.all([
-    exploreCards(d, pick, ctx), exploreCount(d, undefined, ctx), exploreCount(d, 'film', ctx), exploreCount(d, 'series', ctx),
-  ])
-  return { cards, totals: { all, film, series } }
+  const [cards, totals] = await Promise.all([exploreCards(d, pick, ctx), exploreTotals(d, ctx)])
+  return { cards, totals }
 }
 
 /** What a list's saved copy is known by: its filters, type and order (and the services or watched films they use). */

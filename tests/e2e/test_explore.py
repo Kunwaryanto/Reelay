@@ -78,3 +78,18 @@ def test_browse_title_sits_where_the_other_tabs_have_it(app):
       const h = r(document.querySelector('.br-head h1')), a = r(document.querySelector('.br-head a'))
       return (h.bottom - 26 * 0.24) - (a.bottom - 16 * 0.24) })()""")
     assert abs(gap) < 3, gap
+
+def test_totals_come_in_one_request_without_counting_through_the_list(app):
+    # The pills' totals (all, films, series) are one call to title_totals, not three HEAD counts through the list's
+    # own query (which built every title's services only to count them: 1 to 1.4 s each). 26 Nov.
+    pg = app()
+    heads = []
+    pg.on('request', lambda r: heads.append(r.url) if r.method == 'HEAD' and '/rest/v1/titles' in r.url else None)
+    asked = []
+    pg.on('request', lambda r: asked.append(r.post_data) if 'rpc/title_totals' in r.url else None)
+    pg.goto(m.B + '/browse/g/90s/popular'); pg.settle(5000)
+    assert asked.count('{"f":{"decades":[[1990,1999]]}}') == 1, asked
+    assert heads == [], heads
+    total = len([i for i in range(41, 55) if i % 5])
+    pills = pg.evaluate(f"[...({TOP}).querySelectorAll('.wl-pill')].map(b => (b.getAttribute('aria-label') || '') + '|' + b.textContent)")
+    assert any(str(total) in p for p in pills), pills

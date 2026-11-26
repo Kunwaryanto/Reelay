@@ -75,3 +75,10 @@ def test_service_always_at_the_bottom_never_in_the_reason(app):
     # nor the length: a short saved film is "Under 100 minutes", with its length below
     assert not any(o['reason'].startswith('Only ') for o in out), out
     assert any(o['reason'] == 'Under 100 minutes' for o in out), out
+
+def test_taste_reasons_name_the_director_and_the_actor(app):
+    # From the member's own taste: a director of a film they loved ("From the director of Heat") and an actor in two
+    # films they loved ("With Florence Pugh"), one of each a day (home_makers). 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    reasons = [c['reason'] for c in pg.evaluate(CARDS)]
+    assert 'From the director of Heat' in reasons and 'With Florence Pugh' in reasons, reasons

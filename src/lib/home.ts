@@ -77,11 +77,12 @@ export type HomeAsk = {
  * Raise this whenever what loadHome returns changes (rows, their order, the rules). It is part of the name Home's
  * content is saved under on the phone, so a new build never draws an older build's saved rows.
  */
-export const HOME_VERSION = 18
+export const HOME_VERSION = 19
 
 const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
 
+type Maker = { role: 'director' | 'actor'; person_id: number; name: string; source: string | null; title_id: number }
 /** "Anna rated it 4.5", "Anna and Erik liked it", "Anna and 2 friends liked it" */
 function friendsLine(rows: { name: string; rating: number }[]): string {
   const first = (n: string) => n.trim().split(/\s+/)[0] || n
@@ -235,8 +236,10 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
         .order('imdb_rating', { ascending: false }).limit(40) as never) : Promise.resolve([] as Card[]),
     soft<{ source: string; source_id: number; title_id: number; rank: number }>(supabase.rpc('home_saved', { p_day: day, ...rpcArgs }) as never),
     soft<{ person_id: number; name: string; title_id: number }>(supabase.rpc('home_people', { p_day: day, ...rpcArgs }) as never),
+    // Tonight's picks' taste reasons: a director of a film they loved, an actor in two of them (one each a day)
+    soft<Maker>(supabase.rpc('home_makers', { p_day: day, ...rpcArgs }) as never),
   ])
-  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people] =
+  const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people, makersAll] =
     all ? await all : (fetched as unknown as NonNullable<Awaited<typeof all>>)
 
   // second step: the titles behind the two personal lists, and the rows that depend on the member's taste
@@ -260,11 +263,13 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   let savedArrivalsQ = supabase.from('availability_events').select('title_id,service_id,happened_on').eq('event', 'added')
     .gte('happened_on', inDays(-30)).in('title_id', savedIds).order('happened_on', { ascending: false })
   if (mine) savedArrivalsQ = savedArrivalsQ.in('service_id', svc)
-  const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, savedArrivals, decadeLists, ...genreLists] = base
-    ? [[], [], [], [], [], [], [[], []], ...picks.map(() => [[], []])] as unknown as [Card[], Card[], Card[], Card[], Card[], SavedArrival[], Card[][], ...Card[][][]]
+  // not the person the "More with" row is about
+  const makers = (makersAll ?? []).filter((x) => x.person_id !== people[0]?.person_id)
+  const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, makerCards, savedArrivals, decadeLists, ...genreLists] = base
+    ? [[], [], [], [], [], [], [], [[], []], ...picks.map(() => [[], []])] as unknown as [Card[], Card[], Card[], Card[], Card[], Card[], SavedArrival[], Card[][], ...Card[][][]]
     : await Promise.all([
     byIds(because.map((b) => b.title_id)), byIds(alt.map((b) => b.title_id)), byIds(friends.map((f) => f.title_id)),
-    byIds(savedRecs.map((b) => b.title_id)), byIds(people.map((p) => p.title_id)),
+    byIds(savedRecs.map((b) => b.title_id)), byIds(people.map((p) => p.title_id)), byIds([...new Set(makers.map((x) => x.title_id))]),
     savedIds.length ? soft<SavedArrival>(savedArrivalsQ as never) : Promise.resolve([] as SavedArrival[]),
     Promise.all((['film', 'series'] as Kind[]).map((k) =>
       soft<Card>(titles(k).gte('year', decade.rule.from!).lte('year', decade.rule.to!).order('popularity', { ascending: false }).limit(25) as never))),
@@ -411,6 +416,12 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
     }
   }
   if (alt.length) spot(altList, () => altReason)
+  // taste: "From the director of Heat", "With Florence Pugh" (their other titles, most popular first)
+  const makerList = (role: Maker['role']) => makers.filter((x) => x.role === role)
+    .map((x) => makerCards.find((c) => c.id === x.title_id)).filter((c): c is HomeCard => !!c && fits(c))
+  const director = makers.find((x) => x.role === 'director'), actor = makers.find((x) => x.role === 'actor')
+  if (director?.source) spot(makerList('director'), () => `From the director of ${director.source}`)
+  if (actor) spot(makerList('actor'), () => `With ${actor.name}`)
   spot(playable.filter((t) => arrivedSaved.has(t.id)), () => 'Just arrived', { again: true, via: (t) => arrivedSaved.get(t.id) })
   spot(rowFriends, (t) => friendsLine(friends.filter((f) => f.title_id === t.id)))
   const since = new Map(saved.filter((x) => x.title && x.added_at).map((x) => [x.title.id, x.added_at!]))
