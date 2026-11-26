@@ -405,16 +405,25 @@ async function saveAvailability(found, keys) {
     const e = found.get(key);
     for (const [svc, type] of e.offers) rows.push([Number(id), k === 'movie' ? 'film' : 'series', svc, type, e.pop]);
   }
+  // What was seen this run is listed in availability_seen (the offers not seen leave in reconcile); an offer row is
+  // written only when it is new or its type changed (every offer used to be rewritten each night to mark it seen).
+  await db.query('truncate public.availability_seen');
   let offers = 0;
   for (let i = 0; i < rows.length; i += 2000) {
     const chunk = rows.slice(i, i + 2000);
     const cols = [0, 1, 2, 3, 4].map((j) => chunk.map((r) => r[j]));
     const r = await db.query(
-      `insert into public.availability (title_id, service_id, type, seen_at)
-       select t.id, x.svc, x.type, now()
-       from unnest($1::int[], $2::text[], $3::text[], $4::text[]) as x(tmdb_id, kind, svc, type)
-       join public.titles t on t.tmdb_id = x.tmdb_id and t.kind = x.kind
-       on conflict (title_id, service_id) do update set type = excluded.type, seen_at = now()`,
+      `with x as (
+         select distinct on (t.id, x.svc) t.id, x.svc, x.type
+         from unnest($1::int[], $2::text[], $3::text[], $4::text[]) as x(tmdb_id, kind, svc, type)
+         join public.titles t on t.tmdb_id = x.tmdb_id and t.kind = x.kind
+       ), seen as (
+         insert into public.availability_seen (title_id, service_id) select id, svc from x on conflict do nothing
+       )
+       insert into public.availability (title_id, service_id, type, seen_at)
+       select id, svc, type, now() from x
+       on conflict (title_id, service_id) do update set type = excluded.type, seen_at = now()
+       where public.availability.type is distinct from excluded.type`,
       cols.slice(0, 4),
     );
     offers += r.rowCount;
@@ -429,7 +438,8 @@ async function saveAvailability(found, keys) {
       [cols[0], cols[1], cols[4]],
     );
   }
-  log(`availability: ${offers} offers saved`);
+  const seen = (await db.query('select count(*)::int n from public.availability_seen')).rows[0].n;
+  log(`availability: ${seen} offers seen, ${offers} new or changed`);
 }
 
 // ---------------------------------------------------------------------------
@@ -621,7 +631,8 @@ async function syncImdbRatings() {
     const values = chunk.map((_, j) => `($${j * 3 + 1}::bigint,$${j * 3 + 2}::numeric,$${j * 3 + 3}::int, now())`).join(',');
     await db.query(
       `insert into public.scores (title_id, imdb_rating, imdb_votes, imdb_synced_at) values ${values}
-       on conflict (title_id) do update set imdb_rating = excluded.imdb_rating, imdb_votes = excluded.imdb_votes, imdb_synced_at = now()`,
+       on conflict (title_id) do update set imdb_rating = excluded.imdb_rating, imdb_votes = excluded.imdb_votes, imdb_synced_at = now()
+       where (public.scores.imdb_rating, public.scores.imdb_votes) is distinct from (excluded.imdb_rating, excluded.imdb_votes)`,
       chunk.flat(),
     );
   }
@@ -777,7 +788,7 @@ async function syncMdblist() {
 // ---------------------------------------------------------------------------
 // 6. Full runs: drop what's gone, record added/left, clean up
 // ---------------------------------------------------------------------------
-async function reconcile(runStart) {
+async function reconcile() {
   // The very first full run sees everything for the first time: that isn't "new".
   const firstRun = (await db.query('select not exists (select 1 from public.availability where since < current_date) as first')).rows[0].first;
   // Nor is a service's own first night (one added to Reelay later): its whole catalogue was already there.
@@ -790,10 +801,14 @@ async function reconcile(runStart) {
      on conflict do nothing`,
   );
   const left = await db.query(
-    `with gone as (delete from public.availability where seen_at < $1 returning title_id, service_id)
+    // offers this run didn't see (availability_seen, filled by saveAvailability; never when it is empty)
+    `with gone as (
+       delete from public.availability a
+       where exists (select 1 from public.availability_seen)
+         and not exists (select 1 from public.availability_seen s where s.title_id = a.title_id and s.service_id = a.service_id)
+       returning title_id, service_id)
      insert into public.availability_events (title_id, service_id, event)
      select title_id, service_id, 'left' from gone on conflict do nothing`,
-    [runStart],
   );
   // Titles with nothing streaming: kept while someone has saved them, they're well known (notable) or have awards.
   await db.query(
@@ -1418,7 +1433,7 @@ async function main() {
   if (FULL && new Date().getUTCDay() === 0) await syncNotable().catch((e) => log('notable failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncAwards().catch((e) => log('awards failed:', e.message));
   if (FULL && new Date().getUTCDay() === 0) await syncStandup().catch((e) => log('stand-up failed:', e.message));
-  if (FULL) await reconcile(runStart);
+  if (FULL) await reconcile();
   // the Start screen's poster wall, made once a night (public.start_wall reads it)
   if (FULL) await db.query('select public.refresh_start_wall()').catch((e) => log('start wall failed:', e.message));
   // after reconcile, so today's arrivals are in the events; a failure here never fails the sync
