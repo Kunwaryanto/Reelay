@@ -15,6 +15,13 @@ def test_front_page_moods_first_and_pictures_in_one_request(app):
     covers = [b for k, b in m.MODE['browse_asked'] if k == 'covers']
     assert len(covers) == 1 and any(c['rule'] == {'mood': 'feel-good'} for c in covers[0]['p_cats']), covers
 
+def test_no_card_picture_twice(app):
+    # the categories share their popular titles; each card still gets its own picture, a small category first
+    pg = app()
+    pg.goto(m.B + '/browse'); pg.settle(5000)
+    srcs = pg.evaluate("[...document.querySelectorAll('.br-card img')].map(i => i.getAttribute('src'))")
+    assert len(srcs) > 10 and len(set(srcs)) == len(srcs), srcs
+
 def test_category_page_is_one_request_with_picks_and_rows(app):
     m.MODE['browse_asked'] = []
     pg = app()

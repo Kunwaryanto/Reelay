@@ -68,7 +68,7 @@ export const coverPictures = (covers: Record<string, string | null> | undefined,
   cats.map((c) => covers?.[c.id]).filter((p): p is string => !!p).map((p) => { const c = coverSrc(p); return { src: c.src, srcset: c.srcSet, sizes: c.sizes } })
 // The saved card pictures are per set of categories: a new category makes the app look them up again, not wait a day.
 export const coversPage: Page<Record<string, string | null>> = {
-  key: `browse-covers:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`, load: loadCovers, catalogue: true, fold: () => [],
+  key: `browse-covers:2:${CATEGORIES.map((c) => c.id).join(',').length}:${CATEGORIES.length}`, load: loadCovers, catalogue: true, fold: () => [],
 }
 /** A category's cards in a section (View all on a Browse section): the first eight cards' pictures. */
 /** A category Browse shows for a type pill: one that has that type, and not one about a tag the member hides. */

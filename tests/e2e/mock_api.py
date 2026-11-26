@@ -42,7 +42,9 @@ def route(r):
     # Browse (migration 20261126000600): a category page, a whole row, the cards' pictures, one request each
     if '/rest/v1/rpc/browse_covers' in u:
         b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('covers',b))
-        return r.fulfill(json={c['id']:[{"id":3000+k*7+j,"path":f"/b{3000+k*7+j}.jpg"} for j in range(5)] for k,c in enumerate(b['p_cats'])})
+        # as in the real one, the categories share their most popular titles; a country has two, Leaving soon three, all among the most popular
+        pool=lambda k, c: [3000, 2900+k] if 'country' in c['rule'] else [3000, 3001, 3002] if 'leaving' in c['rule'] else range(3000, 3060)
+        return r.fulfill(json={c['id']:[{"id":i,"path":f"/b{i}.jpg"} for i in pool(k, c)] for k,c in enumerate(b['p_cats'])})
     if '/rest/v1/rpc/browse_page' in u:
         b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('page',b))
         kind=b.get('p_kind'); k0=len(MODE['browse_asked'])*100

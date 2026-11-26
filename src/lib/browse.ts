@@ -207,10 +207,12 @@ export async function loadCovers(): Promise<Record<string, string | null>> {
   const { data, error } = await supabase.rpc('browse_covers', { p_cats: cats.map((cat) => ({ id: cat.id, rule: ruleOf(cat), kind: cat.only ?? null })) })
   if (error) throw new Error(error.message)
   const tops = (data ?? {}) as Record<string, { id: number; path: string }[]>
+  // No picture twice: the categories with fewest candidates choose first (a small country before Drama), each the
+  // most popular one not yet taken. Only a category whose every candidate is taken repeats one.
   const used = new Set<number>()
   const out: Record<string, string | null> = {}
-  for (const cat of cats) {
-    const list = tops[cat.id] ?? []
+  const order = cats.map((cat, i) => ({ cat, i, list: tops[cat.id] ?? [] })).sort((a, b) => a.list.length - b.list.length || a.i - b.i)
+  for (const { cat, list } of order) {
     const pick = list.find((t) => !used.has(t.id)) ?? list[0]
     if (pick) used.add(pick.id)
     out[cat.id] = pick?.path ?? null
