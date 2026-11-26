@@ -28,7 +28,7 @@ def test_sign_in_sheet_keeps_the_keyboard_and_hides_the_moving_caret(app):
 def test_leaving_for_mail_lets_go_of_the_field(app):
     # Coming back from Mail, iOS brought the keyboard back by itself and panned the app up while it rose: the sheet
     # jumped. So leaving the Home Screen app with the code field focused lets go of the focus: back in the app the
-    # sheet stands still and a tap on the boxes (or Paste code) carries on. 26 Nov.
+    # sheet stands still and a tap on the boxes carries on. 26 Nov.
     pg = m.ctx(False)
     pg.add_init_script("Object.defineProperty(navigator, 'standalone', { get: () => true })")
     try:

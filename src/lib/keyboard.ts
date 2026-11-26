@@ -62,7 +62,7 @@ export function holdDocument() {
   // Leaving the app (for Mail, to fetch the code) with a field in a sheet focused: iOS brought the keyboard back
   // by itself on return and panned the whole app up while it rose, then let go: the jump coming back from Mail.
   // Nothing panning can be put back mid-way, so the field lets go of the focus as the app is left; back in the
-  // app the sheet stands still, and a tap on the field (focused without scrolling) or Paste code carries on.
+  // app the sheet stands still, and a tap on the field (focused without scrolling) carries on.
   document.addEventListener('visibilitychange', () => {
     const a = document.activeElement as HTMLElement | null
     if (document.hidden && a?.closest?.('dialog.sheet') && a.matches('input, textarea')) a.blur()

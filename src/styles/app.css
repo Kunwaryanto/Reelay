@@ -345,7 +345,6 @@ html:has(.sheet[open]), html:has(.sheet[open]) body { background: var(--sheet); 
 .code-status { margin: 12px 0 0; min-height: 20px; display: flex; align-items: center; gap: 6px; font: var(--type-meta); color: var(--text-faint); }
 .code-status .resent { color: var(--text-secondary); }
 /* Paste: a pill at the end of the status line, big enough to hit with the keyboard up */
-.code-status .code-paste { margin-left: auto; height: var(--button-small); padding: 0 14px; border: 0; border-radius: var(--radius-pill-32); background: var(--fill); color: var(--text-primary); font: var(--type-meta); font-weight: 600; cursor: pointer; }
 .code-status button { height: var(--hit); margin: -12px 0; padding: 0; border: 0; background: none; font: var(--type-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; cursor: pointer; transition: color var(--dur-press) var(--ease-out); }
 .code-status button[data-ready='true'] { color: #fff; font-weight: 500; }
 @keyframes shake { 0%, 100% { transform: none; } 15% { transform: translateX(-6px); } 30% { transform: translateX(5px); } 45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-2px); } 90% { transform: translateX(1px); } }
