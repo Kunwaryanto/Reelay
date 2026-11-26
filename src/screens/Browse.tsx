@@ -1,6 +1,6 @@
 // Browse: categories as cards (genres, lists, decades, countries), a category's page of rows, and the grid behind "View all".
 import { useServicesQuery } from '../lib/profile'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   CATEGORIES, SECTIONS, categoryOf, type Category, type Kind, type SectionId, type Sort,
@@ -12,6 +12,7 @@ import { ALL_ROWS, SERVER_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraf
 import { paths } from '../lib/routes'
 import { categoryPage, coverPictures, coverSrc, coversPage, explorePage, fits, gridDef, gridPage, sectionCats, sectionPage, usePageQuery, warmPage } from '../lib/pages'
 import { ALL_TITLES, exploreCards, exploreCount, exploreKey, exploreOf, exploreTitle, type ExploreStart } from '../lib/explore'
+import { SpotRow, picksTitle } from '../ui/SpotCard'
 import { BackButton, useJoinedRef, usePageRefresh, PageContent, PageLink, usePageFrame, ViewAll, Icon, LoadFailed, LoadOn, PillCount, PosterRow, SectionHeader, Skeleton, TitleCard, useArrival, useSwitched } from '../ui'
 import { Hero } from './Now'
 import { useHiddenTags } from '../lib/hidden'
@@ -101,14 +102,18 @@ export default function Browse() {
   const pageRef = useJoinedRef(page, pull.bind.ref)
   useWarmCovers(covers.data)
   useHiddenTags() // a category all about a hidden tag leaves (fits)
-  // the first cards' pages load ahead, a moment after Browse has settled
+  // the first cards' pages load ahead, a moment after Browse has settled, while it is the tab on screen (Browse is
+  // there from launch behind the other tabs: not then)
+  const { tab } = useNav()
+  const shown = tab === 'browse'
   useEffect(() => {
+    if (!shown) return
     const t = setTimeout(() => {
       const sec = SECTIONS[0]
       for (const c of CATEGORIES.filter((x) => x.section === sec.id && fits(x, pick)).slice(0, sec.shown)) warmPage(hrefOf(c, pick))
     }, 2000)
     return () => clearTimeout(t)
-  }, [pick])
+  }, [pick, shown])
   // The heading and pills are there at once; the cards wait for their pictures above the fold (the first two
   // sections), then fade in as one piece. Once seen, Browse shows straight away.
   const phase = useArrival('browse-tab', !!covers.data, () => coverPictures(covers.data, SECTIONS.slice(0, 2).flatMap((sec) =>
@@ -210,25 +215,38 @@ export function BrowseCategory({ id, kind }: { id: string; kind?: Kind }) {
       <TopBar title={cat.label} glass />
       <main className="page noscroll" data-arrive={frame.arrive} ref={frame.pull.bind.ref} onScroll={onDim}>
         <h1 className="sr-only">{cat.label}</h1>
-        <PageContent frame={frame} what={cat.label} skeleton="rows">{(d) => (
+        <PageContent frame={frame} what={cat.label} skeleton="rows">{(d) => {
+          const picks = d.picks.length > 0 && (
+            <section className="row">
+              <SectionHeader title={picksTitle()} />
+              <SpotRow cards={d.picks} />
+            </section>
+          )
+          return (
           <>
             {d.hero.length > 0 ? <Hero items={d.hero} /> : <div className="br-top-gap" />}
             {d.rows.map((row, r) => (
-              <section key={row.id} className="row">
-                {/* View all only when the row doesn't already hold the whole list */}
-                <SectionHeader title={row.title} viewAll={row.more ? paths.grid(cat.id, row.id, kind) : undefined} />
-                <PosterRow>
-                  {row.items.map((card) => {
-                    const note = row.notes === 'leaving' ? leavingFor(card, { stale: q.stale })
-                      : row.kind ? String(card.year ?? '') : undefined
-                    return <TitleCard key={card.id} card={card} note={note} eager={r === 0} />
-                  })}
-                </PosterRow>
-              </section>
+              <Fragment key={row.id}>
+                {/* the picks, as on Home: a little way down the page (after the first two rows), with Home's heading */}
+                {r === Math.min(2, d.rows.length - 1) && r > 0 && picks}
+                <section className="row">
+                  {/* View all only when the row doesn't already hold the whole list */}
+                  <SectionHeader title={row.title} viewAll={row.more ? paths.grid(cat.id, row.id, kind) : undefined} />
+                  <PosterRow>
+                    {row.items.map((card) => {
+                      const note = row.notes === 'leaving' ? leavingFor(card, { stale: q.stale })
+                        : row.kind ? String(card.year ?? '') : undefined
+                      return <TitleCard key={card.id} card={card} note={note} eager={r === 0} />
+                    })}
+                  </PosterRow>
+                </section>
+              </Fragment>
             ))}
-            {d.hero.length === 0 && d.rows.length === 0 && <p className="br-none">Nothing streaming here right now.</p>}
+            {d.rows.length < 2 && picks}
+            {d.hero.length === 0 && d.picks.length === 0 && d.rows.length === 0 && <p className="br-none">Nothing on your services here right now.</p>}
           </>
-        )}</PageContent>
+          )
+        }}</PageContent>
       </main>
       {frame.pull.indicator}
     </>

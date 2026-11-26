@@ -21,17 +21,22 @@ export type Profile = {
   hidden_tags: string[]
 }
 export type NotifyKey = 'notify_leaving' | 'notify_arrivals' | 'notify_new_seasons'
-const PROFILE = 'notify_leaving,notify_arrivals,notify_new_seasons,onboarded_at,hidden_tags'
-
-async function loadProfile(userId: string): Promise<Profile> {
-  return unwrap(await supabase.from('profiles').select(PROFILE).eq('user_id', userId).single()) as Profile
+/** The profile, read once at sign-in for the app (auth's is_admin) and every screen (useProfile): one request.
+ *  select * so it keeps working before a new column exists. An account with no profile row gets one. */
+export async function loadProfile(userId: string): Promise<Profile & { is_admin?: boolean }> {
+  const first = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle()
+  if (first.error) throw new Error(first.error.message)
+  if (first.data) return first.data as Profile
+  await supabase.rpc('ensure_profile')
+  return unwrap(await supabase.from('profiles').select('*').eq('user_id', userId).single()) as Profile
 }
+export const profileKey = (uid: string) => `profile:${uid}`
 
 /** The signed-in person's profile, and a way to change it (shown at once, put back if saving fails). */
 export function useProfile() {
   const { session } = useAuth()
   const uid = session?.user.id
-  const key = uid ? `profile:${uid}` : null
+  const key = uid ? profileKey(uid) : null
   const q = useQuery<Profile>(key, () => loadProfile(uid!), FRESH.mine())
   const update = async (patch: Partial<Profile>) => {
     if (!uid || !key || !q.data) return

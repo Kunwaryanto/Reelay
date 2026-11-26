@@ -2,7 +2,8 @@
 // "Thrillers" → All titles). The list is read from the database by its filters, a page at a time, with real totals.
 // Lists that aren't filters (Trending, Hidden gems, Award winners, new on streaming) stay fixed grids.
 import type { Draft } from '../screens/SearchFilters'
-import { CATEGORIES, rowsOf, type Category, type Kind, type Sort } from './browse'
+import { CATEGORIES, type Category, type Kind, type Sort } from './browse'
+import { loadMyServices } from './catalogue'
 import type { Card } from './catalogue'
 import { countTitles, genreNames, narrow, type Filters, type Totals } from './search'
 import { supabase } from './supabase'
@@ -14,7 +15,8 @@ export type Pick = 'all' | Kind
 export type ExploreStart = { draft: Draft; pick: Pick }
 
 const thisYear = new Date().getFullYear()
-const EMPTY: Draft = { sort: 'popular', mine: false, hide: false, genres: [], decades: [], rating: 0, rt: 0, lb: 0, length: null, lang: null, country: null, leaving: false, since: null }
+// Browse is the member's own services: its lists start with My services on (the drawer can take it off)
+const EMPTY: Draft = { sort: 'popular', mine: true, hide: false, genres: [], decades: [], rating: 0, rt: 0, lb: 0, length: null, lang: null, country: null, leaving: false, since: null }
 /** All titles, most popular first. */
 export const ALL_TITLES: ExploreStart = { draft: EMPTY, pick: 'all' }
 
@@ -25,8 +27,9 @@ const FILTERABLE = new Set(['genres', 'from', 'to', 'country', 'under', 'leaving
 export function exploreOf(cat: Category, row: string, kind?: Kind): ExploreStart | null {
   const r = cat.rule
   if (Object.keys(r).some((k) => !FILTERABLE.has(k))) return null
-  const def = row === 'list' ? null : rowsOf(cat, kind).find((x) => x.id === row)
-  if (row !== 'list' && !def) return null
+  // only a category's own list: its rows (new on your services, critics' favourites…) aren't filters
+  if (row !== 'list') return null
+  const def = null as { id: string; sort: Sort; kind?: Kind } | null
   const d: Draft = { ...EMPTY, genres: [], decades: [] }
   if (r.genres) d.genres = cat.section === 'genres' ? [cat.label] : []
   if (r.from !== undefined && r.to === r.from + 9) d.decades = [r.from]
@@ -142,12 +145,14 @@ export async function exploreCount(d: Draft, kind: Kind | undefined, ctx: Ctx): 
 }
 
 export async function loadExplore(d: Draft, pick: Pick, ctx: Ctx): Promise<ExplorePage> {
-  const [cards, totals] = await Promise.all([exploreCards(d, pick, ctx), exploreTotals(d, ctx)])
+  // preloaded from a link, before the screen knows the member's services: look them up
+  const c = d.mine && !ctx.picked.length ? { ...ctx, picked: await loadMyServices().catch(() => []) } : ctx
+  const [cards, totals] = await Promise.all([exploreCards(d, pick, c), exploreTotals(d, c)])
   return { cards, totals }
 }
 
 /** What a list's saved copy is known by: its filters, type and order (and the services or watched films they use). */
 export const exploreKey = (d: Draft, pick: Pick, ctx: Ctx) =>
-  `explore:${JSON.stringify({ ...d, mine: d.mine ? ctx.picked : false, hide: d.hide ? ctx.seen.length : false })}:${pick}${hiddenKey()}`
+  `explore:${JSON.stringify({ ...d, hide: d.hide ? ctx.seen.length : false })}:${pick}${hiddenKey()}`
 
 export type { Sort }

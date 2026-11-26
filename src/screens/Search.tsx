@@ -214,8 +214,13 @@ export default function Search() {
   const mineQ = useServicesQuery()
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hidden = useHiddenTags()
-  const ideas = useQuery<Idea[]>(`search-ideas:${picked.join(',')}${hiddenKey(hidden)}`, () => loadIdeas(picked, hidden), FRESH.catalogue)
-  const popular = useQuery<Hit[]>(`search-popular${hiddenKey(hidden)}`, () => loadPopular(hidden), FRESH.catalogue)
+  // Search is there from launch, behind the other tabs: its ideas load once it has been opened, not at launch
+  // (that was a dozen requests every start, for a tab not yet looked at)
+  const [opened, setOpened] = useState(tab === 'search')
+  useEffect(() => { if (tab === 'search') setOpened(true) }, [tab])
+  // and once the member's services are known (the ideas depend on them: asked before, they were asked twice)
+  const ideas = useQuery<Idea[]>(opened && mineQ.data ? `search-ideas:${picked.join(',')}${hiddenKey(hidden)}` : null, () => loadIdeas(picked, hidden), FRESH.catalogue)
+  const popular = useQuery<Hit[]>(opened ? `search-popular${hiddenKey(hidden)}` : null, () => loadPopular(hidden), FRESH.catalogue)
   const hasPicked = picked.length > 0 // without services, "Only on my services" isn't offered
   const myOnly = onlyMine && hasPicked
   // Hide watched: the films logged on Letterboxd (a long list is left to the phone, so the request stays short)
@@ -254,8 +259,6 @@ export default function Search() {
   useEffect(() => { if (early?.kind) setKind(early.kind) }, [early?.kind])
   const tokens = early?.tokens ?? found?.tokens ?? []
   const skeleton = useLate(waiting && !found, 150)
-  // the three ideas are fetched ahead, so tapping one has nothing to wait for
-  useEffect(() => { (ideas.data ?? []).forEach((c) => warm(c.query, c.mine ? { services: picked } : {})) }, [ideas.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = useMemo(() => (hiding ? (found?.hits ?? []).filter((h) => !seen.has(h.id)) : found?.hits ?? []), [found, hiding, seen])
   const mine = all
@@ -494,7 +497,7 @@ export default function Search() {
               <ul>
                 {(ideas.data ?? []).map((c) => (
                   <li key={c.query}>
-                    <button type="button" className="s-idea" onClick={() => { setOnlyMine(!!c.mine); run(c.query) }}>
+                    <button type="button" className="s-idea" onPointerDown={() => warm(c.query, c.mine ? { services: picked } : {})} onClick={() => { setOnlyMine(!!c.mine); run(c.query) }}>
                       <span className="s-thumb">{c.poster_path && <img src={tmdbImage(c.poster_path, 'w92')} alt="" />}<span className="hair" aria-hidden="true" /></span>
                       <span className="s-recent-text"><b>{c.title}</b><small>{c.sub}</small></span>
                     </button>

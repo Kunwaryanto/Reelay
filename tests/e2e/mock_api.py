@@ -22,6 +22,14 @@ def svg(seed,w,h,label=''):
 MODE={'wl':'list','ids':[3,4,5,6,7,8,9]}
 def inv(i,c,e,email=None,joined=None): return {"id":i,"token":"tok"+i,"created_by":"u1","make_admin":False,"created_at":c+"T12:00:00Z","expires_at":e+"T12:00:00Z","used_by":None,"used_email":email,"used_at":joined and joined+"T12:00:00Z","joined_at":joined and joined+"T12:00:00Z"}
 INV=[inv('a','2026-11-18','2026-12-02'),inv('b','2026-11-10','2026-11-24','anna.berg@example.com','2026-11-11'),inv('c','2026-11-01','2026-11-15')]
+def _alike(r):
+    # each title its own list (twelve others), as in the real table, so two titles' lists aren't one request
+    me = int(json.loads(r.request.post_data or '{}').get('p_id', 0))
+    if me == 1: return list(range(3, 15))   # title 1 (the More like this tests): the list as it always was
+    pool = [i for i in range(3, 16) if i != me]
+    k = me % len(pool)
+    return (pool[k:] + pool[:k])[:12]
+
 def route(r):
     u=r.request.url
     if 'image.tmdb.org' in u:
@@ -31,6 +39,27 @@ def route(r):
         b=r.request.post_data_json; sv=b['p_services']; n=b['p_rows']*b['p_cols']
         MODE['wall_asked']=b
         return r.fulfill(json=[{"pos":i,"title_id":2000+i,"service_id":sv[i%len(sv)]} for i in range(n)])
+    # Browse (migration 20261126000600): a category page, a whole row, the cards' pictures, one request each
+    if '/rest/v1/rpc/browse_covers' in u:
+        b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('covers',b))
+        # as in the real one, the categories share their most popular titles; a country has two, Leaving soon three, all among the most popular
+        pool=lambda k, c: [3000, 2900+k] if 'country' in c['rule'] else [3000, 3001, 3002] if 'leaving' in c['rule'] else range(3000, 3060)
+        return r.fulfill(json={c['id']:[{"id":i,"path":f"/b{i}.jpg"} for i in pool(k, c)] for k,c in enumerate(b['p_cats'])})
+    if '/rest/v1/rpc/browse_page' in u:
+        b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('page',b))
+        kind=b.get('p_kind'); k0=len(MODE['browse_asked'])*100
+        def fit(i): c=card(i); return c if not kind or c['kind']==kind else None
+        cards=[c for c in (fit(i) for i in range(4000+k0, 4400+k0)) if c]
+        reasons=['Because you liked Past Lives','Adam rated it 4.5','Critics’ favourite · RT 96%','Best Picture · Oscar 2024']
+        picks=[{**c,"hero_path":None,"hero_poster":False,"reason":reasons[j],"via":None,"by":["Celine Song"]} for j,c in enumerate(cards[:4])]
+        rows=[{"id":rid,"items":cards[10+j*16:10+j*16+(16 if rid!='elsewhere' else 8)]} for j,rid in enumerate(b['p_rows'])]
+        if MODE.get('browse_empty'): picks=[]; rows=[]; cards=[]
+        return r.fulfill(json={"hero":[{**c,"logo_path":f"/l{c['id']}.png"} for c in cards[:3]],"picks":picks,"rows":rows})
+    if '/rest/v1/rpc/browse_list' in u:
+        b=r.request.post_data_json; MODE.setdefault('browse_asked',[]).append(('list',b))
+        kind=b.get('p_kind')
+        cards=[c for c in (card(i) for i in range(5000, 5300)) if not kind or c['kind']==kind][:b.get('p_limit',90)]
+        return r.fulfill(json=[{**c,"original_language":"en","scores":{"imdb_rating":7.1,"rt_critics":88,"letterboxd":3.6}} for c in cards])
     if '/rest/v1/rpc/start_wall' in u: return r.fulfill(json=[f'/w{i}.jpg' for i in range(40)])
     if '/rest/v1/profiles' in u:
         if r.request.method!='GET': MODE.setdefault('patched',[]).append(r.request.post_data_json)
@@ -68,7 +97,7 @@ def route(r):
     if '/rest/v1/rpc/restore_invite' in u: return r.fulfill(status=204, body='')
     if '/rest/v1/invites' in u: return r.fulfill(json=INV)
     if '/rest/v1/availability' in u: return r.fulfill(json=[{"leaves_on":"2026-11-21","title":card(20+i,"2026-11-%02d"%(21+i*3))} for i in range(6)])
-    if '/rest/v1/rpc/similar_titles' in u: return r.fulfill(json=[{"id":i,"pos":k+1} for k,i in enumerate(MODE.get('similar',range(3,15)))])
+    if '/rest/v1/rpc/similar_titles' in u: return r.fulfill(json=[{"id":i,"pos":k+1} for k,i in enumerate(MODE.get('similar',_alike(r)))])
     from urllib.parse import unquote
     _ids = re.search(r'[?&]id=in\.\(([\d,]+)\)', unquote(u)) if '/rest/v1/titles' in u and 'original_language' not in u else None
     if _ids: return r.fulfill(json=[card(int(x)) for x in _ids.group(1).split(',')][::-1])  # any order: the app puts them back in the list's
@@ -216,6 +245,42 @@ def hroute2(r):
         # by its place in the request: one person, two (joined with "and") or three (the first "and 2 others"), for the spotlight's credit line
         def who(i): return [["Celine Song"],["Vince Gilligan"],["Daniel Kwan","Daniel Scheinert"],["Matt Duffer","Ross Duffer","Shawn Levy"]][i%4]
         return r.fulfill(json=[{"title_id":i,"role":"director" if card(i)['kind']=='film' else "creator","person":{"name":n}} for k,i in enumerate(ids) for n in who(k)])
+    # Home in two requests (migration 20261126000700): answered from the separate lookups' own mocks above and below,
+    # so every case those tests set up still holds
+    if 'rpc/home_bundle' in u or 'rpc/home_more' in u:
+        b=r.request.post_data_json; MODE.setdefault('home_asked',[]).append((u.split('/rpc/')[1],b))
+        def ask(path, body=None):
+            got={}
+            class Req:
+                url='https://mock.supabase.co/rest/v1/'+path; method='POST' if body is not None else 'GET'
+                post_data=json.dumps(body) if body is not None else None; post_data_json=body; headers={}
+            class R:
+                request=Req()
+                def fulfill(self, json=None, status=200, **k): got['v']=json if status<400 else []
+                def fallback(self):
+                    if 'fell' in got: got['v']=[]
+                    else: got['fell']=1; route(self)
+            hroute2(R())
+            v=got.get('v') or []
+            return v if isinstance(v,list) else [v]
+        T='titles?select=id,kind,title,year,poster_path,backdrop_path,logo_path'
+        if 'rpc/home_bundle' in u:
+            day=b['p_day']; args={'p_day':day,'p_services':b['p_services'],'p_hide':b['p_hide']}
+            return r.fulfill(json={
+              'trendF':ask(T+'&kind=eq.film&trend_rank=not.is.null'), 'trendS':ask(T+'&kind=eq.series&trend_rank=not.is.null'),
+              'arrivals':ask('availability_events?select=happened_on,service_id,title:titles!inner(id)&event=eq.added'),
+              'leaving':ask('availability?select=leaves_on,service_id,title:titles!inner(id)'),
+              'saved':ask('watchlist?select=added_at,title:titles!inner(id)'),
+              'because':ask('rpc/home_because',args), 'becauseAlt':ask('rpc/home_because',dict(args,p_day=day+1)),
+              'friends':ask('rpc/home_friends',args), 'taste':ask('rpc/home_taste',{}),
+              'newF':ask(T+'&kind=eq.film&year=gte.2025'), 'newS':ask(T+'&kind=eq.series&year=gte.2025'),
+              'awardWins':ask('awards?select=award'), 'theme':ask(T+'&imdb_rating=gte.7.5&scores!inner&imdb_votes=gte.2000') if b['p_gems'] else [],
+              'savedRecs':ask('rpc/home_saved',args), 'people':ask('rpc/home_people',args), 'makers':ask('rpc/home_makers',args)})
+        lists={k:(ask(T+'&id=in.(%s)'%','.join(map(str,v))) if v else []) for k,v in b['p_lists'].items()}
+        sa=ask('availability_events?select=title_id&title_id=in.(%s)'%','.join(map(str,b['p_saved']))) if b['p_saved'] else []
+        dec=[ask(T+'&kind=eq.%s&year=gte.%s&year=lte.%s'%(k,b['p_decade']['from'],b['p_decade']['to'])) for k in ('film','series')]
+        gen=[[ask(T+'&kind=eq.%s&genres=ov.{%s}'%(k,','.join(g))) for k in ('film','series')] for g in b['p_genres']]
+        return r.fulfill(json={'lists':lists,'savedArrivals':sa,'decade':dec,'genres':gen})
     if 'rpc/home_base' in u:
         # the ready-made generic part of Home (only when a test asks for it: otherwise Home is built whole)
         if not MODE.get('base'): return r.fulfill(status=404, json={})

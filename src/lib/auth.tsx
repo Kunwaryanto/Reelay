@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session } from '@supabase/auth-js'
 import { forgetDevice } from './push'
 import { supabase } from './supabase'
+import { loadProfile, profileKey } from './profile'
+import { FRESH, fetchShared } from './query'
 
 type Auth = {
   /** undefined while the saved session is being read */
@@ -28,13 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAdmin(false)
     if (!userId) return
     let live = true
-    // select * so this keeps working before the is_admin column exists
-    supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle().then(async ({ data, error }) => {
-      // No profile at all (an account older than the rule that makes one): make it, so settings, onboarding
-      // and the admin rows work. A new profile is never an admin, so there is nothing more to read.
-      if (!data && !error) await supabase.rpc('ensure_profile').then(() => {}, () => {})
-      if (live) setIsAdmin(!!(data as { is_admin?: boolean } | null)?.is_admin)
-    })
+    // the same load (and saved answer) as useProfile's: one request for both (no profile yet: it makes one)
+    fetchShared(profileKey(userId), () => loadProfile(userId), FRESH.mine())
+      .then((p) => { if (live) setIsAdmin(!!p?.is_admin) }, () => {})
     return () => { live = false }
   }, [userId])
 
