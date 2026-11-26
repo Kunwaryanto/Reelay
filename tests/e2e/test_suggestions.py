@@ -29,16 +29,17 @@ def test_pick_what_not_to_suggest(app):
 def test_home_and_browse_leave_hidden_out(app):
     m.MODE['hidden'] = ['horror', 'kids']
     try:
+        m.MODE['home_asked'] = []
         pg = app(); asked = []
         # as on a phone that has opened Reelay before: the list is kept there, so the first screen knows it
         pg.add_init_script("localStorage.setItem('reelay.hidden-tags', JSON.stringify(['horror','kids']))")
         pg.on('request', lambda r: asked.append(unquote(r.url)))
         pg.goto(m.B + '/'); pg.settle(6000)
-        # Home's own lookups (its fields: id,kind,title,year,poster_path,backdrop_path,logo_path,...), not the
-        # watchlist and what arrived from it, which are the member's own
-        H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min'
-        titles = [u for u in asked if H in u and '/rest/v1/watchlist' not in u and 'title_id=in.' not in u]
-        assert titles and all('tags=not.ov.{horror,kids}' in u for u in titles), [u for u in titles if 'not.ov' not in u][:3]
+        # Home's lookups are two requests (home_bundle, home_more, 26 Nov): both carry the hidden tags; the watchlist
+        # and what arrived from it, the member's own, aren't narrowed by them (the database leaves them out there)
+        import json
+        asked_home = [x for x in m.MODE.get('home_asked', []) if x[0] in ('home_bundle', 'home_more')]
+        assert asked_home and all(b['p_hidden'] == ['horror', 'kids'] for _, b in asked_home), asked_home
         assert not any('not.ov' in u for u in asked if '/rest/v1/watchlist' in u), 'the watchlist is the member\'s own'
         # Browse: the Horror card is gone
         pg.goto(m.B + '/browse'); pg.settle(4000)

@@ -13,6 +13,9 @@ import { tmdbImage } from '../lib/images'
 import { useNavActions } from '../lib/nav'
 import { Cover, NearImage, NearRow, joinHandlers, useHold, useLongPress, usePageLink } from '.'
 
+/** The row's heading, on Home and Browse alike: "Tonight's picks" from 17:00 (and through the night), "Today's picks" before. */
+export const picksTitle = () => { const h = new Date().getHours(); return h >= 17 || h < 4 ? 'Tonight’s picks' : 'Today’s picks' }
+
 /** Tonight's picks: tall cards side by side, each with its picture, why it is here as a small line over the title,
  *  and at the bottom a small poster with who made it and where it plays (as under a title page's name). */
 export function SpotRow({ cards }: { cards: HomeCard[] }) {

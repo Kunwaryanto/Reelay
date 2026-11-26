@@ -1298,8 +1298,7 @@ export type SkeletonKind = 'rows' | 'grid' | 'title' | 'person' | 'cards'
 export function Skeleton({ kind, leaving }: { kind: SkeletonKind; leaving?: boolean }) {
   return (
     <div className="skel" data-kind={kind} data-leaving={leaving || undefined} aria-hidden="true">
-      {/* a category page: its picks (tall cards, as Tonight's picks) under the top picture */}
-      {kind === 'rows' && <section><i /><div><b /><b /></div></section>}
+      {kind === 'rows' && <section><i /><div><span /><span /><span /></div></section>}
       {kind === 'grid' && Array.from({ length: 12 }, (_, i) => <span key={i} />)}
       {kind === 'title' && <><i /><i /><i /><b /><b /><b /></>}
       {kind === 'person' && <><header><i /><div><b /><b /></div></header><div>{Array.from({ length: 9 }, (_, i) => <span key={i} />)}</div></>}

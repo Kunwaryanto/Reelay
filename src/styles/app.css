@@ -1087,8 +1087,7 @@ input, textarea, .legal, .legal * { -webkit-user-select: text; user-select: text
 .skel[data-kind='rows'] section { margin-left: var(--margin); }
 .skel[data-kind='rows'] i { width: 150px; height: 12px; margin: 4px 0; border-radius: 6px; }
 .skel[data-kind='rows'] section > div { margin-top: 16px; display: flex; gap: 16px; overflow: hidden; }
-.skel[data-kind='rows'] section > div { margin-top: 16px; gap: 12px; }
-.skel[data-kind='rows'] b { flex: none; width: calc(100vw - 4 * var(--margin) - 32px); aspect-ratio: 4 / 5; border-radius: var(--radius-media); corner-shape: squircle; }
+.skel[data-kind='rows'] span { flex: none; width: 147px; aspect-ratio: 147 / 220; border-radius: var(--radius-media); corner-shape: squircle; }
 /* grid: three across, fading out down the page */
 .grid-wrap { position: relative; }
 .skel[data-kind='grid'] { margin: 20px var(--margin) 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 62px;

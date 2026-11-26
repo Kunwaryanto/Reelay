@@ -90,12 +90,33 @@ export function updateQueryData<T>(key: string, change: (now: T) => T, persist =
 
 // Loads started ahead of the screen that will show them (see prefetch): that screen waits for this one answer.
 const inflight = new Map<string, Promise<void>>()
+// One load per key at a time, whoever asks: two screens (or a screen and a prefetch) that want the same answer at
+// once share one request. Without this, every screen reading the member's services asked for them itself.
+const loading = new Map<string, Promise<unknown>>()
+function once<T>(key: string, load: () => Promise<T>): Promise<T> {
+  let p = loading.get(key) as Promise<T> | undefined
+  if (!p) {
+    p = load().finally(() => { loading.delete(key) })
+    loading.set(key, p)
+  }
+  return p
+}
 
 /** Start loading a key before its screen opens (a finger on a card): the screen then finds the answer waiting or on its way. */
+/** Load a key now and keep the answer, sharing a load already on its way (for code outside a screen that needs
+ *  the same answer a screen reads, such as the profile at sign-in). */
+export function fetchShared<T>(key: string, load: () => Promise<T>, opts: Freshness = {}): Promise<T> {
+  return once(key, load).then((data) => {
+    save(key, data, opts.persist ?? true, { stamp: opts.catalogue ? currentStamp() : undefined, deps: opts.deps })
+    watchers.get(key)?.forEach((f) => f())
+    return data
+  })
+}
+
 export function prefetch<T>(key: string, load: () => Promise<T>, opts: Freshness = {}) {
   const { persist = true } = opts
   if (isFresh(readSaved(key), opts) || inflight.has(key)) return
-  inflight.set(key, load()
+  inflight.set(key, once(key, load)
     .then((data) => { save(key, data, persist, { stamp: opts.catalogue ? currentStamp() : undefined, deps: opts.deps }); watchers.get(key)?.forEach((f) => f()) })
     .catch(() => { /* the screen loads it itself and shows what went wrong */ })
     .finally(() => { inflight.delete(key) }))
@@ -222,7 +243,7 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>, opts: Fr
     const started = Date.now()
     if (manual) setRetrying(true)
     try {
-      const data = await loadRef.current()
+      const data = await once(key, () => loadRef.current())
       save(key, data, persist, { stamp: optsRef.current.catalogue ? currentStamp() : undefined, deps: optsRef.current.deps })
       attempt.current = 0
       setError(false)

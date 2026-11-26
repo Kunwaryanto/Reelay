@@ -6,7 +6,7 @@ import mock_api as m
 def builds(pg):
     n = []
     def count(r):
-        if 'rpc/home_because' in unquote(r.request.url): n.append(1)
+        if 'rpc/home_bundle' in unquote(r.request.url): n.append(1)  # Home's first step is one request (26 Nov)
         return m.hroute(r)
     pg.route(re.compile(r'.*/rest/v1/(?!data_stamp).*'), count)
     return n

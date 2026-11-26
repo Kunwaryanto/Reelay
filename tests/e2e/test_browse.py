@@ -24,7 +24,9 @@ def test_category_page_is_one_request_with_picks_and_rows(app):
     assert len(pages) == 1, pages
     assert pages[0]['p_rows'][:2] == ['new', 'trending'] and pages[0]['p_rows'][-2:] == ['leaving', 'elsewhere'], pages[0]['p_rows']
     heads = pg.evaluate(f"[...({TOP}).querySelectorAll('section.row h2')].map(h => h.textContent)")
-    assert heads[0] == 'Picks for you' and 'New on your services' in heads and heads[-1] == 'On other services', heads
+    # the picks, with Home's heading, a little way down: after the first two rows
+    picks = pg.evaluate("(() => { const h = new Date().getHours(); return h >= 17 || h < 4 ? 'Tonight’s picks' : 'Today’s picks' })()")
+    assert heads[:3] == ['New on your services', 'Trending', picks] and heads[-1] == 'On other services', heads
     reasons = pg.evaluate(f"[...({TOP}).querySelectorAll('.spot-top small')].map(s => s.textContent)")
     assert reasons[:2] == ['Because you liked Past Lives', 'Adam rated it 4.5'], reasons
     assert pg.evaluate(f"({TOP}).querySelector('.spot-by').textContent").endswith('by Celine Song')  # Directed by (a film), Created by (a series)

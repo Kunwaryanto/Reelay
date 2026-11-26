@@ -16,7 +16,7 @@ import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
 import { iconsReady, markLaunched } from '../lib/launch'
-import { SpotRow } from '../ui/SpotCard'
+import { SpotRow, picksTitle } from '../ui/SpotCard'
 import { Cover, PageLink, PinnedArt, Icon, SettingsButton, LoadFailed, PosterRow, SectionHeader, TitleCard, Wordmark, usePullToRefresh } from '../ui'
 
 function heroMeta(c: Card & { reason?: string }): string {
@@ -149,8 +149,6 @@ export function Hero({ items }: { items: (Card & { reason?: string })[] }) {
 }
 
 /** Long press: the poster lifts, the screen blurs and a glass menu with the title page's actions opens. */
-/** "Tonight's picks" from 17:00 (and through the night), "Today's picks" before. */
-const picksTitle = () => { const h = new Date().getHours(); return h >= 17 || h < 4 ? 'Tonight’s picks' : 'Today’s picks' }
 
 /** How long Home waits behind the wordmark before showing placeholders. */
 const LATE_MS = 8000

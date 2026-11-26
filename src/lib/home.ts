@@ -6,7 +6,7 @@ import { paths } from './routes'
 import { CATEGORIES, type Category } from './browse'
 import { MIN_ROW, SERVICE_NAME, namesLine, type Card } from './catalogue'
 import { supabase } from './supabase'
-import { suggestable } from './hidden'
+import {} from './hidden'
 import { dayNumber, daysUntil, localDay } from './days'
 
 export type HomeCard = Card & {
@@ -79,7 +79,6 @@ export type HomeAsk = {
  */
 export const HOME_VERSION = 19
 
-const H = 'id,kind,title,year,poster_path,backdrop_path,logo_path,hero_path,hero_poster,imdb_rating,imdb_votes,genres,seasons,runtime_min,availability!inner(service_id,leaves_on)'
 type Kind = Card['kind']
 
 type Maker = { role: 'director' | 'actor'; person_id: number; name: string; source: string | null; title_id: number }
@@ -127,7 +126,6 @@ type Res<T> = PromiseLike<{ data: T | null; error: { message: string } | null }>
 
 const today = () => localDay()
 const inDays = localDay
-const YEAR = new Date().getFullYear()
 const svcName = (id: string) => SERVICE_NAME[id] ?? id
 
 /** A row that fails to load is left out; it never takes the page with it. */
@@ -174,23 +172,11 @@ type Base = {
 export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Promise<HomeData> {
   const svc = ask.services
   const mine = svc.length > 0
-  // titles (and what is embedded under them) narrowed to the member's services
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const on = (q: any, path = 'availability.service_id') => (mine ? q.in(path, svc) : q)
-  // titles with a tag the member hides are not suggested: `title` for a query that has the title embedded
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ok = (q: any, path?: string) => suggestable(q, ask.hidden, path)
-  const titles = (kind: Kind) => ok(on(supabase.from('titles').select(H).eq('kind', kind)))
   const day = dayNumber()
   const rpcArgs = { p_services: mine ? svc : null, p_hide: ask.hide }
 
   type Arrival = { happened_on: string; service_id: string; title: Card & { popularity: number } }
   type Leaving = { leaves_on: string; service_id: string; title: Card }
-  let arrivalsQ = supabase.from('availability_events').select(`happened_on,service_id,title:titles!inner(${H},popularity)`)
-    .eq('event', 'added').gte('happened_on', inDays(-30)).order('happened_on', { ascending: false }).limit(200)
-  let leavingQ = supabase.from('availability').select(`leaves_on,service_id,title:titles!inner(${H})`)
-    .gte('leaves_on', today()).lte('leaves_on', inDays(30)).order('leaves_on').limit(60)
-  if (mine) { arrivalsQ = arrivalsQ.in('service_id', svc); leavingQ = leavingQ.in('service_id', svc) }
   // An award row every day, taking turns by day between these (all well over 7 titles on a usual set of services);
   // Hidden gems every other day.
   const AWARD_ROWS = [
@@ -201,9 +187,6 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   ]
   const awardRow = AWARD_ROWS[day % AWARD_ROWS.length]
   const gemsDay = day % 2 === 1
-  let awardsQ = supabase.from('awards').select(`award,short_category,rank,year,title:titles!inner(${H})`).eq('won', true).eq('award', awardRow.award)
-  if (awardRow.category) awardsQ = awardsQ.eq('category', awardRow.category)
-  if (awardRow.kind) awardsQ = awardsQ.eq('title.kind', awardRow.kind)
 
   let base: Base | null = null
   if (opts.quick) {
@@ -216,29 +199,24 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
     base.arrivals.filter((a) => fits(a.title)), base.leaving.filter((l) => fits(l.title)).slice(0, 60),
     [], [], [], [], [], base.newF.filter(fits).slice(0, 25), base.newS.filter(fits).slice(0, 25), [], [], [], [],
   ] : null
-  const all = base ? null : Promise.all([
-    titles('film').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
-    titles('series').not('trend_rank', 'is', null).order('trend_rank').limit(40).then(hard<Card[]>),
-    soft<Arrival>(ok(on(arrivalsQ, 'title.availability.service_id'), 'title') as never),
-    soft<Leaving>(ok(on(leavingQ, 'title.availability.service_id'), 'title') as never),
-    soft<{ title: Card; added_at?: string }>(on(supabase.from('watchlist').select(`added_at,title:titles!inner(${H})`).order('added_at', { ascending: false }).limit(60), 'title.availability.service_id') as never),
-    soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day, ...rpcArgs }) as never),
-    // a second liked film (tomorrow's), for the spotlight: it never repeats the row's reason
-    soft<{ source: string; title_id: number; rank: number }>(supabase.rpc('home_because', { p_day: day + 1, ...rpcArgs }) as never),
-    soft<{ title_id: number; name: string; rating: number }>(supabase.rpc('home_friends', rpcArgs) as never),
-    soft<{ genre: string }>(supabase.rpc('home_taste') as never),
-    soft<Card>(titles('film').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
-    soft<Card>(titles('series').gte('year', YEAR - 1).order('popularity', { ascending: false }).limit(25) as never),
-    // best category first, newest first within it
-    soft<{ award: string; short_category: string; rank: number; year: number; title: Card }>(ok(on(awardsQ.order('rank').order('year', { ascending: false }).limit(300), 'title.availability.service_id'), 'title') as never),
-    // the IMDb rating and votes are on the title (kept in step with scores), so this reads in rating order
-    gemsDay ? soft<Card>(ok(on(supabase.from('titles').select(H))).gte('imdb_rating', 7.5).gte('imdb_votes', 2000).lte('imdb_votes', 30000)
-        .order('imdb_rating', { ascending: false }).limit(40) as never) : Promise.resolve([] as Card[]),
-    soft<{ source: string; source_id: number; title_id: number; rank: number }>(supabase.rpc('home_saved', { p_day: day, ...rpcArgs }) as never),
-    soft<{ person_id: number; name: string; title_id: number }>(supabase.rpc('home_people', { p_day: day, ...rpcArgs }) as never),
-    // Tonight's picks' taste reasons: a director of a film they loved, an actor in two of them (one each a day)
-    soft<Maker>(supabase.rpc('home_makers', { p_day: day, ...rpcArgs }) as never),
-  ])
+  // Everything the first step reads, in one request (home_bundle, migration 20261126000700), in the shapes the
+  // separate lookups had
+  type Bundle = {
+    trendF: Card[]; trendS: Card[]; arrivals: Arrival[]; leaving: Leaving[]; saved: { title: Card; added_at?: string }[]
+    because: { source: string; title_id: number; rank: number }[]; becauseAlt: { source: string; title_id: number; rank: number }[]
+    friends: { title_id: number; name: string; rating: number }[]; taste: { genre: string }[]; newF: Card[]; newS: Card[]
+    awardWins: { award: string; short_category: string; rank: number; year: number; title: Card }[]; theme: Card[]
+    savedRecs: { source: string; source_id: number; title_id: number; rank: number }[]
+    people: { person_id: number; name: string; title_id: number }[]; makers: Maker[]
+  }
+  const all = base ? null : supabase.rpc('home_bundle', {
+    p_day: day, ...rpcArgs, p_hidden: ask.hidden, p_award: awardRow.award, p_award_category: awardRow.category ?? null,
+    p_award_kind: awardRow.kind ?? null, p_gems: gemsDay,
+  }).then((r) => {
+    const b = hard<Bundle>(r as never)
+    return [b.trendF, b.trendS, b.arrivals, b.leaving, b.saved, b.because, b.becauseAlt, b.friends, b.taste, b.newF, b.newS,
+      b.awardWins, b.theme, b.savedRecs, b.people, b.makers] as const
+  })
   const [trendF, trendS, arrivals, leaving, saved, because, becauseAlt, friends, taste, newF, newS, awardWins, theme, savedRecs, people, makersAll] =
     all ? await all : (fetched as unknown as NonNullable<Awaited<typeof all>>)
 
@@ -252,29 +230,26 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
   const genres = genreOrder(taste.length >= 3 ? taste : [...taste, ...savedTaste.filter((g) => !taste.some((t) => t.genre === g.genre))])
   const picks = [genres[day % genres.length], genres[(day + 1) % genres.length]].filter((c, i, a) => a.indexOf(c) === i)
   const decade = DECADES[day % DECADES.length]
-  const byIds = (ids: number[]) => (ids.length ? soft<Card>(ok(on(supabase.from('titles').select(H))).in('id', ids) as never) : Promise.resolve([] as Card[]))
-  const genreRow = (c: Category) => Promise.all((['film', 'series'] as Kind[]).map((k) =>
-    soft<Card>(titles(k).overlaps('genres', c.rule.genres ?? []).order('popularity', { ascending: false }).limit(25) as never)))
-  // the second liked film only counts when it is a different film from the row's
+  // the second step, in one request too (home_more)
   const alt = becauseAlt.length && because.length && becauseAlt[0].source !== because[0].source ? becauseAlt : []
   const savedIds = saved.map((s) => s.title?.id).filter((x): x is number => !!x)
   // saved titles that arrived on one of the member's services in the last 30 days, newest first
   type SavedArrival = { title_id: number; service_id: string; happened_on: string }
-  let savedArrivalsQ = supabase.from('availability_events').select('title_id,service_id,happened_on').eq('event', 'added')
-    .gte('happened_on', inDays(-30)).in('title_id', savedIds).order('happened_on', { ascending: false })
-  if (mine) savedArrivalsQ = savedArrivalsQ.in('service_id', svc)
   // not the person the "More with" row is about
   const makers = (makersAll ?? []).filter((x) => x.person_id !== people[0]?.person_id)
-  const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, makerCards, savedArrivals, decadeLists, ...genreLists] = base
-    ? [[], [], [], [], [], [], [], [[], []], ...picks.map(() => [[], []])] as unknown as [Card[], Card[], Card[], Card[], Card[], Card[], SavedArrival[], Card[][], ...Card[][][]]
-    : await Promise.all([
-    byIds(because.map((b) => b.title_id)), byIds(alt.map((b) => b.title_id)), byIds(friends.map((f) => f.title_id)),
-    byIds(savedRecs.map((b) => b.title_id)), byIds(people.map((p) => p.title_id)), byIds([...new Set(makers.map((x) => x.title_id))]),
-    savedIds.length ? soft<SavedArrival>(savedArrivalsQ as never) : Promise.resolve([] as SavedArrival[]),
-    Promise.all((['film', 'series'] as Kind[]).map((k) =>
-      soft<Card>(titles(k).gte('year', decade.rule.from!).lte('year', decade.rule.to!).order('popularity', { ascending: false }).limit(25) as never))),
-    ...picks.map(genreRow),
-  ])
+  type More = { lists: Record<string, Card[]>; savedArrivals: SavedArrival[]; decade: Card[][]; genres: Card[][][] }
+  const more: More = base ? { lists: {}, savedArrivals: [], decade: [[], []], genres: picks.map(() => [[], []]) } : hard<More>(await supabase.rpc('home_more', {
+    p_services: rpcArgs.p_services, p_hidden: ask.hidden,
+    p_lists: {
+      because: because.map((b) => b.title_id), alt: alt.map((b) => b.title_id), friends: friends.map((f) => f.title_id),
+      savedRecs: savedRecs.map((b) => b.title_id), people: people.map((p) => p.title_id), makers: [...new Set(makers.map((x) => x.title_id))],
+    },
+    p_saved: savedIds, p_decade: { from: decade.rule.from, to: decade.rule.to }, p_genres: picks.map((c) => c.rule.genres ?? []),
+  }) as never)
+  const L = (k: string) => more.lists[k] ?? []
+  const [becauseCards, altCards, friendCards, savedRecCards, peopleCards, makerCards, savedArrivals, decadeLists, ...genreLists] =
+    [L('because'), L('alt'), L('friends'), L('savedRecs'), L('people'), L('makers'), more.savedArrivals, more.decade, ...more.genres] as
+      [Card[], Card[], Card[], Card[], Card[], Card[], SavedArrival[], Card[][], ...Card[][][]]
 
   // ---- Rows, in order. `seen` holds what is already on the page. ----
   const seen = new Set<number>()
@@ -441,8 +416,14 @@ export async function loadHome(ask: HomeAsk, opts: { quick?: boolean } = {}): Pr
     spot(rowTrendF, () => 'Everyone’s watching it this week', { bar: true, again: true, n: 2 })
   }
   noteSpots(spots.map((t) => t.id))
-  // who made each: "Directed by", "Created by" (one small request, for the picks only)
-  if (spots.length) {
+  // who made each: "Directed by", "Created by" (on the cards from home_bundle and home_more; a quick Home's cards
+  // don't have them, so it asks)
+  const named = (t: HomeCard) => (t as HomeCard & { by_names?: string[] }).by_names
+  for (const t of spots) {
+    const names = named(t)
+    if (names?.length) t.by = `${t.kind === 'film' ? 'Directed by' : 'Created by'} ${namesLine([...new Set(names)])}`
+  }
+  if (spots.some((t) => !named(t))) {
     type By = { title_id: number; role: string; person: { name: string } | null }
     const by = await soft<By>(supabase.from('credits').select('title_id,role,person:people(name)').in('title_id', spots.map((t) => t.id))
       .in('role', ['director', 'creator']).order('sort_order') as never)
