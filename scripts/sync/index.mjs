@@ -1210,7 +1210,9 @@ async function syncStandup() {
 // out genres it can't be ("Feel-good" isn't horror). Weekly in the nightly sync (Sundays), or the Moods workflow.
 // The ids here are Browse's (src/lib/browse.ts, rule.mood).
 const MOODS = {
-  'feel-good': { keywords: ['feel-good', 'heartwarming', 'uplifting', 'wholesome'], not: ['Horror', 'War', 'Thriller', 'Crime', 'War & Politics'] },
+  // TMDB tags few titles feel-good (15 of ours, 26 Nov): well-liked comedies, family films and romances count too
+  'feel-good': { keywords: ['feel-good', 'feel good', 'heartwarming', 'heart-warming', 'uplifting', 'wholesome', 'optimism'], not: ['Horror', 'War', 'Thriller', 'Crime', 'War & Politics', 'Mystery'],
+    also: { genres: ['Comedy', 'Family', 'Romance', 'Music'], rating: 7.0, votes: 10000 } },
   'mind-bending': { keywords: ['mind-bending', 'time travel', 'time loop', 'alternate reality', 'parallel world', 'nonlinear timeline', 'simulated reality', 'surrealism'], not: [] },
   'true-stories': { keywords: ['based on true story', 'biography', 'based on real events', 'true crime'], not: ['Animation'] },
   'edge-of-your-seat': { keywords: ['suspenseful', 'tense', 'survival', 'hostage', 'manhunt', 'race against time', 'cat and mouse'], not: ['Comedy', 'Family', 'Animation', 'Kids'] },
@@ -1238,16 +1240,19 @@ async function syncMoods() {
         if (!r || page >= Math.min(r.total_pages ?? 0, 500)) break;
       }
     }
-    if (keys.size < 20) { log(`moods: ${mood}: only ${keys.size} found, kept as it was`); continue; } // a failed read shouldn't empty it
+    if (keys.size < 20 && !def.also) { log(`moods: ${mood}: only ${keys.size} found, kept as it was`); continue; } // a failed read shouldn't empty it
     const kinds = [...keys].map((k) => k.split(':')[0]), tmdbIds = [...keys].map((k) => Number(k.split(':')[1]));
     const c = await db.connect();
     try {
       await c.query('begin');
       // only what changed: the rows that left, then the new ones
+      const also = def.also ? `union select t.id from public.titles t where t.genres && $5::text[] and t.imdb_rating >= $6 and t.imdb_votes >= $7
+        and not (t.genres && $4::text[]) and exists (select 1 from public.availability a where a.title_id = t.id)` : '';
       const want = `select t.id from public.titles t join unnest($1::text[], $2::int[]) k(kind, tmdb_id) on t.kind = k.kind and t.tmdb_id = k.tmdb_id
-        where not (t.genres && $4::text[])`;
-      const gone = await c.query(`delete from public.title_moods m where m.mood = $3 and m.title_id not in (${want})`, [kinds, tmdbIds, mood, def.not]);
-      const added = await c.query(`insert into public.title_moods (mood, title_id) select $3, w.id from (${want}) w on conflict do nothing`, [kinds, tmdbIds, mood, def.not]);
+        where not (t.genres && $4::text[]) ${also}`;
+      const args = [kinds, tmdbIds, mood, def.not, ...(def.also ? [def.also.genres, def.also.rating, def.also.votes] : [])];
+      const gone = await c.query(`delete from public.title_moods m where m.mood = $3 and m.title_id not in (${want})`, args);
+      const added = await c.query(`insert into public.title_moods (mood, title_id) select $3, w.id from (${want}) w on conflict do nothing`, args);
       await c.query('commit');
       const n = (await db.query('select count(*)::int n from public.title_moods where mood = $1', [mood])).rows[0].n;
       log(`moods: ${mood}: ${keys.size} on TMDB (${ids.length} keywords), ${n} of ours; ${added.rowCount} in, ${gone.rowCount} out`);
