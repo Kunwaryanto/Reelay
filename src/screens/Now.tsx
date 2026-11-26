@@ -193,6 +193,8 @@ export function HoldMenu({ held, onClose }: { held: { card: Card; cover: HTMLEle
   // own centre, not the poster's), so it can be a pixel or two off, which showed as a small jump at the end.
   const [closing, setClosing] = useState<{ x: number; y: number; k: number; radius: string } | null>(null)
   const close = () => {
+    // a card that stayed pressed while its poster was lifted (useLongPress keepPressed) lets go first
+    held.cover.dispatchEvent(new Event('hold-close', { bubbles: true }))
     const now = held.cover.getBoundingClientRect()
     setClosing({ x: now.left - rect.left, y: now.top - rect.top, k: now.width / rect.width, radius: getComputedStyle(held.cover).borderRadius })
     setOpen(false)
@@ -318,7 +320,7 @@ function SpotCard({ card }: { card: HomeCard }) {
   const { push } = useNavActions()
   const onHold = useHold()
   // held: the small poster lifts out into the poster menu, as a poster does
-  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.spot-thumb .cover')!))
+  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.spot-thumb .cover')!), { keepPressed: true })
   const link = usePageLink(paths.title(card.id))
   // the title page's picture (a textless poster fills the tall card best), else the wide one, cropped
   const wide = card.hero_path && !card.hero_poster ? card.hero_path : card.backdrop_path

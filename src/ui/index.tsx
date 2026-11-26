@@ -277,15 +277,19 @@ export function TitleCard({ card, note, eager }: { card: Card; note?: string | n
  * Hold 0.45 s without moving more than 8px. Scrolling always wins.
  * The press shrink waits 90 ms like iOS, so a finger that lands only to scroll never moves the poster.
  */
-export function useLongPress(onHold: (el: HTMLElement) => void) {
+export function useLongPress(onHold: (el: HTMLElement) => void, opts: { keepPressed?: boolean } = {}) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pressTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const start = useRef<[number, number] | null>(null)
   const el = useRef<HTMLElement | null>(null)
   const didFire = useRef(false)
+  // keepPressed: once the hold has fired, the element stays pressed until the menu lets it go ('hold-close', sent by
+  // the menu as it closes). For a big card whose small poster lifts (Tonight's picks): growing back while the menu
+  // opened showed through the blur as a jitter.
+  const keep = () => opts.keepPressed && didFire.current
   const cancel = () => {
     clearTimeout(timer.current); clearTimeout(pressTimer.current); start.current = null
-    if (el.current) delete el.current.dataset.pressed
+    if (el.current && !keep()) delete el.current.dataset.pressed
   }
   return {
     fired: () => didFire.current,
@@ -301,7 +305,17 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
         timer.current = setTimeout(() => {
           if (!start.current) return
           didFire.current = true
-          delete target.dataset.pressed
+          if (opts.keepPressed) {
+            target.dataset.pressed = 'true'
+            target.addEventListener('hold-close', () => {
+              // back to full size at once, under the menu's blur, before the poster is measured to land on it
+              const box = target.parentElement
+              if (box) box.style.transition = 'none'
+              delete target.dataset.pressed
+              void target.offsetWidth
+              requestAnimationFrame(() => { if (box) box.style.transition = '' })
+            }, { once: true })
+          } else delete target.dataset.pressed
           onHold(target)
         }, 450)
       },
@@ -314,7 +328,7 @@ export function useLongPress(onHold: (el: HTMLElement) => void) {
         const quick = start.current && !t?.dataset.pressed
         clearTimeout(timer.current); clearTimeout(pressTimer.current); start.current = null
         if (t && quick && !didFire.current) { t.dataset.pressed = 'true'; setTimeout(() => { delete t.dataset.pressed }, 120) }
-        else if (t) delete t.dataset.pressed
+        else if (t && !keep()) delete t.dataset.pressed
       },
       onPointerCancel: cancel,
       onContextMenu: (e: React.MouseEvent) => e.preventDefault(),

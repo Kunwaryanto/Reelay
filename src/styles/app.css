@@ -198,6 +198,9 @@ button { font: inherit; color: inherit; }
 .hold[data-open='true'] .hold-back { background: rgba(0, 0, 0, 0.3); -webkit-backdrop-filter: var(--blur-backdrop); backdrop-filter: var(--blur-backdrop); transition-duration: var(--dur-menu-open); }
 .hold-poster { position: absolute; border-radius: var(--radius-media); corner-shape: squircle; overflow: hidden; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); transform-origin: 0 0; transition: transform var(--dur-menu-close) var(--ease-sheet), border-radius var(--dur-menu-close) var(--ease-sheet), box-shadow var(--dur-menu-close) var(--ease-sheet); }
 .hold-poster > .cover { width: 100%; height: 100%; margin: 0; }
+/* the lifted copy is clipped by .hold-poster's own corners; its own (a small poster's, scaled up with it) were
+   rounder, which left the lift's dark background showing at the corners */
+.hold-poster > .cover, .hold-poster > .cover img { border-radius: 0; }
 .hold-menu { position: absolute; width: 290px; border-radius: var(--radius-menu); corner-shape: squircle; overflow: hidden; background: rgba(44, 44, 44, 0.78); -webkit-backdrop-filter: var(--blur-menu); backdrop-filter: var(--blur-menu); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); opacity: 0; transform: scale(0.6); transition: opacity var(--dur-menu-close) var(--ease-sheet), transform var(--dur-menu-close) var(--ease-sheet); }
 .hold[data-open='true'] .hold-menu { opacity: 1; transition-duration: var(--dur-menu-open); }
 .hold[data-open='true'] .hold-menu { transform: none; }

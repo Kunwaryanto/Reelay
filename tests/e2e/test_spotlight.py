@@ -82,3 +82,16 @@ def test_taste_reasons_name_the_director_and_the_actor(app):
     pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
     reasons = [c['reason'] for c in pg.evaluate(CARDS)]
     assert 'From the director of Heat' in reasons and 'With Florence Pugh' in reasons, reasons
+
+def test_held_card_stays_pressed_and_the_lifted_poster_has_clean_corners(app):
+    # Holding a pick: the card stays pressed while its poster is lifted (growing back under the opening menu showed as a
+    # jitter) and lets go as the menu closes; the lifted copy has no corners of its own inside the lift's, which left
+    # its dark background showing at the corners. 26 Nov.
+    pg = app(); pg.goto(m.B + '/'); pg.settle(8000)
+    box = pg.evaluate("(()=>{const el=document.querySelector('.spot'); el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return [r.x+r.width/2, r.y+r.height/2]})()")
+    pg.wait_for_timeout(300)
+    pg.mouse.move(*box); pg.mouse.down(); pg.wait_for_timeout(900); pg.mouse.up(); pg.wait_for_timeout(700)
+    assert pg.evaluate("document.querySelector('.spot').dataset.pressed === 'true'")
+    assert pg.evaluate("['.hold-poster > .cover', '.hold-poster > .cover img'].map(s => getComputedStyle(document.querySelector(s)).borderTopLeftRadius)") == ['0px', '0px']
+    pg.mouse.click(5, 5); pg.wait_for_timeout(600)
+    assert pg.evaluate("document.querySelector('.spot').dataset.pressed === undefined && !document.querySelector('.hold-menu')")
