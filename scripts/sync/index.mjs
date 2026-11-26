@@ -1374,7 +1374,6 @@ async function main() {
     await db.end();
     return;
   }
-  const runStart = (await db.query('select now() as t')).rows[0].t;
   log(FULL ? 'full sync' : `test sync, ${LIMIT} titles`);
   const providerMap = await syncServices();
   const found = await discover(providerMap);
