@@ -6,7 +6,7 @@ import {
   CATEGORIES, SECTIONS, categoryOf, type Category, type Kind, type SectionId, type Sort,
 } from '../lib/browse'
 import { SERVICE_NAME, leavingFor, type Card } from '../lib/catalogue'
-import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
+import { useDimOnScroll, useNav, useNavActions, useTabWanted } from '../lib/nav'
 import { useWatched } from '../lib/letterboxd'
 import { ALL_ROWS, SERVER_ROWS, FilterDrawer, NO_FILTERS, draftChips, passesDraft, type Count, type Draft, type Facets } from './SearchFilters'
 import { paths } from '../lib/routes'
@@ -97,7 +97,10 @@ export default function Browse() {
       if ((dx || dy) && (seen(from) || seen(to))) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' })
     }
   }
-  const covers = usePageQuery(coversPage)
+  // Browse is there from launch behind Home: its card pictures load once it is pressed or opened, or a few
+  // seconds after launch, not with Home's first requests
+  const wanted = useTabWanted('browse')
+  const covers = usePageQuery(wanted ? coversPage : null)
   const pull = usePageRefresh(covers)
   const pageRef = useJoinedRef(page, pull.bind.ref)
   useWarmCovers(covers.data)

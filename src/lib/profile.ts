@@ -1,4 +1,5 @@
 // What someone has set up: the services they have and the notifications they want.
+import { fromLaunch } from './me'
 import { useAuth } from './auth'
 import { FRESH, changed, setQueryData, useQuery } from './query'
 import { supabase } from './supabase'
@@ -23,7 +24,10 @@ export type Profile = {
 export type NotifyKey = 'notify_leaving' | 'notify_arrivals' | 'notify_new_seasons'
 /** The profile, read once at sign-in for the app (auth's is_admin) and every screen (useProfile): one request.
  *  select * so it keeps working before a new column exists. An account with no profile row gets one. */
-export async function loadProfile(userId: string): Promise<Profile & { is_admin?: boolean }> {
+export function loadProfile(userId: string): Promise<Profile & { is_admin?: boolean }> {
+  return fromLaunch('profile', () => ownProfile(userId), (b) => (b.profile ?? undefined) as (Profile & { is_admin?: boolean }) | undefined)
+}
+async function ownProfile(userId: string): Promise<Profile & { is_admin?: boolean }> {
   const first = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle()
   if (first.error) throw new Error(first.error.message)
   if (first.data) return first.data as Profile

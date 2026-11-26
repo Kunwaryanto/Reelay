@@ -2,6 +2,7 @@
 // the phone (titles, people, Browse) is kept until this moves, instead of on a timer, since it only changes then.
 // It is asked for on opening and on coming back after a while; the answer is saved for the next opening.
 import { supabase } from './supabase'
+import { fromLaunch } from './me'
 
 const KEY = 'reelay:stamp'
 let current: string | null = (() => { try { return localStorage.getItem(KEY) } catch { return null } })()
@@ -15,9 +16,12 @@ export const currentStamp = () => current
 export function checkStamp(): Promise<string | null> {
   if (asking) return asking
   asking = (async () => {
-    const { data, error } = await supabase.from('data_stamp').select('finished_at').maybeSingle()
-    if (error) throw new Error(error.message)
-    return (data?.finished_at as string | undefined) ?? ''
+    // at launch, in the member's one request (me_bundle)
+    return fromLaunch('stamp', async () => {
+      const { data, error } = await supabase.from('data_stamp').select('finished_at').maybeSingle()
+      if (error) throw new Error(error.message)
+      return (data?.finished_at as string | undefined) ?? ''
+    }, (b) => b.stamp ?? '')
   })().then((s) => {
     current = s
     askedAt = Date.now()

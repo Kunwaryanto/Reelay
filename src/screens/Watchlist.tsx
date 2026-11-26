@@ -3,7 +3,7 @@
 // Empty: a wall of posters to pick from.
 import { loadServices, useMyServices, useServicesQuery, type Service } from '../lib/profile'
 import { paths } from '../lib/routes'
-import { warmFacts } from '../lib/facts'
+import { seedFacts, warmFacts } from '../lib/facts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
@@ -65,7 +65,7 @@ export default function Watchlist() {
   const isNew = (id: number) => Date.now() - (born.current.get(id) ?? 0) < 600
 
   // the long-press facts for everything saved, in one go
-  useEffect(() => { if (q.data) warmFacts(q.data.map((t) => t.id)) }, [q.data])
+  useEffect(() => { if (q.data) { seedFacts(q.data); warmFacts(q.data.map((t) => t.id)) } }, [q.data])
   const picked = useMemo(() => mineQ.data ?? [], [mineQ.data])
   const hasPicked = picked.length > 0 // until Your services is set up, every service counts as yours
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAuth } from './auth'
 import { FRESH, changed, setQueryData, useQuery } from './query'
 import { supabase } from './supabase'
+import { fromLaunch } from './me'
 
 export type LbAccount = { username: string; display_name: string | null; mark_watched: boolean; hide_watched: boolean; synced_at: string | null; sync_error: string | null; films: number; imported_at: string | null; imported_films: number | null }
 export type LbLog = { me: boolean; name: string; username: string; entry_id: string; watched_on: string | null; rating: number | null; rewatch: boolean }
@@ -12,13 +13,19 @@ const meKey = (uid: string) => `lb-me:${uid}`
 // v2: the whole list (a saved v1 list may be cut at 1,000 films)
 export const watchedKey = (uid: string) => `lb-watched:v2:${uid}`
 
-async function loadMe(): Promise<LbAccount | null> {
+function loadMe(): Promise<LbAccount | null> {
+  return fromLaunch('letterboxd', ownMe, (b) => (b.letterboxd ?? null) as LbAccount | null)
+}
+async function ownMe(): Promise<LbAccount | null> {
   const { data, error } = await supabase.rpc('letterboxd_me')
   if (error) throw new Error(error.message)
   return ((data ?? []) as LbAccount[])[0] ?? null
 }
 // One row holding the whole list: a row per film would be cut at the API's 1,000 rows (max_rows)
-async function loadWatched(): Promise<number[]> {
+function loadWatched(): Promise<number[]> {
+  return fromLaunch('watched', ownWatched, (b) => b.watched.map(Number))
+}
+async function ownWatched(): Promise<number[]> {
   const { data, error } = await supabase.rpc('letterboxd_watched_ids')
   if (error) throw new Error(error.message)
   return ((data ?? []) as (number | string)[]).map(Number)
@@ -38,7 +45,7 @@ export function useLetterboxd() {
 
 /** Load the connection and the watched films afresh (after connecting or importing). */
 export async function refreshLetterboxd(uid: string) {
-  const [me, watched] = await Promise.all([loadMe(), loadWatched()])
+  const [me, watched] = await Promise.all([ownMe(), ownWatched()])
   setQueryData(meKey(uid), me)
   setQueryData(watchedKey(uid), watched)
   changed('letterboxd')

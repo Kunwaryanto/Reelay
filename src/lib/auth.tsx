@@ -4,6 +4,7 @@ import { forgetDevice } from './push'
 import { supabase } from './supabase'
 import { loadProfile, profileKey } from './profile'
 import { FRESH, fetchShared } from './query'
+import { launchUser } from './me'
 
 type Auth = {
   /** undefined while the saved session is being read */
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id
   useEffect(() => {
     setIsAdmin(false)
+    launchUser(userId ?? null)
     if (!userId) return
     let live = true
     // the same load (and saved answer) as useProfile's: one request for both (no profile yet: it makes one)

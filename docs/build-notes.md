@@ -838,3 +838,4 @@ Measured on the database before and after:
 - Home loads in two requests (`home_bundle`, `home_more`) instead of about forty. Search's ideas wait until Search is opened and the member's services are known; Browse loads its first categories ahead only while Browse is on screen. The profile is read once for sign-in and settings. Launch went from 69 requests to about 20 (title pages loaded ahead included).
 - Browse category pages: Tonight's picks sit after the first two rows, under Home's heading (`picksTitle()`), as on Home.
 - `tests/e2e/test_requests.py` guards this: no request twice at launch, a budget per page.
+- Then (26 Nov, later): the member's things at launch in one request (`me_bundle`), a title page in one (`title_page`), Home's cards and the saved titles bring the long-press menu's facts, Browse's pictures wait for Browse. Launch is about 7 requests (Home 4 of them).

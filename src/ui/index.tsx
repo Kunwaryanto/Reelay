@@ -13,7 +13,7 @@ import { posterSrcSet, tmdbImage } from '../lib/images'
 import { summonKeyboard } from '../lib/keyboard'
 import { useWatchedMark } from '../lib/letterboxd'
 import { SERVICE_NAME, metaLine, type Card } from '../lib/catalogue'
-import { useNav, useNavActions, type Tab } from '../lib/nav'
+import { tabPress, useNav, useNavActions, type Tab } from '../lib/nav'
 import { useRequestFailed } from '../lib/query'
 import { notePressed } from '../lib/press'
 import { warmFacts } from '../lib/facts'
@@ -976,7 +976,7 @@ export function TabBar({ hidden, arriving }: { hidden?: boolean; arriving?: bool
       <div className="tabbar-fade" aria-hidden="true"><i /><i /><i /></div>
       <div className="tabbar-row">
         {items.map(([id, label, icon]) => (
-          <button key={id} type="button" aria-label={label} aria-current={tab === id ? 'page' : undefined} onClick={() => { if (id === 'search' && tab !== 'search') summonKeyboard(); setTab(id) }}>{icon}</button>
+          <button key={id} type="button" aria-label={label} aria-current={tab === id ? 'page' : undefined} onPointerDown={() => tabPress.dispatchEvent(new Event(id))} onClick={() => { if (id === 'search' && tab !== 'search') summonKeyboard(); setTab(id) }}>{icon}</button>
         ))}
       </div>
     </nav>

@@ -1,6 +1,7 @@
 // Reads the catalogue (titles, where they stream, scores, cast) and the user's watchlist.
 import { supabase } from './supabase'
 import { daysUntil } from './days'
+import { fromLaunch } from './me'
 
 // link: the whole link, before links were stored in two parts (kept readable until that database change is live)
 export type Avail = { service_id: string; leaves_on: string | null; type?: string; link_path?: string | null; link?: string | null; service?: { link_base?: string | null } | null }
@@ -52,6 +53,19 @@ export type TitleDetail = Omit<Card, 'availability' | 'genres'> & {
 }
 
 export async function loadTitle(id: number): Promise<TitleDetail | null> {
+  // one request (title_page, migration 20261126000900): the title, its offers, scores, credits, awards and More
+  // like this as cards; an older database without it is asked the old way
+  const page = await supabase.rpc('title_page', { p_id: id })
+  if (!page.error) {
+    const t = page.data as TitleDetail | null
+    if (!t) return null
+    t.credits.sort((a, b) => a.sort_order - b.sort_order)
+    t.awards.sort((a, b) => Number(b.won) - Number(a.won) || a.rank - b.rank || b.year - a.year)
+    return t
+  }
+  return loadTitleOld(id)
+}
+async function loadTitleOld(id: number): Promise<TitleDetail | null> {
   // More like this is asked for at the same time: its list doesn't depend on the title's details
   const similar = supabase.rpc('similar_titles', { p_id: id })
   const title = unwrap(await supabase.from('titles').select(
@@ -84,8 +98,9 @@ export async function loadTitle(id: number): Promise<TitleDetail | null> {
 
 export type Saved = { title_id: number; notify: boolean }
 
-export async function loadWatchlist(): Promise<Saved[]> {
-  return unwrap(await supabase.from('watchlist').select('title_id,notify')) as Saved[]
+export function loadWatchlist(): Promise<Saved[]> {
+  return fromLaunch('saved', async () => unwrap(await supabase.from('watchlist').select('title_id,notify')) as Saved[],
+    (b) => b.watchlist.filter((r) => r.title).map((r) => ({ title_id: Number(r.title!.id), notify: r.notify })))
 }
 
 /** A saved title with what the Watchlist shows about it. */
@@ -107,12 +122,15 @@ export type SavedTitle = {
   runtime_min?: number | null
 }
 
-export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
-  type Sc = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
-  type Raw = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'rt' | 'lb' | 'notify' | 'added_at'> & { scores: Sc | Sc[] | null }) | null }
-  const rows = unwrap(await supabase.from('watchlist')
+type Sc = { imdb_rating: number | null; rt_critics: number | null; letterboxd: number | null }
+type RawSaved = { notify: boolean; added_at: string; title: (Omit<SavedTitle, 'rating' | 'rt' | 'lb' | 'notify' | 'added_at'> & { scores: Sc | Sc[] | null }) | null }
+export function loadWatchlistTitles(): Promise<SavedTitle[]> {
+  // at launch, the same rows come in the member's one request (me_bundle)
+  return fromLaunch('watchlist', async () => savedTitles(unwrap(await supabase.from('watchlist')
     .select('notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))')
-    .order('added_at', { ascending: false }) as never) as Raw[]
+    .order('added_at', { ascending: false }) as never) as RawSaved[]), (b) => savedTitles(b.watchlist as unknown as RawSaved[]))
+}
+function savedTitles(rows: RawSaved[]): SavedTitle[] {
   return rows.filter((r) => r.title).map((r) => {
     const { scores, ...t } = r.title!
     const score = Array.isArray(scores) ? scores[0] : scores
@@ -121,8 +139,9 @@ export async function loadWatchlistTitles(): Promise<SavedTitle[]> {
 }
 
 /** The services someone has picked as theirs. Empty until Your services is set up: then every service counts. */
-export async function loadMyServices(): Promise<string[]> {
-  return (unwrap(await supabase.from('user_services').select('service_id')) as { service_id: string }[]).map((r) => r.service_id)
+export function loadMyServices(): Promise<string[]> {
+  return fromLaunch('services', async () => (unwrap(await supabase.from('user_services').select('service_id')) as { service_id: string }[]).map((r) => r.service_id),
+    (b) => b.services)
 }
 
 /** Posters to pick from when the Watchlist is empty: recent and classic films and series, mixed. */

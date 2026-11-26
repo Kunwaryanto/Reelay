@@ -215,13 +215,15 @@ def new():
     def tt(r):
         u=r.request.url
         if '/rest/v1/titles' in u and 'id=eq.' in u and 'overview' in u:
-            t=card(3); t.update({"tmdb_id":603692,"kind":"film","title":"John Wick: Chapter 4","year":2023,"original_title":None,"title_en":MODE.get("title_en"),"hero_path":MODE.get("hero",[None,False])[0],"hero_poster":MODE.get("hero",[None,False])[1],"end_year":None,"runtime_min":170,"seasons":None,"overview":"With the price on his head ever increasing, John Wick uncovers a path to defeating the High Table.","genres":["Action","Thriller"],"original_language":"en",
-              "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Viaplay","kind":"subscription"}}],
-              "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":MODE.get('awards',[])})
-            return r.fulfill(json=t)
+            return r.fulfill(json=title_detail())
         return r.fallback()
     pg.route(re.compile(r'.*/rest/v1/titles.*'), tt)
     return pg
+def title_detail():
+            t=card(3); t.update({"tmdb_id":603692,"kind":"film","title":"John Wick: Chapter 4","year":2023,"original_title":None,"title_en":MODE.get("title_en"),"hero_path":MODE.get("hero",[None,False])[0],"hero_poster":MODE.get("hero",[None,False])[1],"end_year":None,"runtime_min":170,"seasons":None,"overview":"With the price on his head ever increasing, John Wick uncovers a path to defeating the High Table.","genres":["Action","Thriller"],"original_language":"en",
+              "availability":[{"service_id":"viaplay","type":"subscription","leaves_on":None,"link":None,"service":{"name":"Viaplay","kind":"subscription"}}],
+              "scores":{"imdb_rating":7.6,"rt_critics":94,"rt_audience":89,"letterboxd":3.9},"credits":[{"role":"director","character":None,"sort_order":0,"person":{"id":1,"name":"Chad Stahelski","profile_path":None}}],"awards":MODE.get('awards',[])})
+            return t
 def top(pg): return "(()=>{const ms=[...document.querySelectorAll('main.page')].filter(m=>m.offsetParent&&!m.closest('[inert]'));return ms[ms.length-1]})()"
 which=sys.argv_real if hasattr(sys,'argv_real') else None
 
@@ -233,6 +235,29 @@ ST['acct']=dict(ACC, username='kunwaryanto', hide_watched=True, mark_watched=Fal
 MODE['svc']=['netflix','hbo-max','viaplay']
 CASE={'personal':True}
 seenq=[]
+def with_facts(v):
+    """Home's cards as home_card gives them since 20261126000900 (with the long-press menu's facts), when a test asks."""
+    if not MODE.get('facts'): return v
+    if isinstance(v, list): [with_facts(x) for x in v]
+    elif isinstance(v, dict):
+        if isinstance(v.get('id'), int) and 'availability' in v: v.setdefault('by_names', ['Chad Stahelski']); v.setdefault('rt', 90); v.setdefault('lb', 3.8); v.setdefault('end_year', None)
+        else: [with_facts(x) for x in v.values()]
+    return v
+def mock_ask(path, body=None):
+    """What the mocks answer for one request (the letterboxd ones, Home's, then the rest), as a list."""
+    got={}
+    class Req:
+        url='https://mock.supabase.co/rest/v1/'+path; method='POST' if body is not None else 'GET'
+        post_data=json.dumps(body) if body is not None else None; post_data_json=body; headers={}
+    class R:
+        request=Req()
+        def fulfill(self, json=None, status=200, **k): got['v']=json if status<400 else []
+        def fallback(self):
+            n=got.get('n',0); got['n']=n+1
+            [hroute2, route, lambda _: got.__setitem__('v', [])][min(n,2)](self)
+    lbroute(R())
+    v=got.get('v') or []
+    return v if isinstance(v,list) else [v]
 def hroute(r):
     try: return hroute2(r)
     except Exception as e: print('  MOCK ERROR', repr(e), unquote(r.request.url).split('/rest/v1/')[-1][:260]); return r.fulfill(json=[])
@@ -247,6 +272,21 @@ def hroute2(r):
         return r.fulfill(json=[{"title_id":i,"role":"director" if card(i)['kind']=='film' else "creator","person":{"name":n}} for k,i in enumerate(ids) for n in who(k)])
     # Home in two requests (migration 20261126000700): answered from the separate lookups' own mocks above and below,
     # so every case those tests set up still holds
+    # the member's things at launch in one request (migration 20261126000900): only when a test asks for it, else
+    # 404 (an older database), so every test that mocks those lookups one by one still holds
+    if 'rpc/me_bundle' in u:
+        if not MODE.get('me_bundle'): return r.fulfill(status=404, json={})
+        MODE['me_asked']=MODE.get('me_asked',0)+1
+        one=lambda v: (v[0] if v else None)
+        return r.fulfill(json={'profile':one(mock_ask('profiles?select=*')),'services':[x['service_id'] for x in mock_ask('user_services?select=service_id')],
+          'watchlist':with_facts(mock_ask('watchlist?select=notify,added_at,title:titles(id,kind,title,year,poster_path,genres,original_language,runtime_min,seasons,availability(service_id,leaves_on),scores(imdb_rating,rt_critics,letterboxd))&order=added_at.desc')),
+          'letterboxd':one(mock_ask('rpc/letterboxd_me',{})),'watched':mock_ask('rpc/letterboxd_watched_ids',{}),'stamp':'s1'})
+    if 'rpc/title_page' in u:
+        if not MODE.get('title_page'): return r.fulfill(status=404, json={})
+        MODE['title_page_asked']=MODE.get('title_page_asked',0)+1
+        class F:
+            class request: post_data=r.request.post_data
+        return r.fulfill(json=dict(title_detail(), more=[dict(card(i), tags=[]) for i in MODE.get('similar', _alike(F))]))
     if 'rpc/home_bundle' in u or 'rpc/home_more' in u:
         b=r.request.post_data_json; MODE.setdefault('home_asked',[]).append((u.split('/rpc/')[1],b))
         def ask(path, body=None):
@@ -266,7 +306,7 @@ def hroute2(r):
         T='titles?select=id,kind,title,year,poster_path,backdrop_path,logo_path'
         if 'rpc/home_bundle' in u:
             day=b['p_day']; args={'p_day':day,'p_services':b['p_services'],'p_hide':b['p_hide']}
-            return r.fulfill(json={
+            return r.fulfill(json=with_facts({
               'trendF':ask(T+'&kind=eq.film&trend_rank=not.is.null'), 'trendS':ask(T+'&kind=eq.series&trend_rank=not.is.null'),
               'arrivals':ask('availability_events?select=happened_on,service_id,title:titles!inner(id)&event=eq.added'),
               'leaving':ask('availability?select=leaves_on,service_id,title:titles!inner(id)'),
@@ -275,12 +315,12 @@ def hroute2(r):
               'friends':ask('rpc/home_friends',args), 'taste':ask('rpc/home_taste',{}),
               'newF':ask(T+'&kind=eq.film&year=gte.2025'), 'newS':ask(T+'&kind=eq.series&year=gte.2025'),
               'awardWins':ask('awards?select=award'), 'theme':ask(T+'&imdb_rating=gte.7.5&scores!inner&imdb_votes=gte.2000') if b['p_gems'] else [],
-              'savedRecs':ask('rpc/home_saved',args), 'people':ask('rpc/home_people',args), 'makers':ask('rpc/home_makers',args)})
+              'savedRecs':ask('rpc/home_saved',args), 'people':ask('rpc/home_people',args), 'makers':ask('rpc/home_makers',args)}))
         lists={k:(ask(T+'&id=in.(%s)'%','.join(map(str,v))) if v else []) for k,v in b['p_lists'].items()}
         sa=ask('availability_events?select=title_id&title_id=in.(%s)'%','.join(map(str,b['p_saved']))) if b['p_saved'] else []
         dec=[ask(T+'&kind=eq.%s&year=gte.%s&year=lte.%s'%(k,b['p_decade']['from'],b['p_decade']['to'])) for k in ('film','series')]
         gen=[[ask(T+'&kind=eq.%s&genres=ov.{%s}'%(k,','.join(g))) for k in ('film','series')] for g in b['p_genres']]
-        return r.fulfill(json={'lists':lists,'savedArrivals':sa,'decade':dec,'genres':gen})
+        return r.fulfill(json=with_facts({'lists':lists,'savedArrivals':sa,'decade':dec,'genres':gen}))
     if 'rpc/home_base' in u:
         # the ready-made generic part of Home (only when a test asks for it: otherwise Home is built whole)
         if not MODE.get('base'): return r.fulfill(status=404, json={})

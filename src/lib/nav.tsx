@@ -16,6 +16,22 @@ if (REPORT_COLD) window.addEventListener('pointerdown', () => { pressedAt = Date
 
 export type { Tab } from './routes'
 export const TABS: Tab[] = ['now', 'browse', 'watchlist', 'search']
+/** A finger landing on a tab (before it is opened): a tab that waits to load (Browse) starts then. */
+export const tabPress = new EventTarget()
+/** Whether this tab has been opened or pressed yet, or the app has been up a while (then it loads anyway, quietly). */
+export function useTabWanted(id: Tab, after = 6000): boolean {
+  const { tab } = useNav()
+  const [wanted, setWanted] = useState(tab === id)
+  useEffect(() => {
+    if (wanted) return
+    if (tab === id) { setWanted(true); return }
+    const want = () => setWanted(true)
+    tabPress.addEventListener(id, want)
+    const t = setTimeout(want, after)
+    return () => { tabPress.removeEventListener(id, want); clearTimeout(t) }
+  }, [tab, id, wanted, after])
+  return wanted
+}
 
 type Page = { key: string; path: string }
 type State = { tab: Tab; stacks: Record<Tab, Page[]> }

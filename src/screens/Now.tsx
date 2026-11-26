@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useServicesQuery } from '../lib/profile'
 import { BOOT_RISE_MS, bootShowing } from '../lib/boot'
 import { warmPage } from '../lib/pages'
@@ -11,7 +11,7 @@ import { useLetterboxd, useWatched, watchedKey } from '../lib/letterboxd'
 import { markNewsSeen, useNewsSeen } from '../lib/newsSeen'
 import { hiddenKey, useHiddenTags } from '../lib/hidden'
 import { useAuth } from '../lib/auth'
-import { useFacts } from '../lib/facts'
+import { seedFacts, useFacts } from '../lib/facts'
 import { posterSrcSet, tmdbImage } from '../lib/images'
 import { useDimOnScroll, useNav, useNavActions } from '../lib/nav'
 import { readQueryData, useChanges } from '../lib/query'
@@ -378,6 +378,8 @@ export default function Now() {
   const hidden = useHiddenTags()
   const q = useHome(settled ? `home:${HOME_VERSION}:${[...svc].sort().join(',')}:${hide ? 'hide' : 'all'}${hiddenKey(hidden)}` : null,
     (quick?: boolean) => loadHome({ services: svc ?? [], hide, watched: (uid && readQueryData<number[]>(watchedKey(uid))) || [], hidden }, { quick }), changes, tab === 'now' && path === '/', decodeFold)
+  // Home's cards carry the long-press menu's facts: known before the posters ask (no facts request for Home)
+  useMemo(() => { if (q.data) seedFacts(q.data) }, [q.data])
   const onScroll = useDimOnScroll()
   const { bind, indicator } = usePullToRefresh(q.retry)
   // Launch: ready means the data is in and everything above the fold is decoded: the first hero picture and its

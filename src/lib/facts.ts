@@ -33,6 +33,7 @@ function keep(id: number, f: Facts) {
 }
 
 async function fetchNow(ids: number[]) {
+  if (!ids.length) return
   const res = await supabase.from('titles')
     .select('id,kind,runtime_min,seasons,end_year,genres,scores(imdb_rating,rt_critics,letterboxd),credits(role,sort_order,person:people(name))')
     .in('id', ids).in('credits.role', ['director', 'creator'])
@@ -57,6 +58,30 @@ function fromPage(id: number): Facts | undefined {
     imdb: t.scores?.imdb_rating ?? null, rt: t.scores?.rt_critics ?? null, lb: t.scores?.letterboxd ?? null,
     by: t.credits.filter((c) => c.role === role).map((c) => c.person.name),
   }
+}
+
+/** Cards that came with their facts (Home's, from home_card: end year, scores, who made it): known at once, so
+ *  their posters ask for nothing. Takes any data and finds the cards in it. */
+type Carded = { id: number; kind: string; runtime_min?: number | null; seasons?: number | null; end_year?: number | null; genres?: string[] | null
+  imdb_rating?: number | string | null; rating?: number | string | null; rt?: number | null; lb?: number | string | null; by_names?: string[] }
+export function seedFacts(data: unknown) {
+  const seen = new Set<unknown>()
+  const walk = (v: unknown, depth: number) => {
+    if (!v || typeof v !== 'object' || depth > 5 || seen.has(v)) return
+    seen.add(v)
+    if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return }
+    const c = v as Carded
+    if (typeof c.id === 'number' && Array.isArray(c.by_names) && 'rt' in c && !got.has(c.id)) {
+      keep(c.id, {
+        runtime_min: c.runtime_min ?? null, seasons: c.seasons ?? null, end_year: c.end_year ?? null, genres: c.genres ?? [],
+        imdb: (c.imdb_rating ?? c.rating) == null ? null : Number(c.imdb_rating ?? c.rating), rt: c.rt ?? null, lb: c.lb == null ? null : Number(c.lb), by: c.by_names,
+      })
+      waiting.delete(c.id)
+      return
+    }
+    for (const x of Object.values(v)) walk(x, depth + 1)
+  }
+  walk(data, 0)
 }
 
 /** Ask for these titles' facts soon, together with others asked for in the same moment. `now`: don't wait. */
