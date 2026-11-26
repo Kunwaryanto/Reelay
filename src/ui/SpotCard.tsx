@@ -27,7 +27,7 @@ export function SpotCard({ card }: { card: HomeCard }) {
   const { push } = useNavActions()
   const onHold = useHold()
   // held: the small poster lifts out into the poster menu, as a poster does
-  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.spot-thumb .cover')!), { keepPressed: true })
+  const hold = useLongPress((el) => onHold(card, el.querySelector<HTMLElement>('.spot-thumb .cover')!), { keepPressed: true, pressedOn: (el) => el.parentElement! })
   const link = usePageLink(paths.title(card.id))
   // the title page's picture (a textless poster fills the tall card best), else the wide one, cropped
   const wide = card.hero_path && !card.hero_poster ? card.hero_path : card.backdrop_path

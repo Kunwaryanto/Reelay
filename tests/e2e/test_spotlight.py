@@ -91,7 +91,7 @@ def test_held_card_stays_pressed_and_the_lifted_poster_has_clean_corners(app):
     box = pg.evaluate("(()=>{const el=document.querySelector('.spot'); el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return [r.x+r.width/2, r.y+r.height/2]})()")
     pg.wait_for_timeout(300)
     pg.mouse.move(*box); pg.mouse.down(); pg.wait_for_timeout(900); pg.mouse.up(); pg.wait_for_timeout(700)
-    assert pg.evaluate("document.querySelector('.spot').dataset.pressed === 'true'")
+    assert pg.evaluate("document.querySelector('.spot-item').dataset.pressed === 'true' && getComputedStyle(document.querySelector('.spot-item')).transform !== 'none'")
     assert pg.evaluate("['.hold-poster > .cover', '.hold-poster > .cover img'].map(s => getComputedStyle(document.querySelector(s)).borderTopLeftRadius)") == ['0px', '0px']
     pg.mouse.click(5, 5); pg.wait_for_timeout(600)
-    assert pg.evaluate("document.querySelector('.spot').dataset.pressed === undefined && !document.querySelector('.hold-menu')")
+    assert pg.evaluate("document.querySelector('.spot-item').dataset.pressed === undefined && !document.querySelector('.hold-menu')")

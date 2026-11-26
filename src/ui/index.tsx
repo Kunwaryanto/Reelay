@@ -277,19 +277,22 @@ export function TitleCard({ card, note, eager }: { card: Card; note?: string | n
  * Hold 0.45 s without moving more than 8px. Scrolling always wins.
  * The press shrink waits 90 ms like iOS, so a finger that lands only to scroll never moves the poster.
  */
-export function useLongPress(onHold: (el: HTMLElement) => void, opts: { keepPressed?: boolean } = {}) {
+export function useLongPress(onHold: (el: HTMLElement) => void, opts: { keepPressed?: boolean; pressedOn?: (el: HTMLElement) => HTMLElement } = {}) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pressTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const start = useRef<[number, number] | null>(null)
   const el = useRef<HTMLElement | null>(null)
   const didFire = useRef(false)
+  // pressedOn: the element that shows the press (gets data-pressed) when it isn't the one pressed: the shrink sits
+  // on it directly, no :has() (Safari let a :has() shrink go the moment the menu's blur layer appeared).
+  const host = (t: HTMLElement) => opts.pressedOn?.(t) ?? t
   // keepPressed: once the hold has fired, the element stays pressed until the menu lets it go ('hold-close', sent by
   // the menu as it closes). For a big card whose small poster lifts (Tonight's picks): growing back while the menu
   // opened showed through the blur as a jitter.
   const keep = () => opts.keepPressed && didFire.current
   const cancel = () => {
     clearTimeout(timer.current); clearTimeout(pressTimer.current); start.current = null
-    if (el.current && !keep()) delete el.current.dataset.pressed
+    if (el.current && !keep()) delete host(el.current).dataset.pressed
   }
   return {
     fired: () => didFire.current,
@@ -299,23 +302,23 @@ export function useLongPress(onHold: (el: HTMLElement) => void, opts: { keepPres
         start.current = [e.clientX, e.clientY]
         el.current = e.currentTarget
         const target = e.currentTarget
-        notePressed(target)
+        const shown = host(target)
+        notePressed(shown)
         clearTimeout(timer.current); clearTimeout(pressTimer.current)
-        pressTimer.current = setTimeout(() => { if (start.current) target.dataset.pressed = 'true' }, 90)
+        pressTimer.current = setTimeout(() => { if (start.current) shown.dataset.pressed = 'true' }, 90)
         timer.current = setTimeout(() => {
           if (!start.current) return
           didFire.current = true
           if (opts.keepPressed) {
-            target.dataset.pressed = 'true'
+            shown.dataset.pressed = 'true'
             target.addEventListener('hold-close', () => {
               // back to full size at once, under the menu's blur, before the poster is measured to land on it
-              const box = target.parentElement
-              if (box) box.style.transition = 'none'
-              delete target.dataset.pressed
-              void target.offsetWidth
-              requestAnimationFrame(() => { if (box) box.style.transition = '' })
+              shown.style.transition = 'none'
+              delete shown.dataset.pressed
+              void shown.offsetWidth
+              requestAnimationFrame(() => { shown.style.transition = '' })
             }, { once: true })
-          } else delete target.dataset.pressed
+          } else delete shown.dataset.pressed
           onHold(target)
         }, 450)
       },
@@ -324,7 +327,7 @@ export function useLongPress(onHold: (el: HTMLElement) => void, opts: { keepPres
       },
       // a short tap still shows the press briefly before opening
       onPointerUp: () => {
-        const t = el.current
+        const t = el.current && host(el.current)
         const quick = start.current && !t?.dataset.pressed
         clearTimeout(timer.current); clearTimeout(pressTimer.current); start.current = null
         if (t && quick && !didFire.current) { t.dataset.pressed = 'true'; setTimeout(() => { delete t.dataset.pressed }, 120) }
