@@ -324,13 +324,35 @@ async function saveTitleOnce({ kind, d }, dropIds) {
          runtime_min = excluded.runtime_min, seasons = excluded.seasons, last_season_on = excluded.last_season_on,
          overview = excluded.overview, genres = excluded.genres, original_language = excluded.original_language,
          countries = excluded.countries, age_rating = excluded.age_rating, poster_path = excluded.poster_path,
-         backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path, popularity = excluded.popularity,
+         backdrop_path = excluded.backdrop_path, logo_path = excluded.logo_path,
          released_on = excluded.released_on, aka = excluded.aka, hero_path = excluded.hero_path,
-         hero_poster = excluded.hero_poster, collection_id = excluded.collection_id, synced_at = now()
+         hero_poster = excluded.hero_poster, collection_id = excluded.collection_id,
+         popularity = case when public.titles.popularity is null or abs(public.titles.popularity - excluded.popularity) > greatest(0.15 * public.titles.popularity, 0.5)
+           then excluded.popularity else public.titles.popularity end,
+         synced_at = now()
+       -- only when something changed (an update copies the whole row); popularity only when it really moved
+       where (public.titles.imdb_id, public.titles.wikidata_id, public.titles.title, public.titles.original_title,
+              public.titles.year, public.titles.end_year, public.titles.runtime_min, public.titles.seasons,
+              public.titles.last_season_on, public.titles.overview, public.titles.genres, public.titles.original_language,
+              public.titles.countries, public.titles.age_rating, public.titles.poster_path, public.titles.backdrop_path,
+              public.titles.logo_path, public.titles.released_on, public.titles.aka, public.titles.hero_path,
+              public.titles.hero_poster, public.titles.collection_id)
+         is distinct from
+             (excluded.imdb_id, excluded.wikidata_id, excluded.title, excluded.original_title,
+              excluded.year, excluded.end_year, excluded.runtime_min, excluded.seasons,
+              excluded.last_season_on, excluded.overview, excluded.genres, excluded.original_language,
+              excluded.countries, excluded.age_rating, excluded.poster_path, excluded.backdrop_path,
+              excluded.logo_path, excluded.released_on, excluded.aka, excluded.hero_path,
+              excluded.hero_poster, excluded.collection_id)
+          or public.titles.popularity is null or abs(public.titles.popularity - excluded.popularity) > greatest(0.15 * public.titles.popularity, 0.5)
        returning id`,
       row,
     );
-    const titleId = t.rows[0].id;
+    // unchanged: nothing was written, so look the id up
+    const titleId = t.rows[0]?.id ?? (await c.query('select id from public.titles where tmdb_id = $1 and kind = $2', [row[0], row[1]])).rows[0].id;
+    // the check itself, in a narrow row: the refresh schedule goes by it
+    await c.query(`insert into public.title_checked (title_id, checked_at) values ($1, now())
+      on conflict (title_id) do update set checked_at = now()`, [titleId]);
 
     // Cast and crew: only what changed is written (a refresh used to delete and re-add every row, which left
     // tens of thousands of dead rows a night). People are updated only when their name, picture or department
@@ -787,7 +809,7 @@ async function reconcile(runStart) {
        and not t.notable
        and not exists (select 1 from public.watchlist w where w.title_id = t.id)
        and not exists (select 1 from public.awards a where a.title_id = t.id)
-       and t.synced_at < now() - interval '90 days'`,
+       and coalesce((select c.checked_at from public.title_checked c where c.title_id = t.id), t.synced_at) < now() - interval '90 days'`,
   );
   // People in no title we still keep (their titles were removed above, or their credits changed) go too.
   // Credits are the only thing that points at a person, and a person seen again is fetched again with the title.
@@ -1360,10 +1382,11 @@ async function main() {
   const due = REFRESH_ALL ? known : (await db.query(
     `select case t.kind when 'film' then 'movie' else 'tv' end || ':' || t.tmdb_id as key
      from public.titles t join public.title_refresh r on r.title_id = t.id
-     where t.synced_at < now() - public.refresh_every(r.tier, 'details') + interval '3 hours'
-        or (t.released_on is null and t.year >= extract(year from current_date) - 1 and t.synced_at < '2026-11-24')
+     left join public.title_checked c on c.title_id = t.id
+     where coalesce(c.checked_at, t.synced_at) < now() - public.refresh_every(r.tier, 'details') + interval '3 hours'
+        or (t.released_on is null and t.year >= extract(year from current_date) - 1 and coalesce(c.checked_at, t.synced_at) < '2026-11-24')
      order by (t.released_on is null and t.year >= extract(year from current_date) - 1) desc,
-              case r.tier when 'new' then 0 when 'recent' then 1 else 2 end, t.synced_at`,
+              case r.tier when 'new' then 0 when 'recent' then 1 else 2 end, coalesce(c.checked_at, t.synced_at)`,
   )).rows.map((r) => r.key).filter((k) => knownSet.has(k));
   const stale = due.slice(0, FULL ? REFRESH_PER_RUN : LIMIT);
   log(`titles: ${keys.length} streaming, ${fresh.length} new, ${stale.length} of ${due.length} due (of ${known.length} known) refreshed`);

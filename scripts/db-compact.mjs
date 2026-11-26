@@ -12,7 +12,7 @@ const mb = (b) => (Number(b) / 1048576).toFixed(1) + ' MB';
 const size = async (t) => (await db.query(`select pg_relation_size($1) d, pg_indexes_size($1) i from (select $1::regclass) x`, [t])).rows[0];
 const total = async () => Number((await db.query('select pg_database_size(current_database()) b')).rows[0].b);
 const before = await total();
-for (const t of ['public.titles', 'public.credits', 'public.people', 'public.availability', 'public.scores', 'public.availability_events']) {
+for (const t of ['public.titles', 'public.credits', 'public.people', 'public.availability', 'public.scores', 'public.availability_events', 'public.awards', 'public.title_similar']) {
   const a = await size(t);
   const s = Date.now();
   await db.query(`vacuum (full, analyze) ${t}`);
